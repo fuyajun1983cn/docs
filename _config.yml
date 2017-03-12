@@ -1,0 +1,14 @@
+title: Yajun's Docs
+email: fuyajun1983cn@163.com
+description: 网站主要存储个人编写或翻译的文档。
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "" # the base hostname & protocol for your site, e.g. http://example.com
+
+# Build settings
+markdown: kramdown
+theme: minima
+gems:
+  - jekyll-feed
+exclude:
+  - Gemfile
+  - Gemfile.lock

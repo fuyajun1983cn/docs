@@ -1,0 +1,31 @@
+<head>
+    <!-- Meta, title, CSS, favicons, etc. -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{% if page.excerpt %}{{ page.excerpt | strip_html | strip_newlines | truncate: 160 }}{% else %}{{ site.description }}{% endif %}">
+    <meta name="keywords" content="wifi network">
+    <meta name="author" content="山庄来客">
+
+    <title>{% if page.title %}{{ page.title }}{% else %}{{ site.title }}{% endif %}</title>
+
+    <!-- Bootstrap core CSS -->
+
+    <link href="{{site.baseurl}}/css/bootstrap.min.css" rel="stylesheet">
+    
+
+
+    <!-- Documentation extras -->
+
+    <link href="{{site.baseurl}}/css/docs.min.css" rel="stylesheet">
+
+    <link href="{{site.baseurl}}/css/patch.css" rel="stylesheet">
+    <!--[if lt IE 9]><script src="../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
+    <script src="{{site.baseurl}}/js/ie-emulation-modes-warning.js"></script>
+
+
+    <script>
+        var _hmt = _hmt || [];
+    </script>
+</head>
+
