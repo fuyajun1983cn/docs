@@ -1,0 +1,482 @@
+--- 
+layout: default 
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>ns-3手册</h1>
+          <p>Release ns-3.26，ns-3 project， 未严格逐字翻译</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">ns-3手册</h1>
+
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> 介绍</h2>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> 资源</h2>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> 入门(Getting Started )</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+本节主要介绍ns-3的安装，包含支持的平台，先决条件，获取ns-3的方式，建
+构ns-3的方式以及验证构建出来的ns-3二进制文件和运行简单的程序。
+</p>
+</div>
+
+<div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> Overview</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+ns-3被构建成一组系统软件包，相互之间可以一起工作。用户程序可以通过
+链接这些库来使用它们。用户程序一般使用C++或者Python语言编写。
+</p>
+
+<p>
+ns-3是以源码的方式发布的，意味着目标系统首先需要具体一个软件工发环境来
+编译ns-3，然后才能编译用户程序。ns-3原则上可以为一些系统分布事先编
+译好的库，未来也许会以这种方式来发布，但是目前，许多用户通过自己编
+辑ns-3本身来生成发布软件，因此拥有源码在旁边去重新编译库是很有用的。
+如果有人想承担为一些操作制作pre-built库和包的工作，请联系
+ns-developers的邮件列表。
+</p>
+
+<p>
+在接下来的部分，我们来看如何使用两种不同的方式来下载和编译ns-3。第
+一种方式就是从主站点下载和编译官方发布的源码。第二种方式就是获取和
+编译ns-3的开发版拷贝。由于两种方式使用的工具完全不同，我们会分别介
+绍这两种方式。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><span class="section-number-3">3.2</span> Downloading ns-3</h3>
+<div class="outline-text-3" id="text-3-2">
+<p>
+ns-3系统总体上是一个相当复杂的系统，拥有许多其他的依赖组件。除了你
+每天需要处理的系统（如GNU工具链，Mercurial，一个文本编辑器）外，你
+需要确保一些额外的库已经安装好，才能进入下一步。ns-3提供了一个wiki
+页面，包含了许多有用的提示与技巧。其中有一页是"安装“页面，
+<a href="http://www.nsnam.org/wiki/Installation">http://www.nsnam.org/wiki/Installation</a>.
+</p>
+
+<p>
+该wiki页面中的"先决条件”部分解释了需要哪些安装包以支持ns-3的通用选
+项。同时也提供了不同Linux版本中的命令来安装它们 。Cygwin用户则必须
+使用Cygwin installer。
+</p>
+
+<p>
+你也许想利用这个机会探索一下ns-3的wiki，因为那确实有大量的信息。
+</p>
+
+<p>
+从现在开始，我们将假设读者正工作在Linux或一个类似Linux的环境中，并
+且GNU工具链和上面提到的一些先决条件已经安装好。同时，我们也假设你
+已经安装好了Mercurial和Waf，并在目标系统中运行。
+</p>
+
+<p>
+ns-3代码在Mercurial仓库中，服务器为：<a href="http://code.nsnam.org">http://code.nsnam.org</a>。 你也
+可以从 <a href="http://www.nsnam.org/release/">http://www.nsnam.org/release/</a> 下载一个tarball，或者可以使用
+Mercurial从仓库中下载代码。我们建议使用Mercurial。在本部分最后，可
+以看到如何获取tarball的指令。
+</p>
+
+<p>
+开始使用Mercurial仓库最简单的方式是使用ns-3-allinone环境。这是一组
+脚本，用于管理下载和编译ns-3中各自子系统。我们建议你在这个环境中开
+始ns-3相关的工作。
+</p>
+
+<p>
+一处实践方式是在自己的主目录下创建一个称为 <code>workspace</code> 的目录，在该目
+录下，我们可以保存一份本地的 <code>Mercurial</code> 仓库。其他任何目录名称当然也
+可以，但接下来我们会假定目录名为 <code>workspace</code>. 
+</p>
+</div>
+
+<div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1"><span class="section-number-4">3.2.1</span> Downloading ns-3 Using a Tarball</h4>
+<div class="outline-text-4" id="text-3-2-1">
+<p>
+Tarball是一种软件归档的特殊格式，包含许多文件，且可能被压缩过。
+ns-3软件发布是通过一个可下载的tarball。通过tarball下载的过程很简
+单;你只需要选择一个发布版本，然后下载它并解压它。
+</p>
+
+<p>
+让我们假定，你作为一个用户，想在一个称为 <code>workspace</code> 的本地目录下
+编译 ns-3。 如果你接受了 <code>workspace</code> 目录的方法，你可以输入如下命
+令来获取一份发布版本的拷贝。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-sh">cd
+mkdir workspace
+cd workspace
+wget  http://www.nsnam.org/release/ns-allinone-3.26.tar.bz2
+tar xjf ns-allinone-3.26.tar.bz2
+</pre>
+</div>
+
+<p>
+如果你切换到目录 <code>ns-allinone-3.26</code> 下，你会看到如下文件和目录。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-sh">ls
+bake  build.py  constants.py  netanim-3.107  ns-3.26
+pybindgen-0.17.0.post57+nga6376f2  README  util.py
+</pre>
+</div>
+
+<p>
+你现在就可以编译基本的 ns-3 的发布版本，可以直接跳到编译 ns-3 部
+分。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2"><span class="section-number-4">3.2.2</span> Downloading ns-3 Using Bake</h4>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3" class="outline-3">
+<h3 id="sec-3-3"><span class="section-number-3">3.3</span> Building ns-3</h3>
+<div class="outline-text-3" id="text-3-3">
+</div><div id="outline-container-sec-3-3-1" class="outline-4">
+<h4 id="sec-3-3-1"><span class="section-number-4">3.3.1</span> Building with build.py</h4>
+<div class="outline-text-4" id="text-3-3-1">
+<p>
+当从一个发布的tarball开始时，第一次编译 ns-3 项目可以使用一个非常
+方便的程序来编译，该程序就在 allinone目录下。 该程序称为 build.py。
+该程序为你默认配置大部分情况下都适用的选项。但是，如果需要使用更
+高级的配置项来使用ns-3源码，则通常需要使用本地的 ns-3 编译系统，
+Waf，在本手册的后面会介绍到。
+</p>
+
+<p>
+如果你使用一个tarball来下载，你应该会有一个目录称为
+ns-allinone-3.26 ， 它在你的 ~/workspace 目录下。输入如下命令：
+</p>
+<pre class="example">
+： ./build.py --enable-examples --enable-tests
+</pre>
+
+<p>
+因为在本手册中，我们会使用一些例子和测试用例，而他们默认情况下，
+没有被编译，所以上述参数就是告知 build.py 为我们编译。该程序同时
+也会默认编译所有能用的模块。之后，你可以编译ns-3，不要例子和测试，
+或者去掉一些与你工作无关的一些模块。
+</p>
+
+<p>
+当编译脚本编译你下载的不同模块时，你会看到许多典型的编译器输出的
+信息。最终你会看到如下输出：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-sh">Waf: Leaving directory `/path/to/workspace/ns-allinone-3.26/ns-3.26/build'
+'build' finished successfully (6m25.032s)
+
+Modules built:
+antenna aodv applications
+bridge buildings config-store
+core csma csma-layout
+dsdv dsr energy
+fd-net-device flow-monitor internet
+internet-apps lr-wpan lte
+mesh mobility mpi
+netanim (no Python) network nix-vector-routing
+olsr openflow (no Python) point-to-point
+point-to-point-layout propagation sixlowpan
+spectrum stats tap-bridge
+test (no Python) topology-read traffic-control
+uan virtual-net-device visualizer
+wave wifi wimax
+
+Modules not built (see ns-3 tutorial for explanation):
+brite click
+</pre>
+</div>
+
+<p>
+没有编译的部分模块，会显示如下信息：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-sh">Modules not built (see ns-3 tutorial for explanation):
+brite     click
+</pre>
+</div>
+
+<p>
+这仅仅说明一些ns-3模块依赖的一些第三方库没有安装，或者编译配置要
+求不要编译他们。这并不意味着模拟器没有编译成功或是它会提供错误的
+结果 。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-2" class="outline-4">
+<h4 id="sec-3-3-2"><span class="section-number-4">3.3.2</span> Building with bake</h4>
+</div>
+
+<div id="outline-container-sec-3-3-3" class="outline-4">
+<h4 id="sec-3-3-3"><span class="section-number-4">3.3.3</span> Building with Waf</h4>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4" class="outline-3">
+<h3 id="sec-3-4"><span class="section-number-3">3.4</span> Testing ns-3</h3>
+<div class="outline-text-3" id="text-3-4">
+<p>
+你可以通过使用 ./test.py -c core 脚本来运行单元测试：
+</p>
+<pre class="example">
+./test.py -c core
+</pre>
+
+<p>
+这些测试通过 Waf 并发运行。 你应该最终会看到一个报告显示如下：
+</p>
+<pre class="example">
+92 of 92 tests passed (92 passed, 0 failed, 0 crashed, 0
+valgrind errors)
+</pre>
+
+<p>
+这是重要的信息。
+</p>
+
+<p>
+你同样也可以从Waf中查看总结信息输出，执行每个测试的测试动作脚本，实
+际上看起来类似如下：
+<img src="./images/001.png" class="img-responsive" alt="001.png">
+<img src="./images/002.png" class="img-responsive" alt="002.png">
+</p>
+
+<p>
+该命令通常被用户运行来快速验证ns-3是否构建正确。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5" class="outline-3">
+<h3 id="sec-3-5"><span class="section-number-3">3.5</span> Running a Script</h3>
+<div class="outline-text-3" id="text-3-5">
+<p>
+我们通常在Waf的控制下运行脚本。这允许构建系统确共享库的路径被正确设
+置，且这些库在运行时能够被加载到。要运行一个程序，只要在Waf中使用
+&#x2013;run选项即可。让我们通过输入如下命令来运行一个相当Hello  World的
+ns-3程序：
+</p>
+<pre class="example">
+./waf --run hello-simulator
+</pre>
+
+<p>
+Waf首先检查确保程序被正确地构建，然后根据需要执行一次构建过程。Waf
+然后运行程序，产生如下输出：
+</p>
+<pre class="example">
+Hello Simulator
+</pre>
+
+<p>
+祝贺你！你现在是一个ns-3用户了！
+</p>
+
+<p>
+<b>What do I do if I don’t see the output?</b>
+</p>
+
+<p>
+如果你看到Waf的信息显示构建完成成功了，但是并没有看到 "Hello
+Simulator"输出，有可能是你在 Building with Waf 这一节中将构建模式切
+换到 <code>optimized</code> ， 但是忘记切换为 <code>debug</code> 模式。在本手册中的所有控
+制台输出使用了一个特别的ns-3日志组件，非常用助于将用户消息打开到控
+制台上。当你编译优化版的代码，该组件中的输出会自动地被禁掉——它被“优
+化”掉了。如果你并没有看到 "Hello Simulator" 输出，请输入如下命令：
+</p>
+<pre class="example">
+./waf configure --build-profile=debug --enable-examples --enable-tests
+</pre>
+
+<p>
+告知Waf构建ns-3程序的Debug版本，包含例子和测试程序。你仍然必须通过
+输入如下命令来构建代码的实际Debug版本：
+</p>
+<pre class="example">
+./waf
+</pre>
+
+<p>
+现在，如果你运行 hello-simulator 程序，你应该看到预期的输出。
+</p>
+</div>
+
+<div id="outline-container-sec-3-5-1" class="outline-4">
+<h4 id="sec-3-5-1"><span class="section-number-4">3.5.1</span> Program Arguments</h4>
+<div class="outline-text-4" id="text-3-5-1">
+<p>
+为了将命令行中的参数传递给ns-3程序，可以使用如下模式：
+</p>
+<pre class="example">
+./waf --run &lt;ns3-program&gt; --command-template="%s &lt;args&gt;"
+</pre>
+
+<p>
+替换&lt;ns3-program&gt;为你自己的程序名，&lt;args&gt;为参数。
+传给Waf &#x2013;command-template 参数基本上是一个构造实际命令行参数的方
+法， Waf会使用该命令行来执行程序。 Waf检查构建是否完成，设置共享库
+的路径，然后使用提供的命令行模板来调用可执行程序，为 %s 点位符插入
+程序名。
+</p>
+
+<p>
+另一个特别有用的例子是自己运行一个测试用例。让我们假设存在一个
+mytest 测试用例。 在上面，我们使用 ./test.py 脚本来同时运行一系列
+测试， 通过重复地调用真实的测试程序， test-runner. 为某个单独的测
+试直接调用 test-runner ：
+</p>
+<pre class="example">
+./waf --run test-runner --command-template="%s --suite=mytest --verbose"
+</pre>
+
+<p>
+这个命令将参数传递给 test-runner 程序中。因为 mytest不存在，所以会
+产生一个错误信息。 要打印 test-runner可用的选项，输入如下命令：
+</p>
+<pre class="example">
+./waf --run test-runner --command-template="%s --help"
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5-2" class="outline-4">
+<h4 id="sec-3-5-2"><span class="section-number-4">3.5.2</span> Debugging</h4>
+<div class="outline-text-4" id="text-3-5-2">
+<p>
+如果想运行ns-3程序在另一个工具控制下，例如一个调试器（例如：gdb)或
+内存检查器（例如，valgrind),你可以使用类似
+&#x2013;command-template="&#x2026;" 的形式。
+</p>
+
+<p>
+例如，在gdb调试器下面运行你的ns-3程序 hello-simulator, 参数为
+&lt;args&gt; ，命令如下命令：
+</p>
+<pre class="example">
+./waf --run=hello-simulator --command-template="gdb %s --args &lt;args&gt;"
+</pre>
+
+<p>
+注意， &#x2013;run 参数紧随着ns-3程序名，控制工具(gdb)为
+&#x2013;command-template参数的每一个标记。 &#x2013;args 告诉gdb，如下的参数属
+于"inferior"程序。（有些gdb不理解 &#x2013;args特性）。在这种情况下，从
+&#x2013;command-template 中省略程序参数，使用 gdb的 set args命令。
+</p>
+
+<p>
+我们可以结合这个方法以及之前的方法在调试器下运行一个测试：
+</p>
+<pre class="example">
+./waf --run test-runner --command-template="gdb %s --args --suite=mytest --verbose"
+</pre>
+</div>
+</div>
+
+
+<div id="outline-container-sec-3-5-3" class="outline-4">
+<h4 id="sec-3-5-3"><span class="section-number-4">3.5.3</span> Working Directory</h4>
+<div class="outline-text-4" id="text-3-5-3">
+<p>
+Waf需要从它所在位置的ns-3树的顶端开始运行。它成为它的工作目录，输
+出文件会被写入到工作目录中。如果你想将这些输出放在ns-3源码树之外？
+使用 &#x2013;cwd 参数：
+</p>
+<pre class="example">
+./waf --cwd=...
+</pre>
+
+<p>
+也许将你的工作目录作为输入文件的目录更方便，这种情况下，使用如脚本
+会更方便：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-sh">function waff {
+    CWD="$PWD"
+    cd $NS3DIR &gt;/dev/null
+    ./waf --cwd="$CWD" $*
+    cd - &gt;/dev/null
+}
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> Conceptual Overview</h2>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> Tweaking</h2>
+</div>
+
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> Building Topologies</h2>
+</div>
+
+<div id="outline-container-sec-7" class="outline-2">
+<h2 id="sec-7"><span class="section-number-2">7</span> Tracing</h2>
+</div>
+
+<div id="outline-container-sec-8" class="outline-2">
+<h2 id="sec-8"><span class="section-number-2">8</span> Data Collection</h2>
+</div>
+
+<div id="outline-container-sec-9" class="outline-2">
+<h2 id="sec-9"><span class="section-number-2">9</span> Conclusion</h2>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. 介绍</a></li>
+<li><a href="#sec-2">2. 资源</a></li>
+<li><a href="#sec-3">3. 入门(Getting Started )</a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. Overview</a></li>
+<li><a href="#sec-3-2">3.2. Downloading ns-3</a></li>
+<li><a href="#sec-3-3">3.3. Building ns-3</a></li>
+<li><a href="#sec-3-4">3.4. Testing ns-3</a></li>
+<li><a href="#sec-3-5">3.5. Running a Script</a></li>
+</ul>
+</li>
+<li><a href="#sec-4">4. Conceptual Overview</a></li>
+<li><a href="#sec-5">5. Tweaking</a></li>
+<li><a href="#sec-6">6. Building Topologies</a></li>
+<li><a href="#sec-7">7. Tracing</a></li>
+<li><a href="#sec-8">8. Data Collection</a></li>
+<li><a href="#sec-9">9. Conclusion</a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>
