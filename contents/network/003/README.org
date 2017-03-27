@@ -1,0 +1,1717 @@
+#+TITLE: Monitoring and Tuning the Linux Networking Stack: Receiving Data
+
+* 引用文章地址
+  https://blog.packagecloud.io/eng/2016/06/22/monitoring-tuning-linux-networking-stack-receiving-data/
+
+* Overview
+  The high level path a packet takes from arrival to socket receive
+  buffer is as follows:
+  1. Driver is loaded and initialized.
+  2. Packet arrives at the NIC from the network.
+  3. Packet is copied (via DMA) to a ring buffer in kernel memory.
+  4. Hardware interrupt is generated to let the system know a packet
+     is in memory.
+  5. Driver calls into NAPI to start a poll loop if one was not
+     running already.
+  6. =ksoftirqd= processes run on each CPU on the system. They are
+     registered at boot time. The =ksoftirqd= processes pull packets off
+     the ring buffer by calling the NAPI poll function that the device
+     driver registered during initialization.
+  7. Memory regions in the ring buffer that have had network data
+     written to them are unmapped.
+  8. Data that was DMA’d into memory is passed up the networking
+     layer as an ‘skb’ for more processing.
+  9. Incoming network data frames are distributed among multiple CPUs
+     if packet steering is enabled or if the NIC has multiple receive
+     queues.
+  10. Network data frames are handed to the protocol layers from the
+      queues.
+  11. Protocol layers process data.
+  12. Data is added to receive buffers attached to sockets by protocol
+      layers. 
+
+  This entire flow will be examined in detail in the following
+  sections. 
+
+  The protocol layers examined below are the IP and UDP protocol
+  layers. Much of the information presented will serve as a reference
+  for other protocol layers, as well.
+
+* Network Device Driver
+
+** Initialization
+    A driver registers an initialization function which is called by
+    the kernel when the driver is loaded. This function is registered
+    by using the =module_init= macro. 
+
+    The =igb= initialization function (=igb_init_module=) and its
+    registration with =module_init= can be found
+    in [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L676-L697][drivers/net/ethernet/intel/igb/igb_main.c]] .
+
+    Both are fairly straightforward:
+    #+BEGIN_SRC c
+      /**
+       ,*  igb_init_module - Driver Registration Routine
+       ,*
+       ,*  igb_init_module is the first routine called when the driver is
+       ,*  loaded. All it does is register with the PCI subsystem.
+       ,**/
+      static int __init igb_init_module(void)
+      {
+        int ret;
+        pr_info("%s - version %s\n", igb_driver_string, igb_driver_version);
+        pr_info("%s\n", igb_copyright);
+
+        /* ... */
+
+        ret = pci_register_driver(&igb_driver);
+        return ret;
+      }
+
+      module_init(igb_init_module);    
+    #+END_SRC
+
+    The bulk of the work to initialize the device happens with the
+    call to =pci_register_driver= as we’ll see next. 
+
+    
+** PCI initialization
+    The Intel I350 network card is a PCI express device. 
+
+    PCI devices identify themselves with a series of registers in the
+    PCI Configuration Space. 
+
+    When a device driver is compiled, a macro named
+    =MODULE_DEVICE_TABLE= (from [[https://github.com/torvalds/linux/blob/v3.13/include/linux/module.h#L145-L146][include/module.h]]) is used to export a
+    table of PCI device IDs identifying devices that the device driver
+    can control. The table is also registered as part of a structure,
+    as we’ll see shortly. 
+
+    The kernel uses this table to determine which device driver to
+    load to control the device. 
+
+    That’s how the OS can figure out which devices are connected to
+    the system and which driver should be used to talk to the device. 
+
+    This table and the PCI device IDs for the =igb= driver can be found
+    in [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L79-L117][drivers/net/ethernet/intel/igb/igb_main.c]] and
+    [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/e1000_hw.h#L41-L75][drivers/net/ethernet/intel/igb/e1000_hw.h]] respectively:
+
+    #+BEGIN_SRC c
+      static DEFINE_PCI_DEVICE_TABLE(igb_pci_tbl) = {
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I354_BACKPLANE_1GBPS) },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I354_SGMII) },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I354_BACKPLANE_2_5GBPS) },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I211_COPPER), board_82575 },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I210_COPPER), board_82575 },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I210_FIBER), board_82575 },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I210_SERDES), board_82575 },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I210_SGMII), board_82575 },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I210_COPPER_FLASHLESS), board_82575 },
+        { PCI_VDEVICE(INTEL, E1000_DEV_ID_I210_SERDES_FLASHLESS), board_82575 },
+
+        /* ... */
+      };
+      MODULE_DEVICE_TABLE(pci, igb_pci_tbl);    
+    #+END_SRC
+
+    As seen in the previous section, =pci_register_driver= is called
+    in the driver’s initialization function. 
+
+    This function registers a structure of pointers. Most of the
+    pointers are function pointers, but the PCI device ID table is
+    also registered. The kernel uses the functions registered by the
+    driver to bring the PCI device up. 
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L238-L249][drivers/net/ethernet/intel/igb/igb_main.c:]]
+    #+BEGIN_SRC c
+      static struct pci_driver igb_driver = {
+        .name     = igb_driver_name,
+        .id_table = igb_pci_tbl,
+        .probe    = igb_probe,
+        .remove   = igb_remove,
+
+        /* ... */
+      };    
+    #+END_SRC
+
+    
+** PCI probe
+    Once a device has been identified by its PCI IDs, the kernel can
+    then select the proper driver to use to control the device. Each
+    PCI driver registers a probe function with the PCI system in the
+    kernel. The kernel calls this function for devices which have not
+    yet been claimed by a device driver. Once a device is claimed,
+    other drivers will not be asked about the device. Most drivers
+    have a lot of code that runs to get the device ready for use. The
+    exact things done vary from driver to driver. 
+
+    Some typical operations to perform include:
+    1. Enabling the PCI device.
+    2. Requesting memory ranges and IO ports.
+    3. Setting the DMA mask.
+    4. The ethtool (described more below) functions the driver supports are registered.
+    5. Any watchdog tasks needed (for example, e1000e has a watchdog
+       task to check if the hardware is hung).
+    6. Other device specific stuff like workarounds or dealing with
+       hardware specific quirks or similar.
+    7. The creation, initialization, and registration of a =struct net_device_ops= structure. This structure contains function
+       pointers to the various functions needed for opening the
+       device, sending data to the network, setting the MAC address,
+       and more.
+    8. The creation, initialization, and registration of a high level
+       =struct net_device= which represents a network device. 
+
+    Let’s take a quick look at some of these operations in the =igb=
+    driver in the function [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L2005-L2429][igb_probe]].
+
+    
+*** A peek into PCI initialization
+    The following code from the igb_probe function does some basic PCI
+    configuration. From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L2038-L2059][drivers/net/ethernet/intel/igb/igb_main.c]]
+    #+BEGIN_SRC c
+      err = pci_enable_device_mem(pdev);
+
+      /* ... */
+
+      err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+
+      /* ... */
+
+      err = pci_request_selected_regions(pdev, pci_select_bars(pdev,
+                 IORESOURCE_MEM),
+                 igb_driver_name);
+
+      pci_enable_pcie_error_reporting(pdev);
+
+      pci_set_master(pdev);
+      pci_save_state(pdev);    
+    #+END_SRC
+
+    First, the device is initialized with =pci_enable_device_mem=. This
+    will wake up the device if it is suspended, enable memory
+    resources, and more. 
+
+    Next, the DMA mask will be set. This device can read and write to
+    64bit memory addresses, so =dma_set_mask_and_coherent= is called
+    with =DMA_BIT_MASK(64)=. 
+
+    Memory regions will be reserved with a call to
+    =pci_request_selected_regions=, PCI Express Advanced Error Reporting
+    is enabled (if the PCI AER driver is loaded), DMA is enabled with
+    a call to =pci_set_master=, and the PCI configuration space is saved
+    with a call to =pci_save_state=.
+
+** Network device initialization
+    The =igb_probe= function does some important network device
+    initialization. In addition to the PCI specific work, it will do
+    more general networking and network device work: 
+    1. The =struct net_device_ops= is registered.
+    2. =ethtool= operations are registered.
+    3. The default MAC address is obtained from the NIC.
+    4. =net_device= feature flags are set.
+    5. And lots more.
+
+    Let’s take a look at each of these as they will be interesting
+    later.
+
+    =struct net_device_ops=
+
+    The =struct net_device_ops= contains function pointers to lots of
+    important operations that the network subsystem needs to control
+    the device. We’ll be mentioning this structure many times
+    throughout the rest of this post. 
+
+    This =net_device_ops= structure is attached to a =struct net_device=
+    in =igb_probe=. From ([[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L2090][drivers/net/ethernet/intel/igb/igb_main.c]])
+    
+    #+BEGIN_SRC c
+      static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+      {
+        /* ... */
+
+        netdev->netdev_ops = &igb_netdev_ops;    
+    #+END_SRC
+
+    And the functions that this =net_device_ops= structure holds
+    pointers to are set in the same file.  From
+    [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L1905-L1913][drivers/net/ethernet/intel/igb/igb_main.c]].
+
+    #+BEGIN_SRC c
+      static const struct net_device_ops igb_netdev_ops = {
+        .ndo_open               = igb_open,
+        .ndo_stop               = igb_close,
+        .ndo_start_xmit         = igb_xmit_frame,
+        .ndo_get_stats64        = igb_get_stats64,
+        .ndo_set_rx_mode        = igb_set_rx_mode,
+        .ndo_set_mac_address    = igb_set_mac,
+        .ndo_change_mtu         = igb_change_mtu,
+        .ndo_do_ioctl           = igb_ioctl,
+
+        /* ... */    
+    #+END_SRC
+
+    As you can see, there are several interesting fields in this
+    =struct  net_device_ops= like =ndo_open=, =ndo_stop=, =ndo_start_xmit=, and
+    =ndo_get_stats64= which hold the addresses of functions implemented
+    by the =igb= driver. 
+
+    We’ll be looking at some of these in more detail later.
+
+    =ethtool registration=
+
+    [[https://www.kernel.org/pub/software/network/ethtool/][ethool]] is a command line program you can use to get and set
+    various driver and hardware options. You can install it on Ubuntu
+    by running =apt-get install ethtool=. 
+
+    A common use of =ethtool= is to gather detailed statistics from
+    network devices. Other ethtool settings of interest will be
+    described later. 
+
+    The =ethtool= program talks to device drivers by using the [[http://man7.org/linux/man-pages/man2/ioctl.2.html][ioctl]]
+    system call. The device drivers register a series of functions
+    that run for the =ethtool= operations and the kernel provides the
+    glue. 
+
+    When an =ioctl= call is made from =ethtool=, the kernel finds the
+    =ethtool= structure registered by the appropriate driver and
+    executes the functions registered. The driver’s =ethtool= function
+    implementation can do anything from change a simple software flag
+    in the driver to adjusting how the actual NIC hardware works by
+    writing register values to the device. 
+
+    The =igb= driver registers its =ethtool= operations in =igb_probe= by
+    calling =igb_set_ethtool_ops=: 
+
+    #+BEGIN_SRC c
+      static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+      {
+        /* ... */
+
+        igb_set_ethtool_ops(netdev);    
+    #+END_SRC
+
+    All of the =igb= driver’s =ethtool= code can be found in the file
+    [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_ethtool.c][drivers/net/ethernet/intel/igb/igb_ethtool.c]] along with the
+    =igb_set_ethtool_ops= function.
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_ethtool.c#L3012-L3015][drivers/net/ethernet/intel/igb/igb_ethtool.c]]:
+
+    #+BEGIN_SRC c
+      void igb_set_ethtool_ops(struct net_device *netdev)
+      {
+        SET_ETHTOOL_OPS(netdev, &igb_ethtool_ops);
+      }    
+    #+END_SRC
+
+    Above that, you can find the =igb_ethtool_ops= structure with the
+    =ethtool= functions the =igb= driver supports set to the appropriate
+    fields. 
+    
+    From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_ethtool.c#L2970-L2979][drivers/net/ethernet/intel/igb/igb_ethtool.c]]:
+    
+    #+BEGIN_SRC c
+      static const struct ethtool_ops igb_ethtool_ops = {
+        .get_settings           = igb_get_settings,
+        .set_settings           = igb_set_settings,
+        .get_drvinfo            = igb_get_drvinfo,
+        .get_regs_len           = igb_get_regs_len,
+        .get_regs               = igb_get_regs,
+        /* ... */    
+    #+END_SRC
+
+    It is up to the individual drivers to determine which =ethtool=
+    functions are relevant and which should be implemented. Not all
+    drivers implement all =ethtool= functions, unfortunately. 
+
+    One interesting =ethtool= function is =get_ethtool_stats=, which (if
+    implemented) produces detailed statistics counters that are
+    tracked either in software in the driver or via the device
+    itself. 
+
+    The monitoring section below will show how to use =ethtool= to
+    access these detailed statistics. 
+    
+    
+** IRQs
+    When a data frame is written to RAM via DMA, how does the NIC tell
+    the rest of the system that data is ready to be processed? 
+
+    Traditionally, a NIC would generate an interrupt request (IRQ)
+    indicating data had arrived. There are three common types of IRQs:
+    MSI-X, MSI, and legacy IRQs. These will be touched upon shortly. A
+    device generating an IRQ when data has been written to RAM via DMA
+    is simple enough, but if large numbers of data frames arrive this
+    can lead to a large number of IRQs being generated. The more IRQs
+    that are generated, the less CPU time is available for higher
+    level tasks like user processes. 
+
+    The New Api (NAPI) was created as a mechanism for reducing the
+    number of IRQs generated by network devices on packet
+    arrival. While NAPI reduces the number of IRQs, it cannot
+    eliminate them completely. 
+
+    We’ll see why that is, exactly, in later sections.
+
+** NAPI
+    NAPI differs from the legacy method of harvesting data in several
+    important ways. NAPI allows a device driver to register a =poll=
+    function that the NAPI subsystem will call to harvest data
+    frames. 
+
+    The intended use of NAPI in network device drivers is as follows:
+    1. NAPI is enabled by the driver, but is in the off position initially.
+    2. A packet arrives and is DMA’d to memory by the NIC.
+    3. An IRQ is generated by the NIC which triggers the IRQ handler in the driver.
+    4. The driver wakes up the NAPI subsystem using a softirq (more on
+       these later). This will begin harvesting packets by calling the
+       driver’s registered =poll= function in a separate thread of
+       execution.
+    5. The driver should disable further IRQs from the NIC. This is
+       done to allow the NAPI subsystem to process packets without
+       interruption from the device.
+    6. Once there is no more work to do, the NAPI subsystem is
+       disabled and IRQs from the device are re-enabled.
+    7. The process starts back at step 2.
+
+    This method of gathering data frames has reduced overhead compared
+    to the legacy method because many data frames can be consumed at a
+    time without having to deal with processing each of them one IRQ
+    at a time. 
+
+    The device driver implements a =poll= function and registers it with
+    NAPI by calling =netif_napi_add=. When registering a NAPI poll
+    function with =netif_napi_add=, the driver will also specify the
+    =weight=. Most of the drivers hardcode a value of =64=. This value and
+    its meaning will be described in more detail below. 
+
+    Typically, drivers register their NAPI =poll= functions during
+    driver initialization.
+
+    
+** NAPI initialization in the =igb= driver
+    The =igb= driver does this via a long call chain:
+    1. =igb_probe= calls =igb_sw_init=.
+    2. =igb_sw_init= calls =igb_init_interrupt_scheme=.
+    3. =igb_init_interrupt_scheme= calls =igb_alloc_q_vectors=.
+    4. =igb_alloc_q_vectors= calls =igb_alloc_q_vector=.
+    5. =igb_alloc_q_vector= calls =netif_napi_add=.
+
+    This call trace results in a few high level things happening:
+    1. If MSI-X is supported, it will be enabled with a call to =pci_enable_msix=.
+    2. Various settings are computed and initialized; most notably the
+       number of transmit and receive queues that the device and
+       driver will use for sending and receiving packets.
+    3. =igb_alloc_q_vector= is called once for every transmit and
+       receive queue that will be created.
+    4. Each call to =igb_alloc_q_vector= calls =netif_napi_add= to
+       register a =poll= function for that queue and an instance of
+       =struct napi_struct= that will be passed to poll when called to
+       harvest packets. 
+
+    Let’s take a look at =igb_alloc_q_vector= to see how the poll
+    callback and its private data are registered. 
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L1145-L1271][drivers/net/ethernet/intel/igb/igb_main.c]]
+
+    #+BEGIN_SRC c
+      static int igb_alloc_q_vector(struct igb_adapter *adapter,
+                                    int v_count, int v_idx,
+                                    int txr_count, int txr_idx,
+                                    int rxr_count, int rxr_idx)
+      {
+        /* ... */
+
+        /* allocate q_vector and rings */
+        q_vector = kzalloc(size, GFP_KERNEL);
+        if (!q_vector)
+                return -ENOMEM;
+
+        /* initialize NAPI */
+        netif_napi_add(adapter->netdev, &q_vector->napi, igb_poll, 64);
+
+        /* ... */    
+    #+END_SRC
+
+    The above code is allocation memory for a receive queue and
+    registering the function =igb_poll= with the NAPI subsystem. It
+    provides a reference to the =struct napi_struct= associated with
+    this newly created RX queue (=&q_vector->napi= above). This will be
+    passed into =igb_poll= when called by the NAPI subsystem when it
+    comes time to harvest packets from this RX queue. 
+
+    This will be important later when we examine the flow of data from
+    drivers up the network stack.
+
+* Bringing a network device up
+  Recall the =net_device_ops= structure we saw earlier which registered
+  a set of functions for bringing the network device up, transmitting
+  packets, setting the MAC address, etc. 
+
+  When a network device is brought up (for example, with =ifconfig
+  eth0 up=), the function attached to the =ndo_open= field of the
+  =net_device_ops= structure is called.  
+
+  The =ndo_open= function will typically do things like:
+  1. Allocate RX and TX queue memory
+  2. Enable NAPI
+  3. Register an interrupt handler
+  4. Enable hardware interrupts
+  5. And more.
+
+  In the case of the =igb= driver, the function attached to the =ndo_open=
+  field of the =net_device_ops= structure is called =igb_open=. 
+  
+** Preparing to receive data from the network
+    Most NICs you’ll find today will use DMA to write data directly
+    into RAM where the OS can retrieve the data for processing. The
+    data structure most NICs use for this purpose resembles a queue
+    built on circular buffer (or a ring buffer). 
+
+    In order to do this, the device driver must work with the OS to
+    reserve a region of memory that the NIC hardware can use. Once
+    this region is reserved, the hardware is informed of its location
+    and incoming data will be written to RAM where it will later be
+    picked up and processed by the networking subsystem. 
+
+    This seems simple enough, but what if the packet rate was high
+    enough that a single CPU was not able to properly process all
+    incoming packets? The data structure is built on a fixed length
+    region of memory, so incoming packets would be dropped. 
+
+    This is where something known as known as [[https://en.wikipedia.org/wiki/Network_interface_controller#RSS][Receive Side Scaling
+    (RSS)]] or multiqueue can help.
+
+    Some devices have the ability to write incoming packets to several
+    different regions of RAM simultaneously; each region is a separate
+    queue. This allows the OS to use multiple CPUs to process incoming
+    data in parallel, starting at the hardware level. This feature is
+    not supported by all NICs. 
+
+    The Intel I350 NIC does support multiple queues. We can see
+    evidence of this in the =igb= driver. One of the first things the
+    igb driver does when it is brought up is call a function named
+    [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L2801-L2804][igb_setup_all_rx_resources]]. This function calls another function,
+    =igb_setup_rx_resources=, once for each RX queue to arrange for
+    DMA-able memory where the device will write incoming data. 
+
+    If you are curious how exactly this works, please see the [[https://github.com/torvalds/linux/blob/v3.13/Documentation/DMA-API-HOWTO.txt][Linux
+    kernel’s DMA API HOWTO]].
+
+    It turns out the number and size of the RX queues can be tuned by
+    using =ethtool=. Tuning these values can have a noticeable impact on
+    the number of frames which are processed vs the number of frames
+    which are dropped. 
+
+    The NIC uses a hash function on the packet header fields (like
+    source, destination, port, etc) to determine which RX queue the
+    data should be directed to. 
+
+    Some NICs let you adjust the weight of the RX queues, so you can
+    send more traffic to specific queues. 
+
+    Fewer NICs let you adjust this hash function itself. If you can
+    adjust the hash function, you can send certain flows to specific
+    RX queues for processing or even drop the packets at the hardware
+    level, if desired. 
+
+    We’ll take a look at how to tune these settings shortly.
+
+** Enable NAPI
+    When a network device is brought up, a driver will usually enable
+    NAPI.
+
+    We saw earlier how drivers register =poll= functions with NAPI, but
+    NAPI is not usually enabled until the device is brought up. 
+
+    Enabling NAPI is relatively straight forward. A call to
+    =napi_enable= will flip a bit in the =struct napi_struct= to indicate
+    that it is now enabled. As mentioned above, while NAPI will be
+    enabled it will be in the off position. 
+    
+    In the case of the =igb= driver, NAPI is enabled for each =q_vector=
+    that was initialized when the driver was loaded or when the queue
+    count or size are changed with ethtool. 
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L2833-L2834][drivers/net/ethernet/intel/igb/igb_main.c]]
+
+    #+BEGIN_SRC c
+      for (i = 0; i < adapter->num_q_vectors; i++)
+        napi_enable(&(adapter->q_vector[i]->napi));    
+    #+END_SRC
+
+    
+** Register an interrupt handler
+    After enabling NAPI, the next step is to register an interrupt
+    handler. There are different methods a device can use to signal an
+    interrupt: MSI-X, MSI, and legacy interrupts. As such, the code
+    differs from device to device depending on what the supported
+    interrupt methods are for a particular piece of hardware. 
+
+    The driver must determine which method is supported by the device
+    and register the appropriate handler function that will execute
+    when the interrupt is received. 
+
+    Some drivers, like the =igb= driver, will try to register an
+    interrupt handler with each method, falling back to the next
+    untested method on failure. 
+
+    MSI-X interrupts are the preferred method, especially for NICs
+    that support multiple RX queues. This is because each RX queue can
+    have its own hardware interrupt assigned, which can then be
+    handled by a specific CPU (with =irqbalance= or by modifying
+    =/proc/irq/IRQ_NUMBER/smp_affinity=). As we’ll see shortly, the CPU
+    that handles the interrupt will be the CPU that processes the
+    packet. In this way, arriving packets can be processed by separate
+    CPUs from the hardware interrupt level up through the networking
+    stack. 
+
+    If MSI-X is unavailable, MSI still presents advantages over legacy
+    interrupts and will be used by the driver if the device supports
+    it. Read [[https://en.wikipedia.org/wiki/Message_Signaled_Interrupts][ this useful wiki page ]]this useful wiki page for more information about MSI and
+    MSI-X. 
+
+    In the =igb= driver, the functions =igb_msix_ring=, =igb_intr_msi=,
+    =igb_intr= are the interrupt handler methods for the MSI-X, MSI, and
+    legacy interrupt modes, respectively. 
+
+    You can find the code in the driver which attempts each interrupt
+    method in [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L1360-L1413][drivers/net/ethernet/intel/igb/igb_main.c]]:
+    
+    #+BEGIN_SRC c
+      static int igb_request_irq(struct igb_adapter *adapter)
+      {
+        struct net_device *netdev = adapter->netdev;
+        struct pci_dev *pdev = adapter->pdev;
+        int err = 0;
+
+        if (adapter->msix_entries) {
+          err = igb_request_msix(adapter);
+          if (!err)
+            goto request_done;
+          /* fall back to MSI */
+
+          /* ... */
+        }
+
+        /* ... */
+
+        if (adapter->flags & IGB_FLAG_HAS_MSI) {
+          err = request_irq(pdev->irq, igb_intr_msi, 0,
+                netdev->name, adapter);
+          if (!err)
+            goto request_done;
+
+          /* fall back to legacy interrupts */
+
+          /* ... */
+        }
+
+        err = request_irq(pdev->irq, igb_intr, IRQF_SHARED,
+              netdev->name, adapter);
+
+        if (err)
+          dev_err(&pdev->dev, "Error %d getting interrupt\n", err);
+
+      request_done:
+        return err;
+      }    
+    #+END_SRC
+    
+    As you can see in the abbreviated code above, the driver first
+    attempts to set an MSI-X interrupt handler with =igb_request_msix=,
+    falling back to MSI on failure. Next, =request_irq= is used to
+    register =igb_intr_msi=, the MSI interrupt handler. If this fails,
+    the driver falls back to legacy interrupts. =request_irq= is used
+    again to register the legacy interrupt handler =igb_intr=. 
+
+    And this is how the =igb= driver registers a function that will be
+    executed when the NIC raises an interrupt signaling that data has
+    arrived and is ready for processing. 
+
+    
+** Enable Interrupts
+    At this point, almost everything is setup. The only thing left is
+    to enable interrupts from the NIC and wait for data to
+    arrive. Enabling interrupts is hardware specific, but the =igb=
+    driver does this in =__igb_open= by calling a helper function named
+    =igb_irq_enable=. 
+
+    Interrupts are enabled for this device by writing to registers:
+
+    #+BEGIN_SRC c
+      static void igb_irq_enable(struct igb_adapter *adapter)
+      {
+
+        /* ... */
+
+          wr32(E1000_IMS, IMS_ENABLE_MASK | E1000_IMS_DRSTA);
+          wr32(E1000_IAM, IMS_ENABLE_MASK | E1000_IMS_DRSTA);
+
+        /* ... */
+      }    
+    #+END_SRC
+
+    
+** The network device is now up
+    Drivers may do a few more things like start timers, work queues,
+    or other hardware-specific setup. Once that is completed. the
+    network device is up and ready for use. 
+
+    Let’s take a look at monitoring and tuning settings for network
+    device drivers.
+
+* Monitoring network devices
+  There are several different ways to monitor your network devices
+  offering different levels of granularity and complexity. Let’s
+  start with most granular and move to least granular.
+
+** Using =ethtool -S=
+   You can install =ethtool= on an Ubuntu system by running: sudo =apt-get install ethtool=.
+   
+   Once it is installed, you can access the statistics by passing the
+   =-S= flag along with the name of the network device you want
+   statistics about. 
+
+   #+CAPTION: Monitor detailed NIC device statistics (e.g., packet drops) with `ethtool -S`.
+   #+BEGIN_SRC sh
+     $ sudo ethtool -S eth0
+     NIC statistics:
+          rx_packets: 597028087
+          tx_packets: 5924278060
+          rx_bytes: 112643393747
+          tx_bytes: 990080156714
+          rx_broadcast: 96
+          tx_broadcast: 116
+          rx_multicast: 20294528
+          ....  
+   #+END_SRC
+
+   Monitoring this data can be difficult. It is easy to obtain, but
+   there is no standardization of the field values. Different drivers,
+   or even different versions of the same driver might produce
+   different field names that have the same meaning.
+
+   You should look for values with “drop”, “buffer”, “miss”, etc
+   in the label. Next, you will have to read your driver
+   source. You’ll be able to determine which values are accounted for
+   totally in software (e.g., incremented when there is no memory) and
+   which values come directly from hardware via a register read. In the
+   case of a register value, you should consult the data sheet for your
+   hardware to determine what the meaning of the counter really is;
+   many of the labels given via =ethtool= can be misleading. 
+
+** Using sysfs
+    sysfs also provides a lot of statistics values, but they are
+    slightly higher level than the direct NIC level stats provided.
+
+    You can find the number of dropped incoming network data frames
+    for, e.g. eth0 by using =cat= on a file.
+
+    #+CAPTION: Monitor higher level NIC statistics with sysfs.
+    #+BEGIN_SRC sh
+      $ cat /sys/class/net/eth0/statistics/rx_dropped
+      2    
+    #+END_SRC
+  
+    The counter values will be split into files like collisions,
+    =rx_dropped=, =rx_errors=, =rx_missed_errors=, etc. 
+
+    Unfortunately, it is up to the drivers to decide what the meaning
+    of each field is, and thus, when to increment them and where the
+    values come from. You may notice that some drivers count a certain
+    type of error condition as a drop, but other drivers may count the
+    same as a miss. 
+
+    If these values are critical to you, you will need to read your
+    driver source to understand exactly what your driver thinks each
+    of these values means.
+
+    
+** Using =/proc/net/dev= 
+    An even higher level file is =/proc/net/dev= which provides
+    high-level summary-esque information for each network adapter on
+    the system. 
+
+    #+CAPTION: Monitor high level NIC statistics by reading /proc/net/dev.
+    #+BEGIN_SRC sh
+      $ cat /proc/net/dev
+      Inter-|   Receive                                                |  Transmit
+       face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+        eth0: 110346752214 597737500    0    2    0     0          0  20963860 990024805984 6066582604    0    0    0     0       0          0
+          lo: 428349463836 1579868535    0    0    0     0          0         0 428349463836 1579868535    0    0    0     0       0          0    
+    #+END_SRC
+
+    This file shows a subset of the values you’ll find in the sysfs
+    files mentioned above, but it may serve as a useful general
+    reference.
+
+    The caveat mentioned above applies here, as well: if these values
+    are important to you, you will still need to read your driver
+    source to understand exactly when, where, and why they are
+    incremented to ensure your understanding of an error, drop, or
+    fifo are the same as your driver. 
+
+    
+* Tuning network devices
+  
+** Check the number of RX queues being used
+    If your NIC and the device driver loaded on your system support
+    RSS / multiqueue, you can usually adjust the number of RX queues
+    (also called RX channels), by using =ethtool=. 
+
+    #+CAPTION: Check the number of NIC receive queues with ethtool
+    #+BEGIN_SRC c
+      $ sudo ethtool -l eth0
+      Channel parameters for eth0:
+      Pre-set maximums:
+      RX:   0
+      TX:   0
+      Other:    0
+      Combined: 8
+      Current hardware settings:
+      RX:   0
+      TX:   0
+      Other:    0
+      Combined: 4    
+    #+END_SRC
+
+    This output is displaying the pre-set maximums (enforced by the driver and the hardware) and the current settings.
+
+    NOTES: not all device drivers will have support for this
+    operation.
+
+    #+CAPTION: Error seen if your NIC doesn't support this operation.
+    #+BEGIN_SRC sh
+      $ sudo ethtool -l eth0
+      Channel parameters for eth0:
+      Cannot get device channel parameters
+      : Operation not supported
+    #+END_SRC
+
+    This means that your driver has not implemented the ethtool
+    =get_channels= operation. This could be because the NIC doesn’t
+    support adjusting the number of queues, doesn’t support RSS /
+    multiqueue, or your driver has not been updated to handle this
+    feature. 
+    
+** Adjusting the number of RX queues
+    Once you’ve found the current and maximum queue count, you can
+    adjust the values by using =sudo ethtool -L=. 
+
+    NOTES: some devices and their drivers only support combined
+    queues that are paired for transmit and receive, as in the example
+    in the above section. 
+
+    #+CAPTION: Set combined NIC transmit and receive queues to 8 with ethtool -L
+    #+BEGIN_SRC sh
+      $ sudo ethtool -L eth0 combined 8    
+    #+END_SRC
+
+    If your device and driver support individual settings for RX and
+    TX and you’d like to change only the RX queue count to 8, you
+    would run:
+    
+    #+CAPTION: Set the number of NIC receive queues to 8 with ethtool -L.
+    #+BEGIN_SRC sh
+      $ sudo ethtool -L eth0 rx 8    
+    #+END_SRC
+
+    NOTES: making these changes will, for most drivers, take the
+    interface down and then bring it back up; connections to this
+    interface will be interrupted. This may not matter much for a
+    one-time change, though.
+
+    
+** Adjusting the size of the RX queues
+    Some NICs and their drivers also support adjusting the size of the
+    RX queue. Exactly how this works is hardware specific, but luckily
+    =ethtool= provides a generic way for users to adjust the
+    size. Increasing the size of the RX queue can help prevent network
+    data drops at the NIC during periods where large numbers of data
+    frames are received. Data may still be dropped in software,
+    though, and other tuning is required to reduce or eliminate drops
+    completely. 
+
+    #+CAPTION: Check current NIC queue sizes with ethtool -g
+    #+BEGIN_SRC sh
+      $ sudo ethtool -g eth0
+      Ring parameters for eth0:
+      Pre-set maximums:
+      RX:   4096
+      RX Mini:  0
+      RX Jumbo: 0
+      TX:   4096
+      Current hardware settings:
+      RX:   512
+      RX Mini:  0
+      RX Jumbo: 0
+      TX:   512    
+    #+END_SRC
+
+    the above output indicates that the hardware supports up to 4096
+    receive and transmit descriptors, but it is currently only
+    using 512. 
+
+    #+CAPTION: Increase size of each RX queue to 4096 with ethtool -G
+    #+BEGIN_SRC sh
+      sudo ethtool -G eth0 rx 4096    
+    #+END_SRC
+
+    NOTES: making these changes will, for most drivers, take the
+    interface down and then bring it back up; connections to this
+    interface will be interrupted. This may not matter much for a
+    one-time change, though.
+
+    
+** Adjusting the processing weight of RX queues
+    Some NICs support the ability to adjust the distribution of
+    network data among the RX queues by setting a weight.
+
+    You can configure this if:
+    - Your NIC supports flow indirection.
+    - Your driver implements the ethtool functions
+      =get_rxfh_indir_size= and =get_rxfh_indir=.
+    - You are running a new enough version of =ethtool= that has
+      support for the command line options =-x= and =-X= to show and
+      set the indirection table, respectively. 
+
+    #+CAPTION: Check the RX flow indirection table with ethtool -x
+    #+BEGIN_SRC sh
+      $ sudo ethtool -x eth0
+      RX flow hash indirection table for eth3 with 2 RX ring(s):
+      0: 0 1 0 1 0 1 0 1
+      8: 0 1 0 1 0 1 0 1
+      16: 0 1 0 1 0 1 0 1
+      24: 0 1 0 1 0 1 0 1    
+    #+END_SRC
+
+    This output shows packet hash values on the left, with receive
+    queue 0 and 1 listed. So, a packet which hashes to 2 will be
+    delivered to receive queue 0, while a packet which hashes to 3
+    will be delivered to receive queue 1.
+
+    #+CAPTION: Example: spread processing evenly between first 2 RX queues
+    #+BEGIN_SRC sh
+      $ sudo ethtool -X eth0 equal 2    
+    #+END_SRC
+
+    If you want to set custom weights to alter the number of packets
+    which hit certain receive queues (and thus CPUs), you can specify
+    those on the command line, as well: 
+
+    #+CAPTION: Set custom RX queue weights with ethtool -X
+    #+BEGIN_SRC sh
+      $ sudo ethtool -X eth0 weight 6 2
+    #+END_SRC
+
+    The above command specifies a weight of 6 for rx queue 0 and 2 for
+    rx queue 1, pushing much more data to be processed on queue 0.
+
+    Some NICs will also let you adjust the fields which be used in the
+    hash algorithm, as we’ll see now.
+
+    
+** Adjusting the rx hash fields for network flows
+    You can use =ethtool= to adjust the fields that will be used when
+    computing a hash for use with RSS.
+
+    #+CAPTION: Check which fields are used for UDP RX flow hash with ethtool -n.
+    #+BEGIN_SRC sh
+      $ sudo ethtool -n eth0 rx-flow-hash udp4
+      UDP over IPV4 flows use these fields for computing Hash flow key:
+      IP SA
+      IP DA    
+    #+END_SRC
+
+    For eth0, the fields that are used for computing a hash on UDP
+    flows is the IPv4 source and destination addresses. Let’s include
+    the source and destination ports:
+    
+    #+CAPTION: Set UDP RX flow hash fields with ethtool -N.
+    #+BEGIN_SRC sh
+      $ sudo ethtool -N eth0 rx-flow-hash udp4 sdfn    
+    #+END_SRC
+
+    The =sdfn= string is a bit cryptic; check the =ethtool= man page
+    for an explanation of each letter. 
+
+    Adjusting the fields to take a hash on is useful, but =ntuple=
+    filtering is even more useful for finer grained control over which
+    flows will be handled by which RX queue. 
+
+    
+** COMMENT ntuple filtering for steering network flows
+    Some NICs support a feature known as “ntuple filtering.” This
+    feature allows the user to specify (via =ethtool=) a set of
+    parameters to use to filter incoming network data in hardware and
+    queue it to a particular RX queue. For example, the user can
+    specify that TCP packets destined to a particular port should be
+    sent to RX queue 1. 
+
+    On Intel NICs this feature is commonly known as Intel Ethernet
+    Flow Director. Other NIC vendors may have other marketing names
+    for this feature.
+
+    As we’ll see later, ntuple filtering is a crucial component of
+    another feature called Accelerated Receive Flow Steering (aRFS),
+    which makes using ntuple much easier if your NIC supports it. aRFS
+    will be covered later.
+
+    This feature can be useful if the operational requirements of the
+    system involve maximizing data locality with the hope of
+    increasing CPU cache hit rates when processing network data. For
+    example consider the following configuration for a webserver
+    running on port 80: 
+    - A webserver running on port 80 is pinned to run on CPU 2.
+    - IRQs for an RX queue are assigned to be processed by CPU 2.
+    - TCP traffic destined to port 80 is ‘filtered’ with ntuple to CPU 2.
+    - All incoming traffic to port 80 is then processed by CPU 2 starting at data arrival to the userland program.
+    - Careful monitoring of the system including cache hit rates and
+      networking stack latency will be needed to determine
+      effectiveness. 
+
+    As mentioned, ntuple filtering can be configured with =ethtool=, but
+    first, you’ll need to ensure that this feature is enabled on your
+    device. 
+    
+    #+CAPTION: Check if ntuple filters are enabled with ethtool -k
+    #+BEGIN_SRC sh
+      $ sudo ethtool -k eth0
+      Offload parameters for eth0:
+      ...
+      ntuple-filters: off
+      receive-hashing: on    
+    #+END_SRC
+
+    As you can see, =ntuple-filters= are set to off on this device.
+
+    #+CAPTION: Enable ntuple filters with ethtool -K
+    #+BEGIN_SRC sh
+      $ sudo ethtool -K eth0 ntuple on    
+    #+END_SRC
+
+    Once you’ve enabled ntuple filters, or verified that it is
+    enabled, you can check the existing ntuple rules by using
+    =ethtool=: 
+    
+    #+CAPTION: Check existing ntuple filters with ethtool -u
+    #+BEGIN_SRC sh
+      $ sudo ethtool -u eth0
+      40 RX rings available
+      Total 0 rules    
+    #+END_SRC
+
+    As you can see, this device has no ntuple filter rules. You can
+    add a rule by specifying it on the command line to =ethtool=. Let’s
+    add a rule to direct all TCP traffic with a destination port of 80
+    to RX queue 2: 
+
+    #+CAPTION: Add ntuple filter to send TCP flows with destination port 80 to RX queue 2
+    #+BEGIN_SRC sh
+      $ sudo ethtool -U eth0 flow-type tcp4 dst-port 80 action 2    
+    #+END_SRC
+
+    You can also use ntuple filtering to drop packets for particular
+    flows at the hardware level. This can be useful for mitigating
+    heavy incoming traffic from specific IP addresses. For more
+    information about configuring ntuple filter rules, see the =ethtool=
+    man page. 
+
+    You can usually get statistics about the success (or failure) of
+    your ntuple rules by checking values output from =ethtool -S [device name]=. For example, on Intel NICs, the statistics
+    =fdir_match= and =fdir_miss= calculate the number of matches and
+    misses for your ntuple filtering rules. Consult your device driver
+    source and device data sheet for tracking down statistics counters
+    (if available).
+
+* SoftIRQs
+  Before examining the network stack, we’ll need to take a short
+  detour to examine something in the Linux kernel called SoftIRQs. 
+
+  
+** What is a softirq?
+    The softirq system in the Linux kernel is a mechanism for
+    executing code outside of the context of an interrupt handler
+    implemented in a driver. This system is important because hardware
+    interrupts may be disabled during all or part of the execution of
+    an interrupt handler. The longer interrupts are disabled, the
+    greater chance that events may be missed. So, it is important to
+    defer any long running actions outside of the interrupt handler so
+    that it can complete as quickly as possible and re-enable
+    interrupts from the device. 
+
+    There are other mechanisms that can be used for deferring work in
+    the kernel, but for the purposes of the networking stack, we’ll
+    be looking at softirqs. 
+
+    The softirq system can be imagined as a series of kernel threads
+    (one per CPU) that run handler functions which have been
+    registered for different softirq events. If you’ve ever looked at
+    top and seen =ksoftirqd/0= in the list of kernel threads, you were
+    looking at the softirq kernel thread running on CPU 0. 
+
+    Kernel subsystems (like networking) can register a softirq handler
+    by executing the =open_softirq= function. We’ll see later how the
+    networking system registers its softirq handlers. For now, let’s
+    learn a bit more about how softirqs work. 
+    
+    
+** ksoftirqd
+    Since softirqs are so important for deferring the work of device
+    drivers, you might imagine that the =ksoftirqd= process is spawned
+    pretty early in the life cycle of the kernel and you’d be
+    correct. 
+
+    Looking at the code found in [[https://github.com/torvalds/linux/blob/v3.13/kernel/softirq.c#L743-L758][kernel/softirq.c]] reveals how the
+    =ksoftirqd= system is initialized: 
+    
+    #+BEGIN_SRC c
+      static struct smp_hotplug_thread softirq_threads = {
+        .store              = &ksoftirqd,
+        .thread_should_run  = ksoftirqd_should_run,
+        .thread_fn          = run_ksoftirqd,
+        .thread_comm        = "ksoftirqd/%u",
+      };
+
+      static __init int spawn_ksoftirqd(void)
+      {
+        register_cpu_notifier(&cpu_nfb);
+
+        BUG_ON(smpboot_register_percpu_thread(&softirq_threads));
+
+        return 0;
+      }
+      early_initcall(spawn_ksoftirqd);    
+    #+END_SRC
+
+    As you can see from the =struct smp_hotplug_thread= definition
+    above, there are two function pointers being registered:
+    =ksoftirqd_should_run= and =run_ksoftirqd=. 
+
+    Both of these functions are called from [[https://github.com/torvalds/linux/blob/v3.13/kernel/smpboot.c#L94-L163][kernel/smpboot.c]]as part of
+    something which resembles an event loop. 
+
+    The code in =kernel/smpboot.c= first calls =ksoftirqd_should_run=
+    which determines if there are any pending softirqs and, if there
+    are pending softirqs,  =run_ksoftirqd= is executed. The
+    =run_ksoftirqd= does some minor bookkeeping before it calls
+    =__do_softirq= .
+
+** =__do_softirq=
+    The =__do_softirq= function does a few interesting things:
+    - determines which softirq is pending
+    - softirq time is accounted for statistics purposes
+    - softirq execution statistics are incremented
+    - the softirq handler for the pending softirq (which was
+      registered with a call to =open_softirq=) is executed. 
+
+    So, when you look at graphs of CPU usage and see =softirq= or =si= you
+    now know that this is measuring the amount of CPU usage happening
+    in a deferred work context.   
+
+** Monitoring
+    
+*** =/proc/softirqs=
+    The =softirq= system increments statistic counters which can be read
+    from =/proc/softirqs= Monitoring these statistics can give you a
+    sense for the rate at which softirqs for various events are being
+    generated. 
+
+    #+CAPTION: Check softIRQ stats by reading /proc/softirqs.
+    #+BEGIN_SRC sh
+      $ cat /proc/softirqs
+                          CPU0       CPU1       CPU2       CPU3
+                HI:          0          0          0          0
+             TIMER: 2831512516 1337085411 1103326083 1423923272
+            NET_TX:   15774435     779806     733217     749512
+            NET_RX: 1671622615 1257853535 2088429526 2674732223
+             BLOCK: 1800253852    1466177    1791366     634534
+      BLOCK_IOPOLL:          0          0          0          0
+           TASKLET:         25          0          0          0
+             SCHED: 2642378225 1711756029  629040543  682215771
+           HRTIMER:    2547911    2046898    1558136    1521176
+               RCU: 2056528783 4231862865 3545088730  844379888    
+    #+END_SRC
+
+    This file can give you an idea of how your network receive
+    (=NET_RX=) processing is currently distributed across your CPUs. If
+    it is distributed unevenly, you will see a larger count value for
+    some CPUs than others. This is one indicator that you might be
+    able to benefit from Receive Packet Steering / Receive Flow
+    Steering described below. Be careful using just this file when
+    monitoring your performance: during periods of high network
+    activity you would expect to see the rate =NET_RX= increments
+    increase, but this isn’t necessarily the case. It turns out that
+    this is a bit nuanced, because there are additional tuning knobs
+    in the network stack that can affect the rate at which =NET_RX=
+    softirqs will fire, which we’ll see soon.
+
+    You should be aware of this, however, so that if you adjust the
+    other tuning knobs you will know to examine =/proc/softirqs= and
+    expect to see a change.
+
+    Now, let’s move on to the networking stack and trace how network
+    data is received from top to bottom.
+
+* Linux network device subsystem
+  Now that we’ve taken a look in to how network drivers and softirqs
+  work, let’s see how the Linux network device subsystem is
+  initialized. Then, we can follow the path of a packet starting with
+  its arrival.
+
+  
+** Initialization of network device subsystem
+    The network device (netdev) subsystem is initialized in the
+    function =net_dev_init=. Lots of interesting things happen in this
+    initialization function. 
+
+    
+*** Initialization of struct softnet_data structures
+    =net_dev_init= creates a set of struct softnet_data structures for
+    each CPU on the system. These structures will hold pointers to
+    several important things for processing network data: 
+    - List for NAPI structures to be registered to this CPU.
+    - A backlog for data processing.
+    - The processing =weight=.
+    - The [[https://en.wikipedia.org/wiki/Large_receive_offload][receive offload]] structure list.
+    - [[https://lwn.net/Articles/362339/][Receive packet steering]] settings.
+    - And more.
+
+    Each of these will be examined in greater detail later as we
+    progress up the stack.
+    
+*** Initialization of softirq handlers
+    =net_dev_init= registers a transmit and receive softirq handler
+    which will be used to process incoming or outgoing network
+    data. The code for this is pretty straight forward: 
+
+    #+BEGIN_SRC c
+      static int __init net_dev_init(void)
+      {
+        /* ... */
+
+        open_softirq(NET_TX_SOFTIRQ, net_tx_action);
+        open_softirq(NET_RX_SOFTIRQ, net_rx_action);
+
+       /* ... */
+      }    
+    #+END_SRC
+    
+    We’ll see soon how the driver’s interrupt handler will “raise”
+    (or trigger) the =net_rx_action= function registered to the
+    =NET_RX_SOFTIRQ= softirq.
+
+    
+** Data arrives
+    In general, the interrupt handler which runs when an interrupt is
+    raised should try to defer as much processing as possible to
+    happen outside the interrupt context. This is crucial because
+    while an interrupt is being processed, other interrupts may be
+    blocked. 
+
+    Let’s take a look at the source for the MSI-X interrupt handler;
+    it will really help illustrate the idea that the interrupt handler
+    does as little work as possible. 
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/drivers/net/ethernet/intel/igb/igb_main.c#L5148-L5158][drivers/net/ethernet/intel/igb/igb_main.c]]:
+    #+BEGIN_SRC c
+      static irqreturn_t igb_msix_ring(int irq, void *data)
+      {
+        struct igb_q_vector *q_vector = data;
+
+        /* Write the ITR value calculated from the previous interrupt. */
+        igb_write_itr(q_vector);
+
+        napi_schedule(&q_vector->napi);
+
+        return IRQ_HANDLED;
+      }    
+    #+END_SRC
+
+    This interrupt handler is very short and performs 2 very quick
+    operations before returning.
+
+    First, this function calls =igb_write_itr= which simply updates a
+    hardware specific register. In this case, the register that is
+    updated is one which is used to track the rate hardware interrupts
+    are arriving.
+
+    This register is used in conjunction with a hardware feature
+    called “Interrupt Throttling” (also called “Interrupt
+    Coalescing”) which can be used to to pace the delivery of
+    interrupts to the CPU. We’ll see soon how =ethtool= provides a
+    mechanism for adjusting the rate at which IRQs fire. 
+
+    Secondly, =napi_schedule= is called which wakes up the NAPI
+    processing loop if it was not already active. Note that the NAPI
+    processing loop executes in a softirq; the NAPI processing loop
+    does not execute from the interrupt handler. The interrupt handler
+    simply causes it to start executing if it was not already. 
+
+    The actual code showing exactly how this works is important; it
+    will guide our understanding of how network data is processed on
+    multi-CPU systems. 
+
+    
+** NAPI and =napi_schedule=
+    Let’s figure out how the =napi_schedule= call from the hardware
+    interrupt handler works.
+
+    Remember, NAPI exists specifically to harvest network data without
+    needing interrupts from the NIC to signal that data is ready for
+    processing. As mentioned earlier, the NAPI =poll= loop is
+    bootstrapped by receiving a hardware interrupt. In other words:
+    NAPI is enabled, but off, until the first packet arrives at which
+    point the NIC raises an IRQ and NAPI is started. There are a few
+    other cases, as we’ll see soon, where NAPI can be disabled and
+    will need a hardware interrupt to be raised before it will be
+    started again. 
+
+    The NAPI poll loop is started when the interrupt handler in the
+    driver calls =napi_schedule=. =napi_schedule= is actually just a
+    wrapper function defined in a header file which calls down to
+    =__napi_schedule=. 
+    
+    From [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L4154-L4168][net/core/dev.c]]
+
+    #+BEGIN_SRC c
+      /**
+       ,* __napi_schedule - schedule for receive
+       ,* @n: entry to schedule
+       ,*
+       ,* The entry's receive function will be scheduled to run
+       ,*/
+      void __napi_schedule(struct napi_struct *n)
+      {
+        unsigned long flags;
+
+        local_irq_save(flags);
+        ____napi_schedule(&__get_cpu_var(softnet_data), n);
+        local_irq_restore(flags);
+      }
+      EXPORT_SYMBOL(__napi_schedule);    
+    #+END_SRC
+
+    This code is using =__get_cpu_var= to get the =softnet_data= structure
+    that is registered to the current CPU. This =softnet_data= structure
+    and the =struct napi_struct= structure handed up from the driver are
+    passed into =____napi_schedule=. Wow, that’s a lot of underscores
+    ;) 
+
+    Let’s take a look at =____napi_schedule=, from [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L2914-L2920][net/core/dev.c]]:
+
+    #+BEGIN_SRC c
+      /* Called with irq disabled */
+      static inline void ____napi_schedule(struct softnet_data *sd,
+                                           struct napi_struct *napi)
+      {
+        list_add_tail(&napi->poll_list, &sd->poll_list);
+        __raise_softirq_irqoff(NET_RX_SOFTIRQ);
+      }    
+    #+END_SRC
+
+    This code does two important things:
+    1. The =struct napi_struct= handed up from the device driver’s
+       interrupt handler code is added to the =poll_list= attached to
+       the =softnet_data= structure associated with the current CPU.
+    2. =__raise_softirq_irqoff= is used to “raise” (or trigger) a
+       =NET_RX_SOFTIRQ= softirq. This will cause the =net_rx_action=
+       registered during the network device subsystem initialization
+       to be executed, if it’s not currently being executed. 
+
+     As we’ll see shortly, the softirq handler function =net_rx_action=
+       will call the NAPI poll function to harvest packets.
+
+     
+** A note about CPU and network data processing
+    Note that all the code we’ve seen so far to defer work from a
+    hardware interrupt handler to a softirq has been using structures
+    associated with the current CPU.
+
+    While the driver’s IRQ handler itself does very little work
+    itself, the softirq handler will execute on the same CPU as the
+    driver’s IRQ handler. 
+
+    This why setting the CPU a particular IRQ will be handled by is
+    important: that CPU will be used not only to execute the interrupt
+    handler in the driver, but the same CPU will also be used when
+    harvesting packets in a softirq via NAPI. 
+
+    As we’ll see later, things like [[https://lwn.net/Articles/362339/][Receive Packet Steering]] can
+    distribute some of this work to other CPUs further up the network
+    stack. 
+
+    
+** Monitoring network data arrival
+    
+*** Hardware interrupt requests
+    NOTES: monitoring hardware IRQs does not give a complete picture
+    of packet processing health. Many drivers turn off hardware IRQs
+    while NAPI is running, as we'll see later. It is one important
+    part of your whole monitoring solution.
+
+    #+CAPTION: Check hardware interrupt stats by reading /proc/interrupts.
+    #+BEGIN_SRC sh
+      $ cat /proc/interrupts
+                  CPU0       CPU1       CPU2       CPU3
+         0:         46          0          0          0 IR-IO-APIC-edge      timer
+         1:          3          0          0          0 IR-IO-APIC-edge      i8042
+        30: 3361234770          0          0          0 IR-IO-APIC-fasteoi   aacraid
+        64:          0          0          0          0 DMAR_MSI-edge      dmar0
+        65:          1          0          0          0 IR-PCI-MSI-edge      eth0
+        66:  863649703          0          0          0 IR-PCI-MSI-edge      eth0-TxRx-0
+        67:  986285573          0          0          0 IR-PCI-MSI-edge      eth0-TxRx-1
+        68:         45          0          0          0 IR-PCI-MSI-edge      eth0-TxRx-2
+        69:        394          0          0          0 IR-PCI-MSI-edge      eth0-TxRx-3
+       NMI:    9729927    4008190    3068645    3375402  Non-maskable interrupts
+       LOC: 2913290785 1585321306 1495872829 1803524526  Local timer interrupts    
+    #+END_SRC
+
+    You can monitor the statistics in =/proc/interrupts= to see how the
+    number and rate of hardware interrupts change as packets arrive
+    and to ensure that each RX queue for your NIC is being handled by
+    an appropriate CPU. As we’ll see shortly, this number only tells
+    us how many hardware interrupts have happened, but it is not
+    necessarily a good metric for understanding how much data has been
+    received or processed as many drivers will disable NIC IRQs as
+    part of their contract with the NAPI subsystem. Further, using
+    interrupt coalescing will also affect the statistics gathered from
+    this file. Monitoring this file can help you determine if the
+    interrupt coalescing settings you select are actually working.
+
+    To get a more complete picture of your network processing health,
+    you’ll need to monitor =/proc/softirqs= (as mentioned above) and
+    additional files in =/proc= that we’ll cover below. 
+
+    
+** Tuning network data arrival
+    
+*** Interrupt coalescing
+    [[https://en.wikipedia.org/wiki/Interrupt_coalescing][Interrupt coalescing]] is a method of preventing interrupts from
+    being raised by a device to a CPU until a specific amount of work
+    or number of events are pending. 
+
+    This can help prevent [[https://en.wikipedia.org/wiki/Interrupt_storm][interrupt storms]]  and can help increase
+    throughput or latency, depending on the settings used. Fewer
+    interrupts generated result in higher throughput, increased
+    latency, and lower CPU usage. More interrupts generated result in
+    the opposite: lower latency, lower throughput, but also increased
+    CPU usage. 
+
+    Historically, earlier versions of the =igb=, =e1000=, and other
+    drivers included support for a parameter called
+    =InterruptThrottleRate=. This parameter has been replaced in more
+    recent drivers with a generic =ethtool= function. 
+
+    #+CAPTION: Get the current IRQ coalescing settings with ethtool -c.
+    #+BEGIN_SRC sh
+      $ sudo ethtool -c eth0
+      Coalesce parameters for eth0:
+      Adaptive RX: off  TX: off
+      stats-block-usecs: 0
+      sample-interval: 0
+      pkt-rate-low: 0
+      pkt-rate-high: 0
+      ...    
+    #+END_SRC
+
+    =ethtool= provides a generic interface for setting various
+    coalescing settings. Keep in mind, however, that not every device
+    or driver will support every setting. You should check your driver
+    documentation or driver source code to determine what is, or is
+    not, supported. As per the ethtool documentation: “Anything not
+    implemented by the driver causes these values to be silently
+    ignored.”
+
+    One interesting option that some drivers support is “adaptive
+    RX/TX IRQ coalescing.” This option is typically implemented in
+    hardware. The driver usually needs to do some work to inform the
+    NIC that this feature is enabled and some bookkeeping as well (as
+    seen in the =igb= driver code above). 
+
+    The result of enabling adaptive RX/TX IRQ coalescing is that
+    interrupt delivery will be adjusted to improve latency when packet
+    rate is low and also improve throughput when packet rate is high. 
+
+    #+CAPTION: Enable adaptive RX IRQ coalescing with ethtool -C
+    $ sudo ethtool -C eth0 adaptive-rx on
+
+    You can also use =ethtool -C= to set several options. Some of the
+    more common options to set are:
+    - =rx-usecs=: How many usecs to delay an RX interrupt after a packet arrives.
+    - =rx-frames=: Maximum number of data frames to receive before an RX interrupt.
+    - =rx-usecs-irq=: How many usecs to delay an RX interrupt while an
+      interrupt is being serviced by the host.
+    - =rx-frames-irq=: Maximum number of data frames to receive before
+      an RX interrupt is generated while the system is servicing an
+      interrupt. 
+
+    And many, many more.
+
+    NOTES:  that your hardware and driver may only support a subset of
+    the options listed above. You should consult your driver source
+    code and your hardware data sheet for more information on
+    supported coalescing options.
+
+    Unfortunately, the options you can set aren’t well documented
+    anywhere except in a header file.  Check the source of
+    [[https://github.com/torvalds/linux/blob/v3.13/include/uapi/linux/ethtool.h#L184-L255][include/uapi/linux/ethtool.h]]to find an explanation of each option
+    supported by ethtool (but not necessarily your driver and NIC). 
+
+    NOTES: while interrupt coalescing seems to be a very useful
+    optimization at first glance, the rest of the networking stack
+    internals also come into the fold when attempting to
+    optimize. Interrupt coalescing can be useful in some cases, but
+    you should ensure that the rest of your networking stack is also
+    tuned properly. Simply modifying your coalescing settings alone
+    will likely provide minimal benefit in and of itself. 
+
+    
+*** Adjusting IRQ affinities
+    If your NIC supports RSS / multiqueue or if you are attempting to
+    optimize for data locality, you may wish to use a specific set of
+    CPUs for handling interrupts generated by your NIC. 
+
+    Setting specific CPUs allows you to segment which CPUs will be
+    used for processing which IRQs. These changes may affect how upper
+    layers operate, as we’ve seen for the networking stack.
+
+    If you do decide to adjust your IRQ affinities, you should first
+    check if you running the =irqbalance= daemon. This daemon tries to
+    automatically balance IRQs to CPUs and it may overwrite your
+    settings. If you are running =irqbalance=, you should either disable
+    =irqbalance= or use the =--banirq= in conjunction with
+    =IRQBALANCE_BANNED_CPUS= to let irqbalance know that it shouldn’t
+    touch a set of IRQs and CPUs that you want to assign yourself.
+
+    Next, you should check the file =/proc/interrupts= for a list of
+    the IRQ numbers for each network RX queue for your NIC.
+
+    Finally, you can adjust the which CPUs each of those IRQs will be
+    handled by modifying =/proc/irq/IRQ_NUMBER/smp_affinity= for each
+    IRQ number.
+
+    You simply write a hexadecimal bitmask to this file to instruct
+    the kernel which CPUs it should use for handling the IRQ.
+
+    #+CAPTION: Example: Set the IRQ affinity for IRQ 8 to CPU 0
+    #+BEGIN_SRC sh
+      $ sudo bash -c 'echo 1 > /proc/irq/8/smp_affinity'    
+    #+END_SRC
+
+    
+** Network data processing begins
+    Once the softirq code determines that a softirq is pending, begins
+    processing, and executes =net_rx_action=, network data processing
+    begins.
+
+    Let’s take a look at portions of the =net_rx_action= processing
+    loop to understand how it works, which pieces are tunable, and
+    what can be monitored.
+
+    
+*** =net_rx_action= processing loop
+    =net_rx_action= begins the processing of packets from the memory the
+    packets were DMA’d into by the device.
+
+    The function iterates through the list of NAPI structures that are
+    queued for the current CPU, dequeuing each structure, and
+    operating on it. 
+
+    The processing loop bounds the amount of work and execution time
+    that can be consumed by the registered NAPI =poll= functions. It
+    does this in two ways: 
+    1. By keeping track of a work =budget= (which can be adjusted), and
+    2. Checking the elapsed time
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L4300-L4309][net/core/dev.c]]
+
+    #+BEGIN_SRC c
+      while (!list_empty(&sd->poll_list)) {
+          struct napi_struct *n;
+          int work, weight;
+
+          /* If softirq window is exhausted then punt.
+           ,* Allow this to run for 2 jiffies since which will allow
+           ,* an average latency of 1.5/HZ.
+           ,*/
+          if (unlikely(budget <= 0 || time_after_eq(jiffies, time_limit)))
+            goto softnet_break;    
+    #+END_SRC
+
+    This is how the kernel prevents packet processing from consuming
+    the entire CPU. The =budget= above is the total available budget
+    that will be spent among each of the available NAPI structures
+    registered to this CPU. 
+    
+    This is another reason why multiqueue NICs should have the IRQ
+    affinity carefully tuned. Recall that the CPU which handles the
+    IRQ from the device will be the CPU where the softirq handler will
+    execute and, as a result, will also be the CPU where the above
+    loop and budget computation runs.
+
+    Systems with multiple NICs each with multiple queues can end up in
+    a situation where multiple NAPI structs are registered to the same
+    CPU. Data processing for all NAPI structs on the same CPU spend
+    from the same =budget=.
+
+    If you don’t have enough CPUs to distribute your NIC’s IRQs, you
+    can consider increasing the =net_rx_action= budget to allow for more
+    packet processing for each CPU. Increasing the budget will
+    increase CPU usage (specifically =sitime= or =si= in =top= or other
+    programs), but should reduce latency as data will be processed
+    more promptly. 
+
+    NOTES: the CPU will still be bounded by a time limit of 2 jiffies,
+    regardless of the assigned budget.
+
+    
+*** NAPI poll function and weight
+    Recall that network device drivers use =netif_napi_add= for
+    registering =poll= function. As we saw earlier in this post, the =igb=
+    driver has a piece of code like this:
+    #+BEGIN_SRC c
+      /* initialize NAPI */
+        netif_napi_add(adapter->netdev, &q_vector->napi, igb_poll, 64);    
+    #+END_SRC
+
+    This registers a NAPI structure with a hardcoded weight
+    of 64. We’ll see now how this is used in the =net_rx_action=
+    processing loop.
+
+    From [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L4322-L4338][net/core/dev.c]]
+
+    #+BEGIN_SRC c
+      weight = n->weight;
+
+      work = 0;
+      if (test_bit(NAPI_STATE_SCHED, &n->state)) {
+              work = n->poll(n, weight);
+              trace_napi_poll(n);
+      }
+
+      WARN_ON_ONCE(work > weight);
+
+      budget -= work;    
+    #+END_SRC
+
+    This code obtains the weight which was registered to the NAPI
+    struct (=64= in the above driver code) and passes it into the =poll=
+    function which was also registered to the NAPI struct (=igb_poll= in
+    the above code).
+
+    The =poll= function returns the number of data frames that were
+    processed. This amount is saved above as =work=, which is then
+    subtracted from the overall =budget=.
+
+    So, assuming:
+    1. You are using a weight of =64= from your driver (all drivers were
+       hardcoded with this value in Linux 3.13.0), and
+    2. You have your =budget= set to the default of =300=.
+
+    Your system would *stop* processing data when either:
+    1. The =igb_poll= function was called at most 5 times (less if no data to process as we’ll see next), OR
+    2. At least 2 jiffies of time have elapsed.
+
+*** The NAPI / network device driver contract
+    One important piece of information about the contract between the
+    NAPI subsystem and device drivers which has not been mentioned yet
+    are the requirements around shutting down NAPI.
+
+    This part of the contract is as follows:
+    - If a driver’s =poll= function consumes its entire weight (which
+      is hardcoded to 64) it must *NOT* modify NAPI state. The
+      =net_rx_action= loop will take over.
+    - If a driver’s =poll= function does *NOT* consume its entire weight,
+      it must disable NAPI. NAPI will be re-enabled next time an IRQ
+      is received and the driver’s IRQ handler calls =napi_schedule=
+
+    We’ll see how =net_rx_action= deals with the first part of that
+    contract now. Next, the poll function is examined, we’ll see how the
+    second part of that contract is handled.
+
+*** Finishing the =net_rx_action= loop
+    The =net_rx_action= processing loop finishes up with one last
+    section of code that deals with the first part of the NAPI
+    contract explained in the previous section. From [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L4342-L4363][net/core/dev.c]]:
+
+    #+BEGIN_SRC c
+      /* Drivers must not modify the NAPI state if they
+       ,* consume the entire weight.  In such cases this code
+       ,* still "owns" the NAPI instance and therefore can
+       ,* move the instance around on the list at-will.
+       ,*/
+      if (unlikely(work == weight)) {
+        if (unlikely(napi_disable_pending(n))) {
+          local_irq_enable();
+          napi_complete(n);
+          local_irq_disable();
+        } else {
+          if (n->gro_list) {
+            /* flush too old packets
+             ,* If HZ < 1000, flush all packets.
+             ,*/
+            local_irq_enable();
+            napi_gro_flush(n, HZ >= 1000);
+            local_irq_disable();
+          }
+          list_move_tail(&n->poll_list, &sd->poll_list);
+        }
+      }    
+    #+END_SRC
+
+    If the entire work is consumed, there are two cases that
+    =net_rx_action= handles:
+    1. The network device should be shutdown (e.g. because the user
+       ran =ifconfig eth0 down=),
+    2. If the device is not being shutdown, check if there’s a
+       generic receive offload (GRO) list. If the [[http://www.makelinux.net/books/lkd2/ch10lev1sec2][timer tick rate]] rate is
+       >= 1000, all GRO’d network flows that were recently updated
+       will be flushed. We’ll dig into GRO in detail later. Move the
+       NAPI structure to the end of the list for this CPU so the next
+       iteration of the loop will get the next NAPI structure
+       registered. 
+    
+   And that is how the packet processing loop invokes the driver’s
+   registered =poll= function to process packets. As we’ll see shortly,
+   the =poll= function will harvest network data and send it up the
+   stack to be processed.
+
+*** Exiting the loop when limits are reached
+    The =net_rx_action= loop will exit when either:
+    - The poll list registered for this CPU has no more NAPI structures (=!list_empty(&sd->poll_list=)), or
+    - The remaining budget is <= 0, or
+    - The time limit of 2 jiffies has been reached
+   
+    Here’s this code we saw earlier again:
+    #+BEGIN_SRC c
+      /* If softirq window is exhausted then punt.
+       ,* Allow this to run for 2 jiffies since which will allow
+       ,* an average latency of 1.5/HZ.
+       ,*/
+      if (unlikely(budget <= 0 || time_after_eq(jiffies, time_limit)))
+        goto softnet_break;    
+    #+END_SRC
+
+    If you follow the =softnet_break= label you stumble upon something
+    interesting. From [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L4380-L4383][net/core/dev.c]].
+
+    #+BEGIN_SRC c
+      softnet_break:
+        sd->time_squeeze++;
+        __raise_softirq_irqoff(NET_RX_SOFTIRQ);
+        goto out;
+    #+END_SRC
+
+    The =struct softnet_data= structure has some statistics incremented
+    and the softirq =NET_RX_SOFTIRQ= is shut down. The =time_squeeze=
+    field is a measure of the number of times =net_rx_action= had more
+    work to do but either the budget was exhausted or the time limit
+    was reached before it could be completed. This is a tremendously
+    useful counter for understanding bottlenecks in network
+    processing. We’ll see shortly how to monitor this value. The
+    =NET_RX_SOFTIRQ= is disabled to free up processing time for other
+    tasks. This makes sense as this small stub of code is only
+    executed when more work could have been done, but we don’t want
+    to monopolize the CPU. 
