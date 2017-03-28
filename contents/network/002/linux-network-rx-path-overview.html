@@ -62,11 +62,13 @@ generated. As such, IRQ handlers in device drivers must execute as
 quickly as possible and defer all long running work to execute
 outside of this context. This is why the “softIRQ” system exists. 
 </p>
-
+<div class="note">
+  <h5>注意</h5>
 <p>
-Notes: 驱动中的中断处理函数必须尽快的执行完，避免Block整个系统对其他
+驱动中的中断处理函数必须尽快的执行完，避免Block整个系统对其他
 中断的处理。 其他比较耗时的任务交给“软中断”去处理（下半部机制）。
 </p>
+</div>
 
 <p>
 The “softIRQ” system in the Linux kernel is a system that kernel
@@ -113,14 +115,14 @@ process packets.
 </li>
 </ol>
 
-<p class="note info">
+<div class="note">
   <h5>提示</h5>
   <p>
-NOTES: 当驱动收到中断通知新接收的数据到来时，它会立即执行必要的动作，
+当驱动收到中断通知新接收的数据到来时，它会立即执行必要的动作，
 然后调用 <code>napi_schedule</code> 交给Linux内核处理。 <code>net_rx_action</code> 是内核
 处理接收到的数据的入口。
   </p>
-</p>
+</div>
 
 <p>
 Steps 5 - 8 on the diagram relate to the arrival of data for
@@ -257,14 +259,14 @@ in RAM.
 <li>Packets are handed over to <code>napi_gro_receive</code>, which will deal with
 possible Generic Receive Offloading.
 
-  <p class="note info">
+  <div class="note info">
     <h5>GRO是什么？</h5>
     <p>
 Generic Receive Offloading (GRO) is a software
 implementation of a hardware optimization that is known as Large
 Receive Offloading (LRO), (把小数据包组成大的数据再往协议栈层去送)
 </p>
-</p>
+</div>
 </li>
 <li>Packets are either held for GRO and the call chain ends here or
 packets are passed on to <code>net_receive_skb</code> to proceed up toward the
