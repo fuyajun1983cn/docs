@@ -1,0 +1,1109 @@
+#+TITLE: Monitoring and Tuning the Linux Networking Stack: Sending Data
+
+* 引用原文地址
+  https://blog.packagecloud.io/eng/2017/02/06/monitoring-tuning-linux-networking-stack-sending-data/
+  
+* Overview
+  For reference, you may want to have a copy of the device data sheet
+  handy. This post will examine the Intel I350 Ethernet controller,
+  controlled by the igb device driver. You can find that data sheet
+  [[http://www.intel.com/content/dam/www/public/us/en/documents/datasheets/ethernet-controller-i350-datasheet.pdf][here for your reference]]. 
+
+  The high-level path network data takes from a user program to a
+  network device is as follows: 
+  1. Data is written using a system call (like =sendto=, =sendmsg=,
+     et. al.).
+  2. Data passes through the socket subsystem on to the socket’s
+     protocol family’s system (in  our case, =AF_INET=).
+  3. The protocol family passes data through the protocol layers which
+     (in many cases) arrange the data into packets.
+  4. The data passes through the routing layer, populating the
+     destination and neighbour caches along the way (if they are
+     cold). This can generate ARP traffic if an ethernet address needs
+     to be looked up.
+  5. After passing through the protocol layers, packets reach the
+     device agnostic layer.
+  6. The output queue is chosen using XPS (if enabled) or a hash
+     function.
+  7. The device driver’s transmit function is called.
+  8. The data is then passed on to the queue discipline (qdisc)
+     attached to the output device.
+  9. The qdisc will either transmit the data directly if it can, or
+     queue it up to be sent during the =NET_TX= softirq.
+  10. Eventually the data is handed down to the driver from the qdisc.
+  11. The driver creates the needed DMA mappings so the device can
+      read the data from RAM.
+  12. The driver signals the device that the data is ready to be
+      transmit.
+  13. The device fetches the data from RAM and transmits it.
+  14. Once transmission is complete, the device raises an interrupt to
+      signal transmit completion.
+  15. The driver’s registered IRQ handler for transmit completion
+      runs. For many devices, this handler simply triggers the NAPI
+      poll loop to start running via the =NET_RX= softirq.
+  16. The poll function runs via a softIRQ and calls down into the
+      driver to unmap DMA regions and free packet data. 
+
+   This entire flow will be examined in detail in the following
+      sections. 
+
+    The protocol layers examined below are the IP and UDP protocol
+      layers. Much of the information presented will serve as a
+      reference for other protocol layers, as well. 
+
+* Detailed Look
+  Let’s begin by examining how protocol families are registered in
+  the kernel and used by the socket subsystem, then we can proceed to
+  receiving data. 
+
+** Protocol family registration
+    What happens when you run a piece of code like this in a user
+    program to create a UDP socket? 
+
+    : sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+
+    In short, the Linux kernel looks up a set of functions exported by
+    the UDP protocol stack that deal with many things including
+    sending and receiving network data. To understand exactly how this
+    work, we have to look into the =AF_INET= address family code. 
+
+    The Linux kernel executes the =inet_init= function early during
+    kernel initialization. This function registers the =AF_INET=
+    protocol family, the individual protocol stacks within that family
+    (TCP, UDP, ICMP, and RAW), and calls initialization routines to
+    get protocol stacks ready to process network data. You can find
+    the code for =inet_init= in  [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/af_inet.c#L1678-L1804][./net/ipv4/af_inet.c]].
+
+    The =AF_INET= protocol family exports a structure that has a =create=
+    function. This function is called by the kernel when a socket is
+    created from a user program: 
+
+    #+BEGIN_SRC c
+      static const struct net_proto_family inet_family_ops = {
+              .family = PF_INET,
+              .create = inet_create,
+              .owner  = THIS_MODULE,
+      };    
+    #+END_SRC
+
+    The =inet_create= function takes the arguments passed to the socket
+    system call and searches the registered protocols to find a set of
+    operations to link to the socket. Take a look: 
+
+    #+BEGIN_SRC c
+      /* Look for the requested type/protocol pair. */
+      lookup_protocol:
+              err = -ESOCKTNOSUPPORT;
+              rcu_read_lock();
+              list_for_each_entry_rcu(answer, &inetsw[sock->type], list) {
+
+                      err = 0;
+                      /* Check the non-wild match. */
+                      if (protocol == answer->protocol) {
+                              if (protocol != IPPROTO_IP)
+                                      break;
+                      } else {
+                              /* Check for the two wild cases. */
+                              if (IPPROTO_IP == protocol) {
+                                      protocol = answer->protocol;
+                                      break;
+                              }
+                              if (IPPROTO_IP == answer->protocol)
+                                      break;
+                      }
+                      err = -EPROTONOSUPPORT;
+              }    
+    #+END_SRC
+
+    Later, =answer= which holds a reference to a particular protocol
+    stack has its =ops= fields copied into the socket structure: 
+    : sock->ops = answer->ops;
+
+    You can find the structure definitions for all of the protocol
+    stacks in =af_inet.c=. Let’s take a look at the [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/af_inet.c#L998-L1020][TCP and UDP
+    protocol structures]]:
+
+    #+BEGIN_SRC c
+      /* Upon startup we insert all the elements in inetsw_array[] into
+       ,* the linked list inetsw.
+       ,*/
+      static struct inet_protosw inetsw_array[] =
+      {
+              {
+                      .type =       SOCK_STREAM,
+                      .protocol =   IPPROTO_TCP,
+                      .prot =       &tcp_prot,
+                      .ops =        &inet_stream_ops,
+                      .no_check =   0,
+                      .flags =      INET_PROTOSW_PERMANENT |
+                                    INET_PROTOSW_ICSK,
+              },
+
+              {
+                      .type =       SOCK_DGRAM,
+                      .protocol =   IPPROTO_UDP,
+                      .prot =       &udp_prot,
+                      .ops =        &inet_dgram_ops,
+                      .no_check =   UDP_CSUM_DEFAULT,
+                      .flags =      INET_PROTOSW_PERMANENT,
+             },
+
+                  /* .... more protocols ... */    
+    #+END_SRC
+
+    In the case of =IPPROTO_UDP=, an =ops= structure is linked into place
+    [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/af_inet.c#L935-L960][which contains functions for various things]], including sending and
+    receiving data: 
+    
+    #+BEGIN_SRC c
+      const struct proto_ops inet_dgram_ops = {
+        .family          = PF_INET,
+        .owner           = THIS_MODULE,
+
+        /* ... */
+
+        .sendmsg     = inet_sendmsg,
+        .recvmsg     = inet_recvmsg,
+
+        /* ... */
+      };
+      EXPORT_SYMBOL(inet_dgram_ops);    
+    #+END_SRC
+
+    and a protocol-specific structure =prot=, which contains function
+    pointers to all the internal UDP protocol stack function. For the
+    UDP protocol, this structure is called =udp_prot= and is exported by
+    [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/udp.c#L2171-L2203][./net/ipv4/udp.c]].
+
+    #+BEGIN_SRC c
+      struct proto udp_prot = {
+        .name        = "UDP",
+        .owner           = THIS_MODULE,
+
+        /* ... */
+
+        .sendmsg     = udp_sendmsg,
+        .recvmsg     = udp_recvmsg,
+
+        /* ... */
+      };
+      EXPORT_SYMBOL(udp_prot);    
+    #+END_SRC
+
+    Now, let’s turn to a user program that sends UDP data to see how
+    =udp_sendmsg= is called in the kernel! 
+
+    NOTES: =struct proto= 定义了创建 socket 时，对应的prototol相应的处
+    理函数，包含通过 socket发送的接收数据。 当读取socket接收的数据时，
+    会从 =sk->sk_receive_queue=  队列中去取数据。(数据包从3层伟递到4层
+    时，会将其加入到上述队列中）。)
+
+** Sending network data via a socket
+    A user program wants to send UDP network data and so it uses the
+    =sendto= system call, maybe like this: 
+
+    : ret = sendto(socket, buffer, buflen, 0, &dest, sizeof(dest));
+
+    This system call passes through the [[https://blog.packagecloud.io/eng/2016/04/05/the-definitive-guide-to-linux-system-calls][Linux system call]] layer and
+    lands [[https://github.com/torvalds/linux/blob/v3.13/net/socket.c#L1756-L1803][in this function]] in =./net/socket.c= :
+
+    #+BEGIN_SRC c
+      /*
+       ,*      Send a datagram to a given address. We move the address into kernel
+       ,*      space and check the user space data area is readable before invoking
+       ,*      the protocol.
+       ,*/
+
+      SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
+                      unsigned int, flags, struct sockaddr __user *, addr,
+                      int, addr_len)
+      {
+          /*  ... code ... */
+
+          err = sock_sendmsg(sock, &msg, len);
+
+          /* ... code  ... */
+      }    
+    #+END_SRC
+
+    The =SYSCALL_DEFINE6= macro unfolds [[https://github.com/torvalds/linux/blob/v3.13/include/linux/syscalls.h#L170-L198][into a pile of macros]], which in
+    turn, set up the infrastructure needed to create a system call
+    with 6 arguments (hence =DEFINE6=). One of the results of this is
+    that inside the kernel, system call function names have =sys_=
+    prepended to them. 
+
+    The system call code for sendto calls =sock_sendmsg= after arranging
+    the data in a way that the lower layers will be able to handle. In
+    particular, it takes the destination address passed into sendto
+    and arranges it into a structure, let’s take a look: 
+
+    #+BEGIN_SRC c
+      iov.iov_base = buff;
+        iov.iov_len = len;
+        msg.msg_name = NULL;
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+        msg.msg_control = NULL;
+        msg.msg_controllen = 0;
+        msg.msg_namelen = 0;
+        if (addr) {
+                err = move_addr_to_kernel(addr, addr_len, &address);
+                if (err < 0)
+                        goto out_put;
+                msg.msg_name = (struct sockaddr *)&address;
+                msg.msg_namelen = addr_len;
+        }    
+    #+END_SRC
+
+    This code is copying =addr=, passed in via the user program into the
+    kernel data structure =address=, which is then embedded into a
+    =struct msghdr= structure as =msg_name=. This is similar to what a
+    userland program would do if it were calling =sendmsg= instead of
+    =sendto=. The kernel provides this mutation because both =sendto= and
+    =sendmsg= do call down to =sock_sendmsg=. 
+
+*** =sock_sendmsg=, =__sock_sendmsg=, and =__sock_sendmsg_nosec=
+    =sock_sendmsg= performs some error checking before calling
+    =__sock_sendmsg= does its own error checking before calling
+    =__sock_sendmsg_nosec=. =__sock_sendmsg_nosec= passes the data deeper
+    into the socket subsystem: 
+
+    #+BEGIN_SRC c
+      static inline int __sock_sendmsg_nosec(struct kiocb *iocb, struct socket *sock,
+                                             struct msghdr *msg, size_t size)
+      {
+              struct sock_iocb *si =  ....
+
+                      /* other code ... */
+
+              return sock->ops->sendmsg(iocb, sock, msg, size);
+      }    
+    #+END_SRC
+    
+    As seen in the previous section explaining socket creation, the
+    =sendmsg= function registered to this socket ops structure is
+    =inet_sendmsg=. 
+    
+*** =inet_sendmsg=
+    As you may have guessed from the name, this is a generic function
+    provided by the =AF_INET= protocol family. This function starts by
+    calling =sock_rps_record_flow= to record the last CPU that the flow
+    was processed on; this is used by [[https://blog.packagecloud.io/eng/2016/06/22/monitoring-tuning-linux-networking-stack-receiving-data/#receive-packet-steering-rps][Receive Packet Steering]]. Next,
+    this function looks up the =sendmsg= function on the socket’s
+    internal protocol operations structure and calls it: 
+
+    #+BEGIN_SRC c
+      int inet_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
+                       size_t size)
+      {
+        struct sock *sk = sock->sk;
+
+        sock_rps_record_flow(sk);
+
+        /* We may need to bind the socket. */
+        if (!inet_sk(sk)->inet_num && !sk->sk_prot->no_autobind &&
+            inet_autobind(sk))
+                return -EAGAIN;
+
+        return sk->sk_prot->sendmsg(iocb, sk, msg, size);
+      }
+      EXPORT_SYMBOL(inet_sendmsg);    
+    #+END_SRC
+
+    When dealing with UDP, =sk->sk_prot->sendmsg= above is =udp_sendmsg=
+    as exported by the UDP protocol layer, via the =udp_prot= structure
+    we saw earlier. This function call transitions from the generic
+    =AF_INET= protocol family on to the UDP protocol stack. 
+    
+** UDP protocol layer
+
+*** udp_sendmsg
+    The udp_sendmsg function can be found in [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/udp.c#L845-L1088][./net/ipv4/udp.c]]. The
+    entire function is quite long, so we’ll examine pieces of it
+    below. Follow the previous link if you’d like to read it in its
+    entirety. 
+    
+**** UDP corking
+     After variable declarations and some basic error checking, one of
+     the first things =udp_sendmsg= does is check if the socket is
+     “corked”. UDP corking is a feature that allows a user program
+     request that the kernel accumulate data from multiple calls to
+     =send= into a single datagram before sending. There are two ways to
+     enable this option in your user program: 
+     1. Use the =setsockopt= system call and pass  =UDP_CORK= as the socket
+        option.
+     2. Pass =MSG_MORE= as one of the flags when calling =send=, =sendto=,
+        or =sendmsg= from your program.
+
+     These options are documented in the [[http://man7.org/linux/man-pages/man7/udp.7.html][UDP man page]] and the [[http://man7.org/linux/man-pages/man2/send.2.html][send /
+     sendto / sendmsg man page]], respectively.
+
+     The code from =udp_sendmsg= checks =up->pending= to determine if the
+     socket is currently corked, and if so, it proceeds directly to
+     appending data. We’ll see how data is appended later. 
+
+     #+BEGIN_SRC c
+       int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
+                       size_t len)
+       {
+
+           /* variables and error checking ... */
+
+         fl4 = &inet->cork.fl.u.ip4;
+         if (up->pending) {
+                 /*
+                  ,* There are pending frames.
+                  ,* The socket lock must be held while it's corked.
+                  ,*/
+                 lock_sock(sk);
+                 if (likely(up->pending)) {
+                         if (unlikely(up->pending != AF_INET)) {
+                                 release_sock(sk);
+                                 return -EINVAL;
+                         }
+                         goto do_append_data;
+                 }
+                 release_sock(sk);
+         }     
+     #+END_SRC
+     
+**** Get the UDP destination address and port
+     Next, the destination address and port are determined from one of
+     two possible sources: 
+     1. The socket itself has the destination address stored because
+        the socket was connected at some point.
+     2. The address is passed in via an auxiliary structure, as we saw
+        in the kernel code for =sendto=. 
+
+     Here’s how the kernel deals with this:
+
+     #+BEGIN_SRC c
+       /*
+          ,*      Get and verify the address.
+          ,*/
+         if (msg->msg_name) {
+                 struct sockaddr_in *usin = (struct sockaddr_in *)msg->msg_name;
+                 if (msg->msg_namelen < sizeof(*usin))
+                         return -EINVAL;
+                 if (usin->sin_family != AF_INET) {
+                         if (usin->sin_family != AF_UNSPEC)
+                                 return -EAFNOSUPPORT;
+                 }
+
+                 daddr = usin->sin_addr.s_addr;
+                 dport = usin->sin_port;
+                 if (dport == 0)
+                         return -EINVAL;
+         } else {
+                 if (sk->sk_state != TCP_ESTABLISHED)
+                         return -EDESTADDRREQ;
+                 daddr = inet->inet_daddr;
+                 dport = inet->inet_dport;
+                 /* Open fast path for connected socket.
+                    Route will not be used, if at least one option is set.
+                  ,*/
+                 connected = 1;
+         }     
+     #+END_SRC
+
+     Yes, that is a =TCP_ESTABLISHED= in the UDP protocol layer! The
+     socket states for better or worse use TCP state descriptions. 
+
+     Recall earlier that we saw how the kernel arranges a =struct
+     msghdr=  structure on behalf of the user when the user program
+     calls =sendto=. The code above shows how the kernel parses that
+     data back out in order to set =daddr= and =dport=.
+
+     If the =udp_sendmsg= function was reached by kernel function which
+     did not arrange a =struct msghdr= structure, the destination
+     address and port are retrieved from the socket itself and the
+     socket is marked as “connected.” 
+
+     In either case =daddr= and =dport= will be set to the destination
+     address and port. 
+
+**** Socket transmit bookkeeping and timestamping
+     Next, the source address, device index, and any timestamping
+     options which were set on the socket (like
+     =SOCK_TIMESTAMPING_TX_HARDWARE=, =SOCK_TIMESTAMPING_TX_SOFTWARE=,
+     =SOCK_WIFI_STATUS=) are retrieved and stored: 
+     
+     #+BEGIN_SRC c
+       ipc.addr = inet->inet_saddr;
+
+       ipc.oif = sk->sk_bound_dev_if;
+
+       sock_tx_timestamp(sk, &ipc.tx_flags);     
+     #+END_SRC
+     
+**** Ancillary messages, via sendmsg
+     The =sendmsg= and =recvmsg= system calls allow the user to set or
+     request ancillary data in addition to sending or receiving
+     packets. User programs can make use of this ancillary data by
+     crafting a =struct msghdr= with the request embedded in it. Many of
+     the ancillary data types are documented in the  [[http://man7.org/linux/man-pages/man7/ip.7.html][man page for IP]]. 
+
+     One popular example of ancillary data is =IP_PKTINFO=. In the case
+     of =sendmsg= this data type allows the program to set a =struct
+     in_pktinfo=  to be used when sending data. The program can specify
+     the source address to be used on the packet by filling in fields
+     in the =struct in_pktinfo= structure. This is a useful option if
+     the program is a server program listening on multiple IP
+     addresses. In this case, the server program may want to reply to
+     the client with the same IP address that the client used to
+     contact the server. =IP_PKTINFO= enables precisely this use
+     case. 
+
+     Similarly, the =IP_TTL= and =IP_TOS= ancillary messages allow the
+     user to set the IP packet [[https://en.wikipedia.org/wiki/Time_to_live#IP_packets][TTL]] and [[https://en.wikipedia.org/wiki/Type_of_service][TOS]] values on a per-packet
+     basis, when passed with data to sendmsg from the user
+     program. Note that both =IP_TTL= and =IP_TOS= may be set at the
+     socket level for all outgoing packets by using =setsockopt=,
+     instead of on a per-packet basis if desired. The Linux kernel
+     translates the TOS value specified to a priority [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/route.c#L179-L197][using an
+     array]]. The priority affects how and when a packet is transmit
+     from a queuing discipline. We’ll see more about what this means
+     later. 
+
+     We can see how the kernel handles ancillary messages for =sendmsg=
+     on UDP sockets: 
+
+     #+BEGIN_SRC c
+       if (msg->msg_controllen) {
+               err = ip_cmsg_send(sock_net(sk), msg, &ipc,
+                                  sk->sk_family == AF_INET6);
+               if (err)
+                       return err;
+               if (ipc.opt)
+                       free = 1;
+               connected = 0;
+       }     
+     #+END_SRC
+
+     The internals of parsing the ancillary messages is handled by
+     =ip_cmsg_send= from [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/ip_sockglue.c#L190-L241][./net/ipv4/ip_sockglue.c]]. Note that simply
+     providing any ancillary data marks this socket as not connected. 
+     
+**** Setting custom IP options
+     Next, =sendmsg= will check to see if the user specified any custom
+     IP options with ancillary messages. If options were set, they
+     will be used. If not, the options already in use by this socket
+     will be used: 
+
+     #+BEGIN_SRC c
+       if (!ipc.opt) {
+               struct ip_options_rcu *inet_opt;
+
+               rcu_read_lock();
+               inet_opt = rcu_dereference(inet->inet_opt);
+               if (inet_opt) {
+                       memcpy(&opt_copy, inet_opt,
+                              sizeof(*inet_opt) + inet_opt->opt.optlen);
+                       ipc.opt = &opt_copy.opt;
+               }
+               rcu_read_unlock();
+       }     
+     #+END_SRC
+
+     Next up, the function checks to see if the source record route
+     (SRR) IP option is set. There are two types of source record
+     routing:  [[https://en.wikipedia.org/wiki/Loose_Source_Routing][loose and strict source record routing]]. If this option
+     was set, the first hop address is recorded and stored as =faddr=
+     and the socket is marked as “not connected”. This will be used
+     later: 
+
+     #+BEGIN_SRC c
+       ipc.addr = faddr = daddr;
+
+       if (ipc.opt && ipc.opt->opt.srr) {
+               if (!daddr)
+                       return -EINVAL;
+               faddr = ipc.opt->opt.faddr;
+               connected = 0;
+       }     
+     #+END_SRC
+
+     After the SRR option is handled, the TOS IP flag is retrieved
+     either from the value the user set via an ancillary message or
+     the value currently in use by the socket. Followed by a check to
+     determine if: 
+     - =SO_DONTROUTE= was set on the socket (with =setsockopt=), or
+     - =MSG_DONTROUTE= was specified as a flag when calling =sendto= or
+       =sendmsg=, or
+     - is_strictroute was set, indicating that strict [[http://www.networksorcery.com/enp/protocol/ip/option009.htm][source record
+       routing]] is desired. 
+
+       Then, the =tos= has =0x1= (=RTO_ONLINK=) added to its bit set and the
+       socket is considered not “connected”: 
+
+       #+BEGIN_SRC c
+         tos = get_rttos(&ipc, inet);
+         if (sock_flag(sk, SOCK_LOCALROUTE) ||
+             (msg->msg_flags & MSG_DONTROUTE) ||
+             (ipc.opt && ipc.opt->opt.is_strictroute)) {
+                 tos |= RTO_ONLINK;
+                 connected = 0;
+         }       
+       #+END_SRC
+
+**** Multicast or unicast?
+     Next, the code attempts to deal with multicast. This is a bit
+     tricky, as the user could specify an alternate source address or
+     device index of where to send the packet from by sending an
+     ancillary =IP_PKTINFO= message, as explained earlier. 
+
+     If the destination address is a multicast address:
+     1. The device index of where to write the packet will be set to
+        the multicast device index, and
+     2. The source address on the packet will be set to the multicast
+        source address. 
+
+     Unless, the user has not overridden the device index by sending
+     the =IP_PKTINFO= ancillary message. Let’s take a look: 
+
+     #+BEGIN_SRC c
+       if (ipv4_is_multicast(daddr)) {
+               if (!ipc.oif)
+                       ipc.oif = inet->mc_index;
+               if (!saddr)
+                       saddr = inet->mc_addr;
+               connected = 0;
+       } else if (!ipc.oif)
+               ipc.oif = inet->uc_index;     
+     #+END_SRC
+
+     If the destination address is not a multicast address, the device
+     index is set unless it was overridden by the user with
+     =IP_PKTINFO=. 
+     
+**** Routing
+     Now it’s time for routing!
+
+     The code in the UDP layer that deals with routing begins with a
+     fast path. If the socket is connected try to get the routing
+     structure: 
+
+     #+BEGIN_SRC c
+       if (connected)
+               rt = (struct rtable *)sk_dst_check(sk, 0);     
+     #+END_SRC
+
+     If the socket was not connected, or if it was but the routing
+     helper =sk_dst_check= decided the route was obsolete the code moves
+     into the slow path to generate a routing structure. This begins
+     by calling =flowi4_init_output= to construct a structure describing
+     this UDP flow: 
+
+     #+BEGIN_SRC c
+       if (rt == NULL) {
+               struct net *net = sock_net(sk);
+
+               fl4 = &fl4_stack;
+               flowi4_init_output(fl4, ipc.oif, sk->sk_mark, tos,
+                                  RT_SCOPE_UNIVERSE, sk->sk_protocol,
+                                  inet_sk_flowi_flags(sk)|FLOWI_FLAG_CAN_SLEEP,
+                                  faddr, saddr, dport, inet->inet_sport);     
+     #+END_SRC
+
+     Once this flow structure has been constructed, the socket and its
+     flow structure are passed along to the security subsystem so that
+     systems like [[https://en.wikipedia.org/wiki/Security-Enhanced_Linux][SELinux]] or [[https://en.wikipedia.org/wiki/Smack_(software)][SMACK]] can set a security id value on the
+     flow structure. Next, =ip_route_output_flow= will call into the IP
+     routing code to generate a routing structure for this flow: 
+
+     #+BEGIN_SRC c
+       security_sk_classify_flow(sk, flowi4_to_flowi(fl4));
+       rt = ip_route_output_flow(net, fl4, sk);     
+     #+END_SRC
+
+     If a routing structure could not be generated and the error was
+     =ENETUNREACH=, the =OUTNOROUTES= statistic counter is
+     incremented. 
+
+     #+BEGIN_SRC c
+       if (IS_ERR(rt)) {
+         err = PTR_ERR(rt);
+         rt = NULL;
+         if (err == -ENETUNREACH)
+           IP_INC_STATS(net, IPSTATS_MIB_OUTNOROUTES);
+         goto out;
+       }     
+     #+END_SRC
+
+     The location of the file holding these statistics counter and the
+     other available counters and their meanings will be discussed
+     below in the UDP monitoring section. 
+
+     Next, if the route is for broadcast, but the socket option
+     =SOCK_BROADCAST= was not set on the socket the code terminates. If
+     the socket is considered “connected” (as described throughout
+     this function), the routing structure is cached on the socket: 
+
+     #+BEGIN_SRC c
+       err = -EACCES;
+       if ((rt->rt_flags & RTCF_BROADCAST) &&
+           !sock_flag(sk, SOCK_BROADCAST))
+               goto out;
+       if (connected)
+               sk_dst_set(sk, dst_clone(&rt->dst));     
+     #+END_SRC
+
+**** Prevent the ARP cache from going stale with =MSG_CONFIRM=
+     If the user specified the =MSG_CONFIRM= flag when calling =send=,
+     =sendto=, or =sendmsg=, the UDP protocol layer will now handle
+     that: 
+
+     #+BEGIN_SRC c
+       if (msg->msg_flags&MSG_CONFIRM)
+                 goto do_confirm;
+       back_from_confirm:     
+     #+END_SRC
+
+     This flag indicates to the system to confirm that the ARP cache
+     entry is still valid and prevents it from being garbage
+     collected. The =dst_confirm= function simply sets a flag on
+     destination cache entry which will be checked much later when the
+     neighbour cache has been queried and an entry has been
+     found. We’ll see this again later. This feature is commonly used
+     in UDP networking applications to reduce unnecessary ARP
+     traffic. The =do_confirm= label is found near the end of this
+     function, but it is straightforward: 
+
+     #+BEGIN_SRC c
+       do_confirm:
+               dst_confirm(&rt->dst);
+               if (!(msg->msg_flags&MSG_PROBE) || len)
+                       goto back_from_confirm;
+               err = 0;
+               goto out;     
+     #+END_SRC
+
+     This code confirms the cache entry and jumps back to
+     =back_from_confirm=, if this was not a probe. 
+
+     Once the =do_confirm= code jumps back to =back_from_confirm= (or no
+     jump happened to =do_confirm= in the first place), the code will
+     attempt to deal with both the UDP cork and uncorked cases next. 
+
+**** Fast path for uncorked UDP sockets: Prepare data for transmit
+     If UDP corking is not requested, the data can be packed into a
+     =struct sk_buff= and passed on to =udp_send_skb= to move down the
+     stack and closer to the IP protocol layer. This is done by
+     calling =ip_make_skb=. Note that the routing structure generated
+     earlier by calling =ip_route_output_flow= is passed in as well. It
+     will be affixed to the skb and used later in the IP protocol
+     layer. 
+
+     #+BEGIN_SRC c
+       /* Lockless fast path for the non-corking case. */
+       if (!corkreq) {
+               skb = ip_make_skb(sk, fl4, getfrag, msg->msg_iov, ulen,
+                                 sizeof(struct udphdr), &ipc, &rt,
+                                 msg->msg_flags);
+               err = PTR_ERR(skb);
+               if (!IS_ERR_OR_NULL(skb))
+                       err = udp_send_skb(skb, fl4);
+               goto out;
+       }
+     #+END_SRC
+
+     The =ip_make_skb= function will attempt to construct an skb taking
+     into consideration a wide range of things, like: 
+     - The [[https://blog.packagecloud.io/eng/2017/02/06/monitoring-tuning-linux-networking-stack-sending-data/Maximum_transmission_unit][MTU]].
+     - UDP corking (if enabled).
+     - UDP Fragmentation Offloading ([[https://wiki.linuxfoundation.org/networking/ufo][UFO]])
+     - Fragmentation, if UFO is unsupported and the size of the data
+       to transmit is larger than the MTU. 
+
+     Most network device drivers do not support UFO because the
+     network hardware itself does not support this feature. Let’s
+     take a look through this code, keeping in mind that corking is
+     disabled. We’ll look at the corking enabled path next. 
+
+***** ip_make_skb
+      The ip_make_skb function can be found in
+      [[https://blog.packagecloud.io/eng/2017/02/06/monitoring-tuning-linux-networking-stack-sending-data/LINK][./net/ipv4/ip_output.c]]. This function is a bit tricky. The lower
+      level code that =ip_make_skb= needs to use in order to build an
+      skb requires a corking structure and queue where the skb will be
+      queued to be passed in. In the case where the socket is not
+      corked, a faux corking structure and empty queue are passed in
+      as dummies. 
+
+      Let’s take a look at how the faux corking structure and queue
+      are setup: 
+
+      #+BEGIN_SRC c
+        struct sk_buff *ip_make_skb(struct sock *sk, /* more args */)
+        {
+                struct inet_cork cork;
+                struct sk_buff_head queue;
+                int err;
+
+                if (flags & MSG_PROBE)
+                        return NULL;
+
+                __skb_queue_head_init(&queue);
+
+                cork.flags = 0;
+                cork.addr = 0;
+                cork.opt = NULL;
+                err = ip_setup_cork(sk, &cork, /* more args */);
+                if (err)
+                        return ERR_PTR(err);      
+      #+END_SRC
+
+      As seen above, both the corking structure (=cork=) and the queue
+      (=queue=) are stack-allocated; neither are needed by the time
+      =ip_make_skb= has completed. The faux corking structure is setup
+      with a call to =ip_setup_cork= which allocates memory and
+      initializes the structure. Next, =__ip_append_data= is called and
+      the queue and corking structure are passed in: 
+
+      #+BEGIN_SRC c
+        err = __ip_append_data(sk, fl4, &queue, &cork,
+                               &current->task_frag, getfrag,
+                               from, length, transhdrlen, flags);      
+      #+END_SRC
+
+      We’ll see how this function works later, as it is used in both
+      cases whether the socket is corked or not. For now, all we need
+      to know is that =__ip_append_data= will create an skb, append data
+      to it, and add that skb to the queue passed in. If appending the
+      data failed, =__ip_flush_pending_frame= is called to drop the data
+      on the floor and the error code is passed back upward: 
+
+      #+BEGIN_SRC c
+        if (err) {
+                __ip_flush_pending_frames(sk, &queue, &cork);
+                return ERR_PTR(err);
+        }      
+      #+END_SRC
+
+      Finally, if no error occurred, =__ip_make_skb= will dequeue the
+      queued skb, add the IP options, and return an skb that is ready
+      to be passed on to lower layers for sending: 
+
+      #+BEGIN_SRC c
+        return __ip_make_skb(sk, fl4, &queue, &cork);      
+      #+END_SRC
+      
+***** Transmit the data!
+      If no errors occurred, the skb is handed to =udp_send_skb= which
+      will pass the skb to the next layer of the networking stack, the
+      IP protocol stack: 
+
+      #+BEGIN_SRC c
+        err = PTR_ERR(skb);
+        if (!IS_ERR_OR_NULL(skb))
+                err = udp_send_skb(skb, fl4);
+        goto out;      
+      #+END_SRC
+
+      If there was an error, it will be accounted later. See the
+      “Error Accounting” section below the UDP corking case for more
+      information.
+
+**** Slow path for corked UDP sockets with no preexisting corked data
+     If UDP corking is being used, but no preexisting data is corked,
+     the slow path commences: 
+     1. Lock the socket.
+     2. Check for an application bug: a corked socket that is being
+        “re-corked”.
+     3. The flow structure for this UDP flow is prepared for corking.
+     4. The data to be sent is appended to existing data. 
+
+     You can see this in the next piece of code, continuing down
+     =udp_sendmsg=: 
+     
+     #+BEGIN_SRC c
+       lock_sock(sk);
+         if (unlikely(up->pending)) {
+                 /* The socket is already corked while preparing it. */
+                 /* ... which is an evident application bug. --ANK */
+                 release_sock(sk);
+
+                 LIMIT_NETDEBUG(KERN_DEBUG pr_fmt("cork app bug 2\n"));
+                 err = -EINVAL;
+                 goto out;
+         }
+         /*
+          ,*      Now cork the socket to pend data.
+          ,*/
+         fl4 = &inet->cork.fl.u.ip4;
+         fl4->daddr = daddr;
+         fl4->saddr = saddr;
+         fl4->fl4_dport = dport;
+         fl4->fl4_sport = inet->inet_sport;
+         up->pending = AF_INET;
+
+       do_append_data:
+         up->len += ulen;
+         err = ip_append_data(sk, fl4, getfrag, msg->msg_iov, ulen,
+                              sizeof(struct udphdr), &ipc, &rt,
+                              corkreq ? msg->msg_flags|MSG_MORE : msg->msg_flags);     
+     #+END_SRC
+     
+***** =ip_append_data=
+      The =ip_append_data= is a small wrapper function which does two
+      major things prior to calling down to =__ip__append_data=: 
+      1. Checks if the MSG_PROBE flag was passed in from the
+         user. This flag indicates that the user does not want to
+         really send data. The path should be probed (for example to
+         determine the [[https://en.wikipedia.org/wiki/Path_MTU_Discovery][PMTU]]).
+      2. Checks if the socket’s send queue is empty. If so, this
+         means that there is no corked data pending, so =ip_setup_cork=
+         is called to setup corking. 
+
+      Once the above conditions are dealt with the =__ip_append_data=
+      function is called which contains the bulk of the logic for
+      processing data into packets. 
+
+***** =__ip_append_data=
+      This function is called in either from =ip_append_data= if the
+      socket is corked or from =ip_make_skb= if the socket is not
+      corked. In either case, this function will either allocate a new
+      buffer to store the data passed in or will append the data with
+      existing data. 
+
+      The way this work centers around the socket’s send
+      queue. Existing data waiting to be sent (for example, if the
+      socket is corked) will have an entry in the queue where
+      additional data can be appended. 
+
+      This function is complex; it performs several rounds of
+      calculations to determine how to construct the skb that will be
+      passed to the lower level networking layers and examining the
+      buffer allocation process in detail is not strictly necessary
+      for understanding how network data is transmit. 
+
+      The important highlights of this function include: 
+      1. Handling UDP fragmentation offloading (UFO), if supported by
+         the hardware. The vast majority of network hardware does not
+         support UFO. If your network card’s driver does support it,
+         it will set the feature flag =NETIF_F_UFO=.
+      2. Handling network cards that support [[https://en.wikipedia.org/wiki/Vectored_I/O][scatter/gather
+         IO]]. Handling network cards that support scatter/gather
+         IO. Many cards support this and it is advertised with the
+         =NETIF_F_SG= feature flag. The availability of this feature
+         indicates that a network card can deal with transmitting a
+         packet where the data has been split amongst a set of
+         buffers; the kernel does not need to spend time coalescing
+         multiple buffers into a single buffer. Avoiding this
+         additional copying is desired and most network cards support
+         this.
+      3. Tracking the size of the send queue via calls to
+         =sock_wmalloc=. When a new skb is allocated, the size of the
+         skb is charged to the socket which owns it and the allocated
+         bytes for a socket’s send queue are incremented. If there
+         was not sufficient space in the send queue, the skb is not
+         allocated and an error is returned and tracked. We’ll see
+         how to set the socket send queue size in the tuning section
+         below.
+      4. Incrementing error statistics. Any error in this function
+         increments “discard”. We’ll see how to read this value in
+         the monitoring section below. 
+
+      Upon successful completion of this function, =0= is returned and
+      the data to be transmit will be assembled into an skb that is
+      appropriate for the network device and is waiting on the send
+      queue. 
+
+      In the uncorked case, the queue holding the skb is passed to
+      =__ip_make_skb= described above where it is dequeued and prepared
+      to be sent to the lower layers via =udp_send_skb=. 
+
+      In the corked case, the return value of =__ip_append_data= is
+      passed upward. The data sits on the send queue until =udp_sendmsg=
+      determines it is time to call =udp_push_pending_frames= which will
+      finalize the skb and call =udp_send_skb=. 
+
+***** Flushing corked sockets
+      Now, =udp_sendmsg= will move on to check the return value (err
+      below) from =__ip_append_skb=: 
+      
+      #+BEGIN_SRC c
+        if (err)
+                udp_flush_pending_frames(sk);
+        else if (!corkreq)
+                err = udp_push_pending_frames(sk);
+        else if (unlikely(skb_queue_empty(&sk->sk_write_queue)))
+                up->pending = 0;
+        release_sock(sk);      
+      #+END_SRC
+
+      Let’s take a look at each of these cases:
+      1. If there is an error (err is non-zero), then
+         =udp_flush_pending_frames= is called, which cancels corking and
+         drops all data from the socket’s send queue.
+      2. If this data was sent without =MSG_MORE= specified, called
+         =udp_push_pending_frames= which will attempt to deliver the
+         data to the lower networking layers.
+      3. If the send queue is empty, mark the socket as no longer
+         corking. 
+
+      If the append operation completed successfully and there is more
+      data to cork coming, the code continues by cleaning up and
+      returning the length of the data appended:
+
+      #+BEGIN_SRC c
+        ip_rt_put(rt);
+        if (free)
+                kfree(ipc.opt);
+        if (!err)
+                return len;      
+      #+END_SRC
+      
+      That is how the kernel deals with corked UDP sockets.
+
+**** Error accounting
+     
+
+*** udp_send_skb
+
+*** Monitoring: UDP protocol layer statistics
+
+**** /proc/net/snmp
+
+**** /proc/net/udp
+
+*** Tuning: Socket send queue memory
+
+** IP protocol layer
+
+*** ip_send_skb
+
+*** ip_local_out and __ip_local_out
+
+*** netfilter and nf_hook
+
+*** Destination cache
+
+*** ip_output
+
+*** ip_finish_output
+
+**** Path MTU Discovery
+
+*** ip_finish_output2
+
+*** dst_neigh_output
+
+*** neigh_hh_output
+
+*** n->output
+
+**** neigh_resolve_output
+
+*** Monitoring: IP protocol layer
+
+**** /proc/net/snmp
+
+**** /proc/net/netstat
+
+** Linux netdevice subsystem
+
+*** Linux traffic control
+
+*** dev_queue_xmit and __dev_queue_xmit
+
+**** netdev_pick_tx
+
+**** __netdev_pick_tx
+
+***** Transmit Packet Steering (XPS)
+
+***** skb_tx_hash
+
+*** Resuming __dev_queue_xmit
+
+*** __dev_xmit_skb
+
+*** Tuning: Transmit Packet Steering (XPS)
+
+** Queuing disciplines!
+
+*** qdisc_run_begin and qdisc_run_end
+
+*** __qdisc_run
+
+*** qdisc_restart
+
+**** dequeue_skb
+
+**** sch_direct_xmit
+
+**** handle_dev_cpu_collision
+
+**** dev_requeue_skb
+
+*** Reminder, while loop in __qdisc_run
+
+**** __netif_schedule
+
+**** net_tx_action
+
+***** net_tx_action completion queue
+
+***** net_tx_action output queue
+
+*** Finally time to meet our friend dev_hard_start_xmit
+
+*** Monitoring qdiscs
+
+**** Using the tc command line tool
+
+*** Tuning qdiscs
+
+**** Increasing the processing weight of __qdisc_run
+
+**** Increasing the transmit queue length
+
+** Network Device Driver
+
+*** Driver operations registration
+
+*** Transmit data with ndo_start_xmit
+
+*** igb_tx_map
+
+**** Dynamic Queue Limits (DQL)
+
+*** Transmit completions
+
+**** Transmit completion IRQ
+
+**** igb_poll
+
+**** igb_clean_tx_irq
+
+**** igb_poll return value
+
+*** Monitoring network devices
+
+**** Using ethtool -S
+
+**** Using sysfs
+
+**** Using /proc/net/dev
+
+*** Monitoring dynamic queue limits
+
+*** Tuning network devices
+
+**** Check the number of TX queues being used
+
+**** Adjust the number of TX queues used
+
+**** Adjust the size of the TX queues
+
+*** The End
+
+** Extras
+
+*** Reducing ARP traffic (MSG_CONFIRM)
+
+*** UDP Corking
+
+*** Timestamping
+
+** Conclusion
