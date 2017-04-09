@@ -46,6 +46,7 @@ def git_push():
     git push command
     '''
     os.system("git push {0} {1}".format(remote_name, branch_name))
+    os.system("git push csdn gh-pages")
 
 def git_pull():
     '''
