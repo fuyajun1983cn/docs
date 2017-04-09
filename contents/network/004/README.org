@@ -956,39 +956,739 @@
       That is how the kernel deals with corked UDP sockets.
 
 **** Error accounting
-     
+     If:
+     1. The =non-corking= fast path failed to make an skb or
+        =udp_send_skb= reports an error, or
+     2. =ip_append_data= fails to append data to a corked UDP socket, or
+     3. =udp_push_pending_frames= returns an error received from
+        =udp_send_skb= when trying to transmit a corked skb 
 
-*** udp_send_skb
+
+     the =SNDBUFERRORS= statistic will be incremented only if the error
+     received was =ENOBUFS= (no kernel memory available) or the socket
+     has =SOCK_NOSPACE= set (the send queue is full): 
+     #+BEGIN_SRC c
+       /*
+        ,* ENOBUFS = no kernel mem, SOCK_NOSPACE = no sndbuf space.  Reporting
+        ,* ENOBUFS might not be good (it's not tunable per se), but otherwise
+        ,* we don't have a good statistic (IpOutDiscards but it can be too many
+        ,* things).  We could add another new stat but at least for now that
+        ,* seems like overkill.
+        ,*/
+       if (err == -ENOBUFS || test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
+               UDP_INC_STATS_USER(sock_net(sk),
+                               UDP_MIB_SNDBUFERRORS, is_udplite);
+       }
+       return err;     
+     #+END_SRC
+
+     We’ll see how to read these counters in the monitoring section below.
+
+*** =udp_send_skb=
+    The [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/udp.c#L765-L819][udp_send_skb]] function is how =udp_sendmsg= will eventually push
+    an skb down to the next layer of the networking stack, in this
+    case the IP protocol layer. This function does a few important
+    things: 
+    1. Adds a UDP header to the skb.
+    2. Deals with checksums: software checksums, hardware checksums,
+       or no checksum (if disabled).
+    3. Attempts to send the skb to the IP protocol layer by calling
+       =ip_send_skb=.
+    4. Increments statistics counters for successful or failed
+       transmissions. 
+
+       
+    Let’s take a look. First, a UDP header is created: 
+    #+BEGIN_SRC c
+      static int udp_send_skb(struct sk_buff *skb, struct flowi4 *fl4)
+      {
+                      /* useful variables ... */
+
+              /*
+               ,* Create a UDP header
+               ,*/
+              uh = udp_hdr(skb);
+              uh->source = inet->inet_sport;
+              uh->dest = fl4->fl4_dport;
+              uh->len = htons(len);
+              uh->check = 0;    
+    #+END_SRC
+
+    Next, checksumming is handled. There’s a few cases: 
+    1. [[https://en.wikipedia.org/wiki/UDP-Lite][UDP-Lite]] checksums are handled first.
+    2. Next, if the socket is set to not generate checksums at all
+       (via =setsockopt= with =SO_NO_CHECK=), it will be marked as such.
+    3. Next, if the hardware supports UDP checksums, =udp4_hwcsum= will
+       be called to set that up. Note that the kernel will generate
+       checksums in software if the packet is fragmented. You can see
+       this in the source for [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/udp.c#L720-L763][udp4_hwcsum]].
+    4. Lastly, a software checksum is generated with a call to
+       =udp_csum=. 
+
+       #+BEGIN_SRC c
+         if (is_udplite)                                  /*     UDP-Lite      */
+                 csum = udplite_csum(skb);
+
+         else if (sk->sk_no_check == UDP_CSUM_NOXMIT) {   /* UDP csum disabled */
+
+                 skb->ip_summed = CHECKSUM_NONE;
+                 goto send;
+
+         } else if (skb->ip_summed == CHECKSUM_PARTIAL) { /* UDP hardware csum */
+
+                 udp4_hwcsum(skb, fl4->saddr, fl4->daddr);
+                 goto send;
+
+         } else
+                 csum = udp_csum(skb);       
+       #+END_SRC
+
+       Next, the [[https://en.wikipedia.org/wiki/User_Datagram_Protocol#IPv4_Pseudo_Header][psuedo header]] is added:
+       #+BEGIN_SRC c
+         uh->check = csum_tcpudp_magic(fl4->saddr, fl4->daddr, len,
+                                       sk->sk_protocol, csum);
+         if (uh->check == 0)
+                 uh->check = CSUM_MANGLED_0;       
+       #+END_SRC
+
+       If the checksum is 0, the equivalent in one’s complement is
+       set as the checksum, per [[https://tools.ietf.org/html/rfc768][RFC 768]]. Finally, the skb is passed to
+       the IP protocol stack and statistics are incremented: 
+       
+       #+BEGIN_SRC c
+         send:
+           err = ip_send_skb(sock_net(sk), skb);
+           if (err) {
+                   if (err == -ENOBUFS && !inet->recverr) {
+                           UDP_INC_STATS_USER(sock_net(sk),
+                                              UDP_MIB_SNDBUFERRORS, is_udplite);
+                           err = 0;
+                   }
+           } else
+                   UDP_INC_STATS_USER(sock_net(sk),
+                                      UDP_MIB_OUTDATAGRAMS, is_udplite);
+           return err;       
+       #+END_SRC
+
+       If =ip_send_skb= completes successfully, the =OUTDATAGRAMS=
+       statistic is incremented. If the IP protocol layer reports an
+       error, =SNDBUFERRORS= is incremented, but only if the error is
+       =ENOBUFS= (lack of kernel memory) and there is no error queue
+       enabled. 
+
+       Before moving on to the IP protocol layer, let’s take a look
+       at how to monitor and tune the UDP protocol layer in the Linux
+       kernel. 
 
 *** Monitoring: UDP protocol layer statistics
+    Two very useful files for getting UDP protocol statistics are:
+    - =/proc/net/snmp=
+    - =/proc/net/udp=
 
-**** /proc/net/snmp
+**** =/proc/net/snmp=
+     
+     #+CAPTION: Monitor detailed UDP protocol statistics by reading =/proc/net/snmp=
+     #+BEGIN_SRC sh
+       $ cat /proc/net/snmp | grep Udp\:
+       Udp: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors
+       Udp: 16314 0 0 17161 0 0     
+     #+END_SRC
 
-**** /proc/net/udp
+     In order to understand precisely where these statistics are
+     incremented, you will need to carefully read the kernel
+     source. There are a few cases where some errors are counted in
+     more than one statistic. 
+
+     - =InDatagrams= : 
+       Incremented when =recvmsg= was used by a userland program to read
+       datagram. Also incremented when a UDP packet is encapsulated
+       and sent back for processing.
+     - =NoPorts= :
+       Incremented when UDP packets arrive destined for a port where
+       no program is listening.
+     - =InErrors= :
+       Incremented in several cases: no memory in the receive queue,
+       when a bad checksum is seen, and if =sk_add_backlog= fails to add
+       the datagram.
+     - =OutDatagrams= :
+       Incremented when a UDP packet is handed down without error to
+       the IP protocol layer to be sent.
+     - =RcvbufErrors= :
+       Incremented when =sock_queue_rcv_skb= reports that no memory is
+       available; this happens if =sk->sk_rmem_alloc= is greater than or
+       equal to =sk->sk_rcvbuf=.
+     - =SndbufErrors= :
+       Incremented if the IP protocol layer reported an error when
+       trying to send the packet and no error queue has been
+       setup. Also incremented if no send queue space or kernel memory
+       are available.
+     - =InCsumErrors= :
+       Incremented when a UDP checksum failure is detected. Note that
+       in all cases I could find, =InCsumErrors= is incremented at the
+       same time as =InErrors=. Thus, =InErrors= - =InCsumErros= should
+       yield the count of memory related errors on the receive side. 
+
+     Note that some errors discovered by the UDP protocol layer are
+     reported in the statistics files for other protocol layers. One
+     example of this: routing errors. A routing error discovered by
+     =udp_sendmsg= will cause an increment to the IP protocol layer’s
+     =OutNoRoutes= statistic. 
+
+**** =/proc/net/udp=
+     #+CAPTION: Monitor UDP socket statistics by reading =/proc/net/udp=
+     #+BEGIN_SRC sh
+       $ cat /proc/net/udp
+         sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+         515: 00000000:B346 00000000:0000 07 00000000:00000000 00:00000000 00000000   104        0 7518 2 0000000000000000 0
+         558: 00000000:0371 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7408 2 0000000000000000 0
+         588: 0100007F:038F 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7511 2 0000000000000000 0
+         769: 00000000:0044 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7673 2 0000000000000000 0
+         812: 00000000:006F 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7407 2 0000000000000000 0     
+     #+END_SRC
+
+     The first line describes each of the fields in the lines
+     following:
+     - =sl=:
+       Kernel hash slot for the socket
+     - =local_address=:
+       Hexadecimal local address of the socket and port number,
+       separated by =:= .
+     - =rem_address=:
+       Hexadecimal remote address of the socket and port number,
+       separated by =:= .
+     - =st=:
+       The state of the socket. Oddly enough, the UDP protocol layer
+       seems to use some TCP socket states. In the example above, =7= is
+       =TCP_CLOSE=.
+     - =tx_queue=:
+       The amount of memory allocated in the kernel for outgoing UDP
+       datagrams.
+     - =rx_queue=:
+       The amount of memory allocated in the kernel for incoming UDP
+       datagrams.
+     - =tr=, =tm->when=, =retrnsmt=:
+       These fields are unused by the UDP protocol layer.
+     - =uid=:
+       The effective user id of the user who created this socket.
+     - =timeout=:
+       Unused by the UDP protocol layer.
+     - =inode=:
+       The inode number corresponding to this socket. You can use this
+       to help you determine which user process has this socket
+       open. Check =/proc/[pid]/fd=, which will contain symlinks to
+       =socket[:inode]=.
+     - =ref=:
+       The current reference count for the socket.
+     - =pointer=:
+       The memory address in the kernel of the =struct sock=.
+     - =drops=:
+       The number of datagram drops associated with this socket. Note
+       that this does not include any drops related to sending
+       datagrams (on corked UDP sockets or otherwise); this is only
+       incremented in receive paths as of the kernel version examined
+       by this blog post. 
+
+       The code which outputs this can be found in [[https://github.com/torvalds/linux/blob/master/net/ipv4/udp.c#L2396-L2431][net/ipv4/udp.c]]. 
 
 *** Tuning: Socket send queue memory
+    The maximum size of the send queue (also called the write queue)
+    can be adjusted by setting the =net.core.wmem_max= sysctl. 
+
+    #+CAPTION: Increase the maximum send buffer size by setting a sysctl.
+    #+BEGIN_SRC sh
+      $ sudo sysctl -w net.core.wmem_max=8388608    
+    #+END_SRC
+
+    =sk->sk_write_queue= starts at the =net.core.wmem_default= value,
+    which can also be adjusted by setting a sysctl, like so: 
+
+    #+CAPTION: Adjust the default initial send buffer size by setting a sysctl.
+    #+BEGIN_SRC sh
+      $ sudo sysctl -w net.core.wmem_default=8388608    
+    #+END_SRC
+
+    You can also set the =sk->sk_write_queue= size by calling
+    [[http://www.manpagez.com/man/2/setsockopt/][setsockopt]]from your application and passed =SO_SNDBUF=. The maximum
+    you can set with =setsockopt= is =net.core.wmem_max=. 
+
+    However, you can override the =net.core.wmem_max= limit by calling
+    setsockopt and passing =SO_SNDBUFFORCE=, but the user running the
+    application need the =CAP_NET_ADMIN= capability. 
+
+    The =sk->sk_wmem_alloc= is incremented each time an skb is allocated
+    by calls to =__ip_append_data=. As we’ll see, UDP datagrams are
+    transmit quickly and typically don’t spend much time in the send
+    queue. 
 
 ** IP protocol layer
+    The UDP protocol layer hands skbs down to the IP protocol by
+    simply calling =ip_send_skb=, so let’s start there and map out the
+    IP protocol layer! 
+    
+*** =ip_send_skb=
+    The =ip_send_skb= function is found in [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/ip_output.c#L1367-L1380][./net/ipv4/ip_output.c]]and is
+    very short. It simply calls down to =ip_local_out= and bumps an
+    error statistic if =ip_local_out= returns an error of some
+    sort. Let’s take a look: 
+    
+    #+BEGIN_SRC c
+      int ip_send_skb(struct net *net, struct sk_buff *skb)
+      {
+              int err;
 
-*** ip_send_skb
+              err = ip_local_out(skb);
+              if (err) {
+                      if (err > 0)
+                              err = net_xmit_errno(err);
+                      if (err)
+                              IP_INC_STATS(net, IPSTATS_MIB_OUTDISCARDS);
+              }
 
-*** ip_local_out and __ip_local_out
+              return err;
+      }    
+    #+END_SRC
 
-*** netfilter and nf_hook
+    As seen above, =ip_local_out= is called and the return value is
+    dealt with after that. The call to =net_xmit_errno= helps to
+    “translate” any errors from lower levels into an error that is
+    understood by the IP and UDP protocol layers. If any error
+    happens, the IP protocol statistic “OutDiscards” is
+    incremented. We’ll see later which files to read to obtain this
+    statistic. For now, let’s continue down the rabbit hole and see
+    where =ip_local_out= takes us. 
+
+*** =ip_local_out= and =__ip_local_out=
+    Luckily for us, both =ip_local_out= and =__ip_local_out= are
+    simple. =ip_local_out= simply calls down to =__ip_local_out= and based
+    on the return value, will call into the routing layer to output
+    the packet: 
+    
+    #+BEGIN_SRC c
+      int ip_local_out(struct sk_buff *skb)
+      {
+              int err;
+
+              err = __ip_local_out(skb);
+              if (likely(err == 1))
+                      err = dst_output(skb);
+
+              return err;
+      }    
+    #+END_SRC
+
+    We can see from the source to =__ip_local_out= that the function
+    does two important things first: 
+    1. Sets the length of the IP packet
+    2. Calls =ip_send_check= to compute the checksum to be written in
+       the IP packet header. The =ip_send_check= function will call a
+       function named =ip_fast_csum= to compute the checksum. On the =x86=
+       and =x86_64= architectures, this function is implemented in
+       assembly.  You can read the [[https://github.com/torvalds/linux/blob/v3.13/arch/x86/include/asm/checksum_64.h#L40-L73][64bit implementation here]] and the
+       [[https://github.com/torvalds/linux/blob/v3.13/arch/x86/include/asm/checksum_32.h#L63-L98][32bit implementation here]]. 
+
+    Next, the IP protocol layer will call down into netfilter by
+    calling =nf_hook=. The return value of the =nf_hook= function will be
+    passed back up to =ip_local_out=. If =nf_hook= returns 1, this
+    indicates that the packet was allowed to pass and that the caller
+    should pass it along itself. As we saw above, this is precisely
+    what happens: =ip_local_out= checks for the return value of =1= and
+    passes the packet on by calling =dst_output= itself. Let’s take a
+    look at the code for =__ip_local_out=: 
+
+    #+BEGIN_SRC c
+      int __ip_local_out(struct sk_buff *skb)
+      {
+              struct iphdr *iph = ip_hdr(skb);
+
+              iph->tot_len = htons(skb->len);
+              ip_send_check(iph);
+              return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT, skb, NULL,
+                             skb_dst(skb)->dev, dst_output);
+      }    
+    #+END_SRC
+
+*** netfilter and =nf_hook=
+    In the interest of brevity (and my RSI), I’ve decided to skip my
+    deep dive into =netfilter=, =iptables=, and =conntrack=. You can dive
+    into the source for netfilter by starting [[https://github.com/torvalds/linux/blob/v3.13/include/linux/netfilter.h#L142-L147][here]] and [[https://github.com/torvalds/linux/blob/v3.13/net/netfilter/core.c#L168-L209][here]]. 
+
+    The short version is that =nf_hook= is a wrapper which calls
+    =nf_hook_thresh= that first checks if any filters are installed for
+    the specified protocol family and hook type (=NFPROTO_IPV4= and
+    =NF_INET_LOCAL_OUT= in this case, respectively) and attempt to
+    return execution back to the IP protocol layer to avoid going
+    deeper into netfilter and anything that hooks in below that like
+    iptables and conntrack. 
+
+    Keep in mind: if you have numerous or very complex netfilter or
+    iptables rules, those rules will be executed in the CPU context of
+    the user process which initiated the original =sendmsg= call. If you
+    have CPU pinning set up to restrict execution of this process to a
+    particular CPU (or set of CPUs), be aware that the CPU will spend
+    system time processing outbound iptables rules. Depending on your
+    system’s workload, you may want to carefully pin processes to
+    CPUs or reduce the complexity of your ruleset if you measure a
+    performance regression here. 
+
+    For the purposes of our discussion, let’s assume =nf_hook= returns
+    =1= indicating that the caller (in this case, the IP protocol layer)
+    should pass the packet along itself. 
 
 *** Destination cache
+    The =dst= code implements the protocol independent destination cache
+    in the Linux kernel. To understand how =dst= entries are setup to
+    proceed with the sending of UDP datagrams, we need to briefly
+    examine how =dst= entries and routes are generated. The destination
+    cache, routing, and neighbour subsystems can all be examined in
+    extreme detail on their own. For our purposes, we can take a quick
+    look to see how this all fits together. 
 
-*** ip_output
+    The code we’ve seen above calls =dst_output(skb)=. This function
+    simply looks up the dst entry attached to the =skb= and calls the
+    output function. Let’s take a look: 
 
-*** ip_finish_output
+    #+BEGIN_SRC c
+      /* Output packet to network from transport.  */
+      static inline int dst_output(struct sk_buff *skb)
+      {
+              return skb_dst(skb)->output(skb);
+      }    
+    #+END_SRC
 
+    Seems simple enough, but how does that output function get
+    attached to the =dst= entry in the first place? 
+
+    It’s important to understand that destination cache entries are
+    added in many different ways. One way we’ve seen so far in the
+    code path we’ve been following is with the call to
+    [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/route.c#L2252-L2267][ip_route_output_flow]] from =udp_sendmsg=.  The =ip_route_output_flow=
+    function calls [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/route.c#L1990-L2173][__ip_route_output_key]] which calls
+    [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/route.c#L1868-L1988][__mkroute_output]]. The =__mkroute_output= function creates the route
+    and the destination cache entry. When it does so, it determines
+    which of the output functions is appropriate for this
+    destination. Most of the time, this function is =ip_output=. 
+
+*** =ip_output=
+    So, =dst_output= executes the output function, which in the UDP IPv4
+    case is =ip_output=. The =ip_output= function is straightforward: 
+    
+    #+BEGIN_SRC c
+      int ip_output(struct sk_buff *skb)
+      {
+              struct net_device *dev = skb_dst(skb)->dev;
+
+              IP_UPD_PO_STATS(dev_net(dev), IPSTATS_MIB_OUT, skb->len);
+
+              skb->dev = dev;
+              skb->protocol = htons(ETH_P_IP);
+
+              return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING, skb, NULL, dev,
+                                  ip_finish_output,
+                                  !(IPCB(skb)->flags & IPSKB_REROUTED));
+      }    
+    #+END_SRC
+
+    First, a statistics counter is updated =IPSTATS_MIB_OUT=. The
+    =IP_UPD_PO_STATS= macro will increment both the number of bytes and
+    number packets. We’ll see in a later section how to obtain the IP
+    protocol layer statistics and what each of them mean. Next, the
+    device for this =skb= to be transmit on is set, as is the
+    protocol. 
+
+    Finally, control is passed off to netfilter with a call to
+    =NF_HOOK_COND=. Looking at the function prototype for =NF_HOOK_COND=
+    will help make the explanation of how it works a bit clearer. From
+    [[https://github.com/torvalds/linux/blob/v3.13/include/linux/netfilter.h#L177-L188][./include/linux/netfilter.h]]: 
+
+    #+BEGIN_SRC c
+      static inline int
+      NF_HOOK_COND(uint8_t pf, unsigned int hook, struct sk_buff *skb,
+                   struct net_device *in, struct net_device *out,
+                   int (*okfn)(struct sk_buff *), bool cond)    
+    #+END_SRC
+
+    =NF_HOOK_COND= works by checking the conditional, which is passed
+    in. In this case, that conditional is =!(IPCB(skb)->flags &
+    IPSKB_REROUTED=. If this conditional is true, then the skb will be 
+    passed on to netfilter. If netfilter allows the packet to pass,
+    the =okfn= is called. In this case, the =okfn= is =ip_finish_output=. 
+
+*** =ip_finish_output=
+    The =ip_finish_output= function is also short and clear. Let’s take
+    a look: 
+    
+    #+BEGIN_SRC c
+      static int ip_finish_output(struct sk_buff *skb)
+      {
+      #if defined(CONFIG_NETFILTER) && defined(CONFIG_XFRM)
+              /* Policy lookup after SNAT yielded a new policy */
+              if (skb_dst(skb)->xfrm != NULL) {
+                      IPCB(skb)->flags |= IPSKB_REROUTED;
+                      return dst_output(skb);
+              }
+      #endif
+              if (skb->len > ip_skb_dst_mtu(skb) && !skb_is_gso(skb))
+                      return ip_fragment(skb, ip_finish_output2);
+              else
+                      return ip_finish_output2(skb);
+      }    
+    #+END_SRC
+
+    If netfilter and packet transformation are enabled in this kernel,
+    the =skb=’s flags are updated and it is sent back through
+    =dst_output=. The two more common cases are: 
+    1. If packet’s length is larger than the MTU and the packet’s
+       segmentation will not be offloaded to the device, =ip_fragment=
+       is called to help fragment the packet prior to transmission.
+    2. Otherwise, the packet is passed straight through to
+       =ip_finish_output2= . 
+
+    Let’s take a short detour to talk about Path MTU Discovery before
+    continuing our way through the kernel. 
+    
 **** Path MTU Discovery
+     Linux provides a feature I’ve avoided mentioning until now: [[https://en.wikipedia.org/wiki/Path_MTU_Discovery][Path
+     MTU Discovery]]. This feature allows the kernel to automatically
+     determine the largest  [[https://en.wikipedia.org/wiki/Maximum_transmission_unit][MTU]] for a particular route. Determining
+     this value and sending packets that are less than or equal to the
+     MTU for the route means that IP fragmentation can be
+     avoided. This is the preferred setting because fragmenting
+     packets consumes system resources and is seemingly easy to avoid:
+     simply send small enough packets and fragmentation is
+     unnecessary. 
 
-*** ip_finish_output2
+     You can adjust the Path MTU Discovery settings on a per-socket
+     basis by calling =setsockopt= in your application with the =SOL_IP=
+     level and =IP_MTU_DISCOVER= optname. The optval can be one of the
+     several values described in the [[http://man7.org/linux/man-pages/man7/ip.7.html][IP protocol man page]]. The value
+     you’ll likely want to set is:  =IP_PMTUDISC_DO=  which means
+     “Always do Path MTU Discovery.” More advanced network
+     applications or diagnostic tools may choose to implement [[https://www.ietf.org/rfc/rfc4821.txt][RFC 4821]]
+     themselves to determine the PMTU at application start for a
+     particular route or routes. In this case, you can use the
+     =IP_PMTUDISC_PROBE= option which tells the kernel to set the
+     “Don’t Fragment” bit, but allows you to send data larger than
+     the PMTU. 
 
-*** dst_neigh_output
+     Your application can retrieve the PMTU by calling =getsockopt=,
+     with the =SOL_IP= and =IP_MTU= optname. You can use this to help
+     guide the size of the UDP datagrams your application will
+     construct prior to attempting transmissions. 
 
-*** neigh_hh_output
+     If you have enabled PTMU discovery, any attempt to send UDP data
+     larger than the PMTU will result in the application receiving the
+     error code  =EMSGSIZE=. The application can then retry, but with
+     less data. 
+
+     Enabling PTMU discovery is strongly encouraged, so I’ll avoid
+     describing the IP fragmentation code path in detail. When we take
+     a look at the IP protocol layer statistics, I’ll explain all the
+     statistics including the fragmentation related statistics. Many
+     of them are incremented in =ip_fragment=. In both the fragment or
+     non-fragment case =ip_finish_output2= is called, so let’s continue
+     there. 
+
+*** =ip_finish_output2=
+    The =ip_finish_output2= is called after IP fragmentation and also
+    directly from =ip_finish_output=. This function handles bumping
+    various statistics counters prior to handing the packet down to
+    the neighbour cache. Let’s see how this works: 
+    
+    #+BEGIN_SRC c
+      static inline int ip_finish_output2(struct sk_buff *skb)
+      {
+
+                      /* variable declarations */
+
+              if (rt->rt_type == RTN_MULTICAST) {
+                      IP_UPD_PO_STATS(dev_net(dev), IPSTATS_MIB_OUTMCAST, skb->len);
+              } else if (rt->rt_type == RTN_BROADCAST)
+                      IP_UPD_PO_STATS(dev_net(dev), IPSTATS_MIB_OUTBCAST, skb->len);
+
+              /* Be paranoid, rather than too clever. */
+              if (unlikely(skb_headroom(skb) < hh_len && dev->header_ops)) {
+                      struct sk_buff *skb2;
+
+                      skb2 = skb_realloc_headroom(skb, LL_RESERVED_SPACE(dev));
+                      if (skb2 == NULL) {
+                              kfree_skb(skb);
+                              return -ENOMEM;
+                      }
+                      if (skb->sk)
+                              skb_set_owner_w(skb2, skb->sk);
+                      consume_skb(skb);
+                      skb = skb2;
+              }    
+    #+END_SRC
+
+    If the routing structure associated with this packet is of type
+    multicast, both the =OutMcastPkts= and =OutMcastOctets= counters are
+    bumped by using the =IP_UPD_PO_STATS= macro. Otherwise, if the route
+    type is broadcast the =OutBcastPkts= and =OutBcastOctets= counters are
+    bumped. 
+
+    Next, a check is performed to ensure that the skb structure has
+    enough room for any link layer headers that need to be added. If
+    not, additional room is allocated with a call to
+    =skb_realloc_headroom= and the cost of the new skb is charged to the
+    associated socket. 
+
+    #+BEGIN_SRC c
+      rcu_read_lock_bh();
+              nexthop = (__force u32) rt_nexthop(rt, ip_hdr(skb)->daddr);
+              neigh = __ipv4_neigh_lookup_noref(dev, nexthop);
+              if (unlikely(!neigh))
+                      neigh = __neigh_create(&arp_tbl, &nexthop, dev, false);    
+    #+END_SRC
+
+    Continuing on, we can see that the next hop is computed by
+    querying the routing layer followed by a lookup against the
+    neighbour cache. If the neighbour is not found, one is created by
+    calling __neigh_create. This could be the case, for example, the
+    first time data is sent to another host. Note that this function
+    is called with arp_tbl (defined in [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/arp.c#L160-L187][./net/ipv4/arp.c]] ) to create
+    the neighbour entry in the ARP table. Other systems (like IPv6 or
+    [[https://en.wikipedia.org/wiki/DECnet][DECnet]] ) maintain their own ARP tables and would pass a different
+    structure into =__neigh_create=. This post does not aim to cover
+    the neighbour cache in full detail, but it is worth nothing that
+    if the neighbour has to be created it is possible that this
+    creation can cause the cache to grow. This post will cover some
+    more details about the neighbour cache in the sections below. At
+    any rate, the neighbour cache exports its own set of statistics so
+    that this growth can be measured. See the monitoring sections
+    below for more information. 
+
+    #+BEGIN_SRC c
+      if (!IS_ERR(neigh)) {
+                      int res = dst_neigh_output(dst, neigh, skb);
+
+                      rcu_read_unlock_bh();
+                      return res;
+              }
+              rcu_read_unlock_bh();
+
+              net_dbg_ratelimited("%s: No header cache and no neighbour!\n",
+                                  __func__);
+              kfree_skb(skb);
+              return -EINVAL;
+      }    
+    #+END_SRC
+
+    Finally, if no error is returned, =dst_neigh_output= is called to
+    pass the skb along on its journey to be output. Otherwise, the skb
+    is freed and EINVAL is returned. An error here will ripple back
+    and cause =OutDiscards= to be incremented way back up in
+    =ip_send_skb=. Let’s continue on in =dst_neigh_output= and continue
+    approaching the Linux kernel’s netdevice subsystem. 
+
+*** =dst_neigh_output=
+    The =dst_neigh_output= function does two important things for
+    us. First, recall from earlier in this blog post we saw that if a
+    user specified =MSG_CONFIRM= via an ancillary message to =sendmsg= the
+    function, a flag is flipped to indicate that the destination cache
+    entry for the remote host is still valid and should not be garbage
+    collected. That check happens here and the =confirmed= field on the
+    neighbour is set to the current jiffies count. 
+
+    #+BEGIN_SRC c
+      static inline int dst_neigh_output(struct dst_entry *dst, struct neighbour *n,
+                                         struct sk_buff *skb)
+      {
+              const struct hh_cache *hh;
+
+              if (dst->pending_confirm) {
+                      unsigned long now = jiffies;
+
+                      dst->pending_confirm = 0;
+                      /* avoid dirtying neighbour */
+                      if (n->confirmed != now)
+                              n->confirmed = now;
+              }    
+    #+END_SRC
+
+    NOTES: 更新 =n->confirmed= 的值为当前的Jiffies， 以保证该目标缓冲
+    项不会被回收清除。
+
+    Second, the neighbour’s state is checked and the appropriate
+    output function is called. Let’s take a look at the conditional
+    and try to understand what’s going on:
+
+    #+BEGIN_SRC c
+      hh = &n->hh;
+              if ((n->nud_state & NUD_CONNECTED) && hh->hh_len)
+                      return neigh_hh_output(hh, skb);
+              else
+                      return n->output(n, skb);
+      }    
+    #+END_SRC
+
+    If a neighbour is considered =NUD_CONNECTED=, meaning it is one or
+    more of: 
+    - =NUD_PERMANENT=:
+      A static route.
+    - =NUD_NOARP=:
+      Does not require an ARP request (for example, the destination is
+      a multicast or broadcast address, or a loopback device).
+    - =NUD_REACHABLE=:
+      The neighbour is “reachable.” A destination is marked as
+      reachable whenever an ARP request for it is [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/arp.c#L905-L923][successfully
+      processed.]]
+
+    and the “hardware header” (=hh=) is cached (because we’ve sent
+    data before and have previously generated it), call
+    =neigh_hh_output=. Otherwise, call the output function. Both code
+    paths end with =dev_queue_xmit= which pass the skb down to the Linux
+    net device subsystem where it will be processed a bit more before
+    hitting the device driver layer. Let’s follow both the
+    =neigh_hh_output= and =n->output= code paths until we reach
+    =dev_queue_xmit=. 
+
+*** =neigh_hh_output=
+    If the destination is =NUD_CONNECTED= and the hardware header has
+    been cached, =neigh_hh_output= will be called, which does a small
+    bit of processing before handing the skb over to
+    =dev_queue_xmit=. Let’s take a look, from
+    [[https://github.com/torvalds/linux/blob/v3.13/include/net/neighbour.h#L336-L356][./include/net/neighbour.h]]:
+    
+    #+BEGIN_SRC c
+      static inline int neigh_hh_output(const struct hh_cache *hh, struct sk_buff *skb)
+      {
+              unsigned int seq;
+              int hh_len;
+
+              do {
+                      seq = read_seqbegin(&hh->hh_lock);
+                      hh_len = hh->hh_len;
+                      if (likely(hh_len <= HH_DATA_MOD)) {
+                              /* this is inlined by gcc */
+                              memcpy(skb->data - HH_DATA_MOD, hh->hh_data, HH_DATA_MOD);
+                       } else {
+                               int hh_alen = HH_DATA_ALIGN(hh_len);
+
+                               memcpy(skb->data - hh_alen, hh->hh_data, hh_alen);
+                       }
+               } while (read_seqretry(&hh->hh_lock, seq));
+
+               skb_push(skb, hh_len);
+               return dev_queue_xmit(skb);
+      }    
+    #+END_SRC
+
+    This function is a bit tricky to understand, partially due to the
+    locking primitive used to synchronize reading/writing on the
+    cached hardware header. This code uses something called a
+    [[https://en.wikipedia.org/wiki/Seqlock][seqlock]]. You can imagine the =do { } while()= loop above as a
+    simple retry mechanism which will attempt to perform the
+    operations in the loop until it can be performed successfully. 
+
+    The loop itself is attempted to determine if the hardware
+    header’s length needs to be aligned prior to being copied. This
+    is required because some hardware headers (like the [[https://github.com/torvalds/linux/blob/v3.13/include/linux/ieee80211.h#L210-L218][IEEE 802.11]]
+    header) is larger than =HH_DATA_MOD= (16 bytes).
+
+    Once the data is copied to the skb and the skb’s internal
+    pointers tracking the data are updated with =skb_push=, the skb is
+    passed to =dev_queue_xmit= to enter the Linux net device subsystem. 
 
 *** n->output
 

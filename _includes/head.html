@@ -9,6 +9,9 @@
 
   <title>{% if page.title %}{{ page.title }}{% else %}{{ site.title }}{% endif %}</title>
 
+
+  <link rel="stylesheet" href="{{"/css/gruvbox-dark.css" | prepend: site.baseurl }}">
+  <script src="{{"/js/highlight.pack.js" | prepend: site.baseurl }}"></script>
   <!-- Bootstrap core CSS -->
 
  <!--  <link href="{{site.baseurl}}/css/bootstrap.min.css" rel="stylesheet"> -->
@@ -193,6 +196,14 @@
 
   $('.bs-docs-sidebar').affix();
   });
+</script>
+
+<script>
+    $(document).ready(function() {
+        $('div pre').each(function(i, block) {
+            hljs.highlightBlock(block);
+        });
+    });
 </script>
 
 </head>
