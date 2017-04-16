@@ -1,0 +1,1270 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Emacs-Lisp学习笔记</h1>
+          <p>探索Emacs-Lisp语法的点点滴滴。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">Emacs-Lisp学习笔记</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1">基础语法</h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1">function definitions</h3>
+<div class="outline-text-3" id="text-1-1">
+</div><div id="outline-container-sec-1-1-1" class="outline-4">
+<h4 id="sec-1-1-1">defun template</h4>
+<div class="outline-text-4" id="text-1-1-1">
+<p>
+(defun functoin-name (arguments &#x2026;)
+"optional documentation &#x2026;"
+(interactive argument-passing info) ; optional
+body&#x2026;)
+</p>
+</div>
+
+<ul class="org-ul"><li><a id="sec-1-1-1-1" name="sec-1-1-1-1"></a>example<br ><div class="outline-text-5" id="text-1-1-1-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defun multiply-by-seven (number)
+  "Multiply by server"
+  (* number 7))
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+
+<div id="outline-container-sec-1-1-2" class="outline-4">
+<h4 id="sec-1-1-2">install a func</h4>
+<div class="outline-text-4" id="text-1-1-2">
+<pre class="example">
+evaluate defunc
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-1-1-3" class="outline-4">
+<h4 id="sec-1-1-3">make a function interactive</h4>
+<div class="outline-text-4" id="text-1-1-3">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defun multiply-by-seven (number) ;interactive version
+  "Multiply by seven"
+  (interactive "p")  ;the "p" tells Emacs to pass the prefix argument to the function and use its value for the argument of the function.
+  (message "The result is %d" (* 7 number)))
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-1-1-4" class="outline-4">
+<h4 id="sec-1-1-4">diffrent options for interactive</h4>
+</div>
+<div id="outline-container-sec-1-1-5" class="outline-4">
+<h4 id="sec-1-1-5">funcall</h4>
+<div class="outline-text-4" id="text-1-1-5">
+<p>
+调用另外一个函数.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-1-6" class="outline-4">
+<h4 id="sec-1-1-6">参数</h4>
+<div class="outline-text-4" id="text-1-1-6">
+</div><ul class="org-ul"><li><a id="sec-1-1-6-1" name="sec-1-1-6-1"></a>prefix-numeric-value<br ><div class="outline-text-5" id="text-1-1-6-1">
+<p>
+获取传入进来的参数值
+</p>
+</div>
+</li></ul>
+</div>
+<div id="outline-container-sec-1-1-7" class="outline-4">
+<h4 id="sec-1-1-7">内联函数</h4>
+<div class="outline-text-4" id="text-1-1-7">
+<p>
+定义内联函数使用 defsubst
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-1-8" class="outline-4">
+<h4 id="sec-1-1-8">声明一个函数</h4>
+<div class="outline-text-4" id="text-1-1-8">
+<pre class="example">
+(declare-function FN FILE &amp;optional ARGLIST FILEONLY)
+</pre>
+<p>
+声明函数FN定义在文件FILE中。 
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2">宏</h3>
+<div class="outline-text-3" id="text-1-2">
+<p>
+宏的参数是隐式引用起来的，也就是说，当宏被调用时，它的参数不会被解
+析，而是原样传递到宏内部。
+</p>
+</div>
+<div id="outline-container-sec-1-2-1" class="outline-4">
+<h4 id="sec-1-2-1">例子</h4>
+<div class="outline-text-4" id="text-1-2-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defmacro incr (var)
+  "Add one to the named variable"
+  '(setq ,var (+ ,var 1)))
+</pre>
+</div>
+
+<p>
+其中 macroexpand 用于调试，可以查看一个宏展开后的样子。','表示
+backquote, 被backquote的元素在执行宏定义的代码时，不会被解析。
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defmacro limited-save-excursion (&amp;rest subexprs)
+  "Like save-excursion, but only restores point."
+  (let ((orig-point-symbol (make-symbol "orig-point")))
+    '(let ((,orig-point-symbol (point)))
+       (unwind-protect
+           (progn ,@subexprs)
+         (goto-char ,orig-point-symbol)))))
+</pre>
+</div>
+
+<p>
+",@"跟","一样，原封不动的保留传入进来的参数，且会自动去掉最外层的
+括号。
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-1-3" class="outline-3">
+<h3 id="sec-1-3">变量</h3>
+<div class="outline-text-3" id="text-1-3">
+</div><div id="outline-container-sec-1-3-1" class="outline-4">
+<h4 id="sec-1-3-1">普通变量</h4>
+<div class="outline-text-4" id="text-1-3-1">
+<pre class="example">
+defvar
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-1-3-2" class="outline-4">
+<h4 id="sec-1-3-2">常量</h4>
+<div class="outline-text-4" id="text-1-3-2">
+<pre class="example">
+defconst
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-1-3-3" class="outline-4">
+<h4 id="sec-1-3-3">可配置变量</h4>
+<div class="outline-text-4" id="text-1-3-3">
+<pre class="example">
+defcustom
+</pre>
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defcustom org-timer-display 'mode-line
+  "When a timer is running, org-mode can display it in the mode
+line and/or frame title.
+Allowed values are:
+
+both         displays in both mode line and frame title
+mode-line    displays only in mode line (default)
+frame-title  displays only in frame title
+nil          current timer is not displayed"
+  :group 'org-time
+  :type '(choice
+          (const :tag "Mode line" mode-line)
+          (const :tag "Frame title" frame-title)
+          (const :tag "Both" both)
+          (const :tag "None" nil)))
+</pre>
+</div>
+<p>
+type的类型有:  choice, boolean, alist, plist,  "set greedy: t"
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-3-4" class="outline-4">
+<h4 id="sec-1-3-4">变量赋值let</h4>
+<div class="outline-text-4" id="text-1-3-4">
+<p>
+create a name for a local variable
+<code>let*</code> : set each variable in its varlist in sequence
+但通常情况下，应该使用 <code>let</code> ，因为它在大多数情况下，更有效率。
+</p>
+
+<p>
+in Emacs Lisp, scoping is dynamic, not lexical
+</p>
+</div>
+
+<ul class="org-ul"><li><a id="sec-1-3-4-1" name="sec-1-3-4-1"></a>sample<br ><div class="outline-text-5" id="text-1-3-4-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(let ((zera 'strips)
+      (tiger 'fierce))
+(message "One kind of animal has %s and another is %s. " 
+     zera tiger))
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+</div>
+<div id="outline-container-sec-1-4" class="outline-3">
+<h3 id="sec-1-4">条件与控制</h3>
+<div class="outline-text-3" id="text-1-4">
+</div><div id="outline-container-sec-1-4-1" class="outline-4">
+<h4 id="sec-1-4-1">if</h4>
+<div class="outline-text-4" id="text-1-4-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(if true-or-false-test
+    action-to-carryout-if-test-is-true)
+</pre>
+</div>
+</div>
+
+<ul class="org-ul"><li><a id="sec-1-4-1-1" name="sec-1-4-1-1"></a>sample<br ><div class="outline-text-5" id="text-1-4-1-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(if (&gt; number 5)
+    (message "%d is larger than 5" number))
+
+(if true-or-false-test
+    action-to-carryout-if-test-is-true
+ action-to-carryout-if-test-is-false)
+</pre>
+</div>
+</div>
+</li>
+
+<li><a id="sec-1-4-1-2" name="sec-1-4-1-2"></a>sample<br ><div class="outline-text-5" id="text-1-4-1-2">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(if (&gt; number 5)
+    (message "%d is larger than 5" number)
+(message "%d is not larger than 5" number))
+</pre>
+</div>
+</div>
+</li>
+
+<li><a id="sec-1-4-1-3" name="sec-1-4-1-3"></a>nil<br ><div class="outline-text-5" id="text-1-4-1-3">
+<p>
+nil mean an empty list or false
+</p>
+</div>
+</li>
+<li><a id="sec-1-4-1-4" name="sec-1-4-1-4"></a>save-excursion<br ><div class="outline-text-5" id="text-1-4-1-4">
+<p>
+save the current location of point and mark, execute the body of
+function, and then restores point and mark.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defun simple-beginning-of-buffer ()
+  "Move point to the beginning of buffer,
+leave mark at previouse position"
+  (interactive)
+  (push-mark)
+  (goto-char (point-min)))
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+<div id="outline-container-sec-1-4-2" class="outline-4">
+<h4 id="sec-1-4-2">unless</h4>
+</div>
+<div id="outline-container-sec-1-4-3" class="outline-4">
+<h4 id="sec-1-4-3">catch</h4>
+<div class="outline-text-4" id="text-1-4-3">
+<p>
+(catch TAG BODY&#x2026;)
+</p>
+
+<p>
+Eval BODY allowing nonlocal exits using ‘throw’.
+TAG is evalled to get the tag to use; it must not be nil.
+</p>
+
+<p>
+Then the BODY is executed.
+Within BODY, a call to ‘throw’ with the same TAG exits BODY and this ‘catch’.
+If no throw happens, ‘catch’ returns the value of the last BODY form.
+If a throw happens, it specifies the value to return from ‘catch’.
+</p>
+</div>
+<ul class="org-ul"><li><a id="sec-1-4-3-1" name="sec-1-4-3-1"></a>示例<br ><div class="outline-text-5" id="text-1-4-3-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defun test ()
+  (catch 'exit
+    (throw 'exit "this is the return values")))
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+<div id="outline-container-sec-1-4-4" class="outline-4">
+<h4 id="sec-1-4-4">condition-case</h4>
+<div class="outline-text-4" id="text-1-4-4">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(condition-case nil
+        (load (concat (file-name-directory load-file-name)
+                      "org-loaddefs.el")
+              nil t t t)
+      (error
+       (message "WARNING: No org-loaddefs.el file could be found from where org.el is loaded.")
+       (sit-for 3)
+       (message "You need to run \"make\" or \"make autoloads\" from Org lisp directory")
+       (sit-for 3)))
+</pre>
+</div>
+<p>
+条件处理函数，包含一系列的HANDLER处理
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-4-5" class="outline-4">
+<h4 id="sec-1-4-5">cond</h4>
+<div class="outline-text-4" id="text-1-4-5">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(cond
+ ((integerp offset) (setq delta offset)) ;; 条件1
+ ((stringp offset) (setq delta (org-timer-hms-to-secs offset)));;条件2
+ (t  ;;默认条件，任何时候都会执行
+  (setq def (if (org-in-regexp org-timer-re)
+                (match-string 0)
+              "0:00:00")
+        s (read-string
+           (format "Restart timer with offset [%s]: " def)))
+  (unless (string-match "\\S-" s) (setq s def))
+  (setq delta (org-timer-hms-to-secs (org-timer-fix-incomplete s)))))
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-1-5" class="outline-3">
+<h3 id="sec-1-5">make-symbol</h3>
+<div class="outline-text-3" id="text-1-5">
+<p>
+创建一个全新的对象，能确保不会与现存的对象冲突。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-6" class="outline-3">
+<h3 id="sec-1-6">错误处理</h3>
+<div class="outline-text-3" id="text-1-6">
+<p>
+unwind-protect函数专门用于调用某个程序发生错误时，自动回退到调用前的状态。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-7" class="outline-3">
+<h3 id="sec-1-7">Point Marker</h3>
+</div>
+<div id="outline-container-sec-1-8" class="outline-3">
+<h3 id="sec-1-8">处理命令行参数</h3>
+<div class="outline-text-3" id="text-1-8">
+<p>
+&#x2013;script模式下，与处理命令行参数相关的常用变量有如下几个：
+</p>
+<ol class="org-ol">
+<li>command-line-args-left
+尚未处理的命令行参数的列表
+</li>
+<li>command-line-args 
+传递给emacs完整的命令行参数列表，一般用于获取当前执行的脚本名。
+</li>
+<li>command-switch-alist
+检查command-line-args-left是否包含以 - 开头的选项，并在变量中查
+找并运行对应的handler-function。每处理完一个选项后，就将该参数从
+command-line-args-left中删除。该元素为'(option
+. handler-function)的alist。如果该参数后面还有其他的参数，则在该
+函数中可以通过变量'command-line-args-left来获取剩余的命令行参数。
+</li>
+<li>command-line-functions
+该变量是一系列函数的列表，这些函数用来处理无法识别的command-line
+参数。只要处理的函数不返回非nil的值，则该函数会依次被不同的函数
+处理。这些函数被调用时并不传递参数，但这些函数内可以通过变量
+<code>argi</code> 获取当前未被处理的命令行参数。
+</li>
+</ol>
+
+<p>
+EmacsScript的执行顺序：
+</p>
+<ol class="org-ol">
+<li>Emacs读取并执行EmacsScript中的内容
+</li>
+<li>Emacs遍历command-line-args-left中的参数，对于
+command-switch-alist中的参数调用对应的函数，对于不在
+command-switch-alist中的参数依次调用command-line-functions中的函
+数。
+</li>
+<li>倘若command-line-functions中没有定义函数或者某参数在依次调用
+command-line-functions中的函数后都返回nil的话，那么该参数交由
+emacs本身处理。
+</li>
+</ol>
+
+<p>
+脚本示例：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">#!/bin/sh
+":"; exec emacs --script "$0" "$@" #-*- mode: emacs-lisp; lexical-binding: t; -*-
+(message "Hello world")
+
+ ;;命令行相关常用变量
+
+ ;; 1. command-line-args-left
+ ;; 传递给可执行程序的参数，不包含应用程序本身    
+ (print (format "command-line-args-left=%s" command-line-args-left))
+
+ ;;2. command-line-args
+   ;;一般用于获取可执行程序本身的名称
+   (print (format "command-line-args=%s\n" command-line-args))
+   (print (format "$0=%s" (nth 2 command-line-args)))
+
+
+   ;;3. command-switch-alist
+     (defun print-option-value (option)
+      (print (format "command-line-args-left=%s\n"  command-line-args-left))
+      (print (format "value of %s is %s\n" option (car command-line-args-left)))
+      (pop command-line-args-left)
+     )
+
+     (add-to-list 'command-switch-alist '("-f" . print-option-value))
+
+     (defun print-option ()
+      (print (format "command-line-args-left=%s\n" command-line-args-left))
+      (print (format "option is %s\n" argi))
+     )
+
+     (add-to-list 'command-line-functions #'print-option)
+
+     (print (shell-command-to-string "ls -l"))
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2">数据结构</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1">向量</h3>
+<div class="outline-text-3" id="text-2-1">
+<ol class="org-ol">
+<li>创建一个向量
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">;;创建一个包含rows个元素的向量，初始值为nil
+(make-vector rows nill)
+</pre>
+</div>
+</li>
+<li>访问向量元素
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(aref VECTOR INDEX)
+</pre>
+</div>
+</li>
+<li>设置一个向量元素
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(aset VECTOR INDEX NEW-ELEMENT-VALUE)
+</pre>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2">数组</h3>
+</div>
+<div id="outline-container-sec-2-3" class="outline-3">
+<h3 id="sec-2-3">字符串</h3>
+<div class="outline-text-3" id="text-2-3">
+<ul class="org-ul">
+<li>replace-regexp-in-string
+替换匹配模式的字符串中字符
+</li>
+<li>intern
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">require (intern (concat "ob-" lang))
+</pre>
+</div>
+<p>
+返回规范的符号
+</p>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-2-4" class="outline-3">
+<h3 id="sec-2-4">列表</h3>
+<div class="outline-text-3" id="text-2-4">
+</div><div id="outline-container-sec-2-4-1" class="outline-4">
+<h4 id="sec-2-4-1">普通列表</h4>
+<div class="outline-text-4" id="text-2-4-1">
+<ul class="org-ul">
+<li>delete-dups
+删除重复元素
+</li>
+<li>copy-sequence
+复制列表
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-2-4-2" class="outline-4">
+<h4 id="sec-2-4-2">Assocation List</h4>
+</div>
+
+<div id="outline-container-sec-2-4-3" class="outline-4">
+<h4 id="sec-2-4-3">Property List</h4>
+<div class="outline-text-4" id="text-2-4-3">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp"> (plist-get '(foo 4) 'foo)
+     ⇒ 4
+(plist-get '(foo 4 bad) 'foo)
+     ⇒ 4
+(plist-get '(foo 4 bad) 'bad)
+     ⇒ nil
+(plist-get '(foo 4 bad) 'bar)
+     ⇒ nil
+</pre>
+</div>
+
+<p>
+主要函数：
+</p>
+<ul class="org-ul">
+<li>plist-get plist property
+</li>
+<li>plist-put plist property value
+</li>
+<li>lax-plist-get plist property
+使用equal比较属性
+</li>
+<li>lax-plist-put plist property value
+使用equal比较属性
+</li>
+<li>plist-member plist property
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3">evaluate an expression</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1">C-x C-e</h3>
+</div>
+</div>
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4">Syntax Table</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1">char-syntax</h3>
+</div>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5">Buffer</h2>
+<div class="outline-text-2" id="text-5">
+</div><div id="outline-container-sec-5-1" class="outline-3">
+<h3 id="sec-5-1">Buffer Names</h3>
+<div class="outline-text-3" id="text-5-1">
+</div><div id="outline-container-sec-5-1-1" class="outline-4">
+<h4 id="sec-5-1-1">buffer-name</h4>
+<div class="outline-text-4" id="text-5-1-1">
+<p>
+return file name, make sure this buffer is alive.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-5-1-2" class="outline-4">
+<h4 id="sec-5-1-2">buffer-file-name</h4>
+<div class="outline-text-4" id="text-5-1-2">
+<p>
+return full path
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-5-2" class="outline-3">
+<h3 id="sec-5-2">Buffers</h3>
+<div class="outline-text-3" id="text-5-2">
+</div><div id="outline-container-sec-5-2-1" class="outline-4">
+<h4 id="sec-5-2-1">current-buffer</h4>
+</div>
+<div id="outline-container-sec-5-2-2" class="outline-4">
+<h4 id="sec-5-2-2">other-buffer</h4>
+</div>
+<div id="outline-container-sec-5-2-3" class="outline-4">
+<h4 id="sec-5-2-3">switch-to-buffer</h4>
+</div>
+<div id="outline-container-sec-5-2-4" class="outline-4">
+<h4 id="sec-5-2-4">get-buffer-create</h4>
+<div class="outline-text-4" id="text-5-2-4">
+<p>
+如果存在对应名字的buffer，则返回该buffer，否则，创建一个对应名称的buffer.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-5-3" class="outline-3">
+<h3 id="sec-5-3">Buffer size</h3>
+<div class="outline-text-3" id="text-5-3">
+</div><div id="outline-container-sec-5-3-1" class="outline-4">
+<h4 id="sec-5-3-1">buffer-size</h4>
+</div>
+<div id="outline-container-sec-5-3-2" class="outline-4">
+<h4 id="sec-5-3-2">point, point-min, point-max</h4>
+<div class="outline-text-4" id="text-5-3-2">
+<p>
+the size of the current buffer
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-5-4" class="outline-3">
+<h3 id="sec-5-4">Buffer Operations</h3>
+<div class="outline-text-3" id="text-5-4">
+</div><div id="outline-container-sec-5-4-1" class="outline-4">
+<h4 id="sec-5-4-1">with-current-buffer</h4>
+<div class="outline-text-4" id="text-5-4-1">
+<p>
+将buffer临时作为当前buffer执行
+</p>
+</div>
+</div>
+<div id="outline-container-sec-5-4-2" class="outline-4">
+<h4 id="sec-5-4-2">with-temp-current</h4>
+<div class="outline-text-4" id="text-5-4-2">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">;; use a temp buffer to manipulate string
+(with-temp-buffer
+  (insert myStr)
+  ;; manipulate the string here
+  (buffer-string) ; get result
+)
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6">File Operations</h2>
+<div class="outline-text-2" id="text-6">
+</div><div id="outline-container-sec-6-1" class="outline-3">
+<h3 id="sec-6-1">Open, Append, Write</h3>
+<div class="outline-text-3" id="text-6-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">;; open a file (returns a buffer)
+(find-file "/home/jane/test.txt")
+
+;; save current buffer (write to the associated file)
+(save-buffer)
+
+;; like “Save As”. Save current buffer, close it, and open the new saved
+(write-file "/home/jane/new.txt")
+
+;; append text between positions 100 to 200 to file 
+(append-to-file 100 200 "/home/jane/test.txt")
+
+;; close a buffer
+(kill-buffer myBuffName)
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-6-2" class="outline-3">
+<h3 id="sec-6-2">Rename, Copy, Delete</h3>
+<div class="outline-text-3" id="text-6-2">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(rename-file "/home/jane/test1.txt" "/home/jane/test2.txt")
+
+(copy-file "/home/jane/test1.txt" "/home/jane/test2.txt")
+
+(delete-file "/home/jane/test2.txt")
+
+(copy-directory "/home/jane/stuff" "/home/jane/stuff-backup")
+
+;; delete a whole dir. (new in emacs 23)
+(delete-directory "/home/jane/stuff" t)
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-6-3" class="outline-3">
+<h3 id="sec-6-3">File Name Manipulation</h3>
+<div class="outline-text-3" id="text-6-3">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">; get the dir path part
+(file-name-directory "/home/jane/xyz.txt") ; "/home/jane/"
+
+;; get filename part
+(file-name-nondirectory "/home/jane/xyz.txt") ; "xyz.txt"
+
+;; get filename's extension
+(file-name-extension "/home/jane/cat.txt.jpg") ; "jpg"
+
+;; get filename without extension
+(file-name-sans-extension "/home/jane/cat.txt.jpg") ; "/home/jane/cat.txt"
+
+;; get relative path
+(file-relative-name "/home/jane/b/cat.jpg" "/home/jane/") ; "b/cat.jpg"
+
+;; get full path
+(expand-file-name "test.el")
+;; sample output
+;; "/home/jane/misc/emacs/test.el"
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-7" class="outline-2">
+<h2 id="sec-7">Window</h2>
+<div class="outline-text-2" id="text-7">
+</div><div id="outline-container-sec-7-1" class="outline-3">
+<h3 id="sec-7-1">window-buffer</h3>
+<div class="outline-text-3" id="text-7-1">
+<p>
+返回当前窗口中显示的buffer
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-8" class="outline-2">
+<h2 id="sec-8">Minor Mode</h2>
+<div class="outline-text-2" id="text-8">
+<p>
+Emacs uses the concept of a mode to encapsulate a set of editing
+behaviors. 
+</p>
+
+<p>
+A minor mode, adds to a buffer a package of
+functionality that doesn't fundamentally change the way editing in
+the buffer is performed. 
+</p>
+</div>
+
+<div id="outline-container-sec-8-1" class="outline-3">
+<h3 id="sec-8-1">实现步骤</h3>
+<div class="outline-text-3" id="text-8-1">
+<ol class="org-ol">
+<li>选择一个名称
+</li>
+<li>定义一个变量: name-mode, 并使它buffer-local, 
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defvar refill-mode nil
+  "Mode variable for refill minor mode.")
+(make-variable-buffer-local 'refill-mode)
+</pre>
+</div>
+</li>
+<li>定义一个叫name-mode的命令，该命令应该接收一个可选的参数。
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defun refill-mode (&amp;optional arg)
+  "Refill minor mode."
+  (interactive "P")
+  (setq refill-mode
+        (if (null arg)
+            (not refill-mode)
+          (&gt; (prefix-numeric-value arg) 0)))
+  (if refill-mode
+      code for turning on refill-mode
+      code for turning offrefill-mode) )
+</pre>
+</div>
+</li>
+<li>向minor-mode-alist添加一项
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(if (not (assq 'refill-mode minor-mode-alist))
+    (setq minor-mode-alist
+          (cons '(refill-mode " Refill")
+                minor-mode-alist)) )
+</pre>
+</div>
+</li>
+</ol>
+</div>
+</div>
+
+
+<div id="outline-container-sec-8-2" class="outline-3">
+<h3 id="sec-8-2">示例</h3>
+<div class="outline-text-3" id="text-8-2">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(define-minor-mode next-error-follow-minor-mode
+  "Minor mode for compilation, occur and diff modes.
+With a prefix argument ARG, enable mode if ARG is positive, and
+disable it otherwise.  If called from Lisp, enable mode if ARG is
+omitted or nil.
+When turned on, cursor motion in the compilation, grep, occur or diff
+buffer causes automatic display of the corresponding source code location."
+  :group 'next-error :init-value nil :lighter " Fol"
+  (if (not next-error-follow-minor-mode)
+      (remove-hook 'post-command-hook 'next-error-follow-mode-post-command-hook t)
+    (add-hook 'post-command-hook 'next-error-follow-mode-post-command-hook nil t)
+    (make-local-variable 'next-error-follow-last-line)))
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-9" class="outline-2">
+<h2 id="sec-9">Major Mode</h2>
+<div class="outline-text-2" id="text-9">
+</div><div id="outline-container-sec-9-1" class="outline-3">
+<h3 id="sec-9-1">实现步骤</h3>
+<div class="outline-text-3" id="text-9-1">
+<ol class="org-ol">
+<li>选择一个名称name
+</li>
+<li>创建一个文件name.el, 它包含相关代码
+</li>
+<li>定义一个叫name-mode-hook的变量，包含用户自定义的钩子函数
+</li>
+<li>如果有需要，可以定义一个模式相关的keymap，名称为name-mode-keymap
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defvar name-mode-map nil
+  "Keymap for name major mode.")
+(if name-mode-map
+    nil
+  (setq name-mode-map (make-keymap))
+  (define-key name-mode-map keysequence command))
+</pre>
+</div>
+<p>
+如果定义的keybindings不多的话，则可以使用 make-sparse-keymap.
+</p>
+</li>
+<li>如果有需要，可以定义一个模式相关的syntax table，名称为
+name-mode-syntax-table.
+</li>
+<li>如果有需要，可以定义一个模式相关的abbrev table，名称为
+name-mode-abbrev-table.
+</li>
+<li>定义一条名为name-mode的命令，它没有参数。 当执行时，需要执行如下
+一些步骤：
+<ol class="org-ol">
+<li>必须调用kill-all-local-variables, 清掉所有buffer-local的变量。
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(kill-all-local-variables)
+</pre>
+</div>
+</li>
+<li>设置变量major-mode的值为name-mode.
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(setq major-mode 'name-mode)
+</pre>
+</div>
+</li>
+<li>设置变量mode-name描述该模式，用于在mode line中显示
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(setq mode-name "Name Mode")
+</pre>
+</div>
+</li>
+<li>如果有的话，必须在name-mode-map上调用use-local-map以安装模式
+相关的keymap.
+</li>
+<li>调用用户定义的钩子函数.
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(run-hooks 'name-mode-hook)
+</pre>
+</div>
+</li>
+</ol>
+</li>
+<li>"provide"该模式
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(provide 'name) ;;allow user to (require 'name)
+</pre>
+</div>
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-9-2" class="outline-3">
+<h3 id="sec-9-2">示例</h3>
+<div class="outline-text-3" id="text-9-2">
+</div><div id="outline-container-sec-9-2-1" class="outline-4">
+<h4 id="sec-9-2-1">简单示例</h4>
+<div class="outline-text-4" id="text-9-2-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defun fundamental-mode ()
+  "Major mode not specialized for anything in particular.
+Other major modes are defined by comparison with this one."
+  (interactive)
+  (kill-all-local-variables)
+  (run-mode-hooks))
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-9-2-2" class="outline-4">
+<h4 id="sec-9-2-2">完整实例</h4>
+<div class="outline-text-4" id="text-9-2-2">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(defvar quip-mode-hook nil
+  "*List of functions to call when entering Quip mode.")
+(defvar quip-mode-map nil
+  "Keymap for quip major mode.")
+
+(defalias 'backward-quip 'backward-page)
+(defalias 'forward-quip forward-page)
+(defalias 'narrow-to-quip 'narrow-to-page)
+(defalias 'what-quip 'what-page)
+
+(if quip-mode-map
+    nil
+  (setq quip-mode-map (copy-keymap text-mode-map))
+  (define-key quip-mode-map "\C-x[" 'backward-quip)
+  (define-key quip-mode-map "\C-x]" 'forward-quip)
+  (define-key quip-mode-map "\C-xnq" 'narrow-to-quip)
+  (define-key quip-mode-map "\C-cw" 'what-quip))
+
+(defun quip-mode ()
+  "Major mode for editing Quip files.
+Special commands:
+\\{quip-mode-map}"
+  (interactive)
+  (kill-all-local-variables)
+  (text-mode) ;first, set things upfor Text mode
+  (setq major-mode 'quip-mode) ; now, specializefor Quip mode
+  (setq mode-name "Quip")
+  (use-local-map quip-mode-map)
+  (make-local-variable 'paragraph-separate)
+  (make-local-variable 'paragraph-start)
+  (make-local-variable 'page-delimiter)
+  (setq paragraph-start "%%\\I[ \t\n\^L]")
+  (setq paragraph-separate "%%$\\ [ \t\^L]*\$")
+  (setq page-delimiter "^%%$")
+  (run-hooks quip-mode-hook))
+(provide 'quip)
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-9-3" class="outline-3">
+<h3 id="sec-9-3">define-derived-mode</h3>
+<div class="outline-text-3" id="text-9-3">
+<p>
+从现存的模式中派生出一个新的模式。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">(require 'derived)
+(define-derived-mode quip-mode text-mode "Quip"
+  "Major mode for editing Quip files.
+Special commands:
+\\ quip-mode-map}"
+  (make-local-variable 'paragraph-separate)
+  (make-local-variable 'paragraph-start)
+  (make-local-variable 'page-delimiter)
+  (setq paragraph-start "%%\\[[ \t\n\^L]")
+  (setq paragraph-separate "%%$\\ [ \t\^L]*$")
+  (setq page-delimiter "^%%$"))
+(define-key quip-mode-map "\C-x[" 'backward-quip)
+(define-key quip-mode-map "\C-x]" 'forward-quip)
+(define-key quip-mode-map "\C-xnq" narrow-to-quip)
+(define-key quip-mode-map "\C-cw" 'what-quip)
+(provide 'quip)
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-9-3-1" class="outline-4">
+<h4 id="sec-9-3-1">示例</h4>
+<div class="outline-text-4" id="text-9-3-1">
+<div class="org-src-container">
+
+<pre class="src src-emacs-lisp">;;; strace-mode.el --- strace output syntax highlighting
+;; COPYRIGHT © 2016, by Preston Moore
+
+;; Author: Preston Moore (prestonkmoore@gmail.com)
+;; Version: 0.0.2
+;; Keywords: languages
+
+;; This file is not part of GNU Emacs.
+
+;;; License:
+
+
+;;; Commentary:
+
+;; strace syntax highlighting
+
+;; strace syntax highlighting
+
+
+;;; Code:
+
+;; create the list for font-lock.
+;; each category of keyword is given a particular face
+(defvar strace-font-lock-keywords)
+(setq strace-font-lock-keywords `(
+                                  ("^\\([0-9]+\\) " . (1 font-lock-warning-face))
+                                  ("^[0-9]+ \\([a-zA-Z0-9_]*\\)(" . (1 font-lock-constant-face))
+                                  (" = \\(0x[[:xdigit:]]+\\).*$" . (1 font-lock-type-face))
+                                  (" = \\(-?[[:digit:]?]+\\).*$" . (1 font-lock-type-face))
+                                  (" = 0x[[:xdigit:]]+ \\([[:upper:]]+\\).*$" . (1 font-lock-negation-char-face))
+                                  (" = -?[[:digit:]?]+ \\([[:upper:]]+\\).*$" . (1 font-lock-negation-char-face))
+                                  (" \\((.*)\\)$" . (1 font-lock-comment-face))
+                                  ("0x[[:xdigit:]]+" . font-lock-type-face)
+                                  ("-?[[:digit:]]+" . font-lock-type-face)
+                                  )
+)
+
+;;;###autoload
+(define-derived-mode strace-mode fundamental-mode
+  "strace mode"
+  "Major mode for strace output"
+
+  (setq font-lock-defaults '((strace-font-lock-keywords)))
+)
+
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.strace\\'" . strace-mode))
+
+;; add the mode to the `features' list
+(provide 'strace-mode)
+
+;; Local Variables:
+;; coding: utf-8
+;; End:
+
+;;; strace-mode.el ends here
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-10" class="outline-2">
+<h2 id="sec-10">一些功能函数</h2>
+<div class="outline-text-2" id="text-10">
+</div><div id="outline-container-sec-10-1" class="outline-3">
+<h3 id="sec-10-1">sit-for</h3>
+<div class="outline-text-3" id="text-10-1">
+<p>
+重新显示，并等待几秒钟
+</p>
+<pre class="example">
+(sit-for 3)
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-10-2" class="outline-3">
+<h3 id="sec-10-2">资料参考</h3>
+<div class="outline-text-3" id="text-10-2">
+<ol class="org-ol">
+<li><a href="https://www.emacswiki.org/emacs/ElispCookbook">https://www.emacswiki.org/emacs/ElispCookbook</a>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">基础语法</a>
+<ul class="nav">
+<li><a href="#sec-1-1">function definitions</a>
+<ul class="nav">
+<li><a href="#sec-1-1-1">defun template</a></li>
+<li><a href="#sec-1-1-2">install a func</a></li>
+<li><a href="#sec-1-1-3">make a function interactive</a></li>
+<li><a href="#sec-1-1-4">diffrent options for interactive</a></li>
+<li><a href="#sec-1-1-5">funcall</a></li>
+<li><a href="#sec-1-1-6">参数</a></li>
+<li><a href="#sec-1-1-7">内联函数</a></li>
+<li><a href="#sec-1-1-8">声明一个函数</a></li>
+</ul>
+</li>
+<li><a href="#sec-1-2">宏</a>
+<ul class="nav">
+<li><a href="#sec-1-2-1">例子</a></li>
+</ul>
+</li>
+<li><a href="#sec-1-3">变量</a>
+<ul class="nav">
+<li><a href="#sec-1-3-1">普通变量</a></li>
+<li><a href="#sec-1-3-2">常量</a></li>
+<li><a href="#sec-1-3-3">可配置变量</a></li>
+<li><a href="#sec-1-3-4">变量赋值let</a></li>
+</ul>
+</li>
+<li><a href="#sec-1-4">条件与控制</a>
+<ul class="nav">
+<li><a href="#sec-1-4-1">if</a></li>
+<li><a href="#sec-1-4-2">unless</a></li>
+<li><a href="#sec-1-4-3">catch</a></li>
+<li><a href="#sec-1-4-4">condition-case</a></li>
+<li><a href="#sec-1-4-5">cond</a></li>
+</ul>
+</li>
+<li><a href="#sec-1-5">make-symbol</a></li>
+<li><a href="#sec-1-6">错误处理</a></li>
+<li><a href="#sec-1-7">Point Marker</a></li>
+<li><a href="#sec-1-8">处理命令行参数</a></li>
+</ul>
+</li>
+<li><a href="#sec-2">数据结构</a>
+<ul class="nav">
+<li><a href="#sec-2-1">向量</a></li>
+<li><a href="#sec-2-2">数组</a></li>
+<li><a href="#sec-2-3">字符串</a></li>
+<li><a href="#sec-2-4">列表</a>
+<ul class="nav">
+<li><a href="#sec-2-4-1">普通列表</a></li>
+<li><a href="#sec-2-4-2">Assocation List</a></li>
+<li><a href="#sec-2-4-3">Property List</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-3">evaluate an expression</a>
+<ul class="nav">
+<li><a href="#sec-3-1">C-x C-e</a></li>
+</ul>
+</li>
+<li><a href="#sec-4">Syntax Table</a>
+<ul class="nav">
+<li><a href="#sec-4-1">char-syntax</a></li>
+</ul>
+</li>
+<li><a href="#sec-5">Buffer</a>
+<ul class="nav">
+<li><a href="#sec-5-1">Buffer Names</a>
+<ul class="nav">
+<li><a href="#sec-5-1-1">buffer-name</a></li>
+<li><a href="#sec-5-1-2">buffer-file-name</a></li>
+</ul>
+</li>
+<li><a href="#sec-5-2">Buffers</a>
+<ul class="nav">
+<li><a href="#sec-5-2-1">current-buffer</a></li>
+<li><a href="#sec-5-2-2">other-buffer</a></li>
+<li><a href="#sec-5-2-3">switch-to-buffer</a></li>
+<li><a href="#sec-5-2-4">get-buffer-create</a></li>
+</ul>
+</li>
+<li><a href="#sec-5-3">Buffer size</a>
+<ul class="nav">
+<li><a href="#sec-5-3-1">buffer-size</a></li>
+<li><a href="#sec-5-3-2">point, point-min, point-max</a></li>
+</ul>
+</li>
+<li><a href="#sec-5-4">Buffer Operations</a>
+<ul class="nav">
+<li><a href="#sec-5-4-1">with-current-buffer</a></li>
+<li><a href="#sec-5-4-2">with-temp-current</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-6">File Operations</a>
+<ul class="nav">
+<li><a href="#sec-6-1">Open, Append, Write</a></li>
+<li><a href="#sec-6-2">Rename, Copy, Delete</a></li>
+<li><a href="#sec-6-3">File Name Manipulation</a></li>
+</ul>
+</li>
+<li><a href="#sec-7">Window</a>
+<ul class="nav">
+<li><a href="#sec-7-1">window-buffer</a></li>
+</ul>
+</li>
+<li><a href="#sec-8">Minor Mode</a>
+<ul class="nav">
+<li><a href="#sec-8-1">实现步骤</a></li>
+<li><a href="#sec-8-2">示例</a></li>
+</ul>
+</li>
+<li><a href="#sec-9">Major Mode</a>
+<ul class="nav">
+<li><a href="#sec-9-1">实现步骤</a></li>
+<li><a href="#sec-9-2">示例</a>
+<ul class="nav">
+<li><a href="#sec-9-2-1">简单示例</a></li>
+<li><a href="#sec-9-2-2">完整实例</a></li>
+</ul>
+</li>
+<li><a href="#sec-9-3">define-derived-mode</a>
+<ul class="nav">
+<li><a href="#sec-9-3-1">示例</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-10">一些功能函数</a>
+<ul class="nav">
+<li><a href="#sec-10-1">sit-for</a></li>
+<li><a href="#sec-10-2">资料参考</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>

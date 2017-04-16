@@ -1,0 +1,782 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>蓝牙学习总结</h1>
+          <p>概述了蓝牙的基本概念，并对Android蓝牙框架做了简单的介绍。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">蓝牙学习总结</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> 蓝牙协议</h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1"><span class="section-number-3">1.1</span> 概述</h3>
+<div class="outline-text-3" id="text-1-1">
+</div><div id="outline-container-sec-1-1-1" class="outline-4">
+<h4 id="sec-1-1-1"><span class="section-number-4">1.1.1</span> Bluetooth: terminology</h4>
+<div class="outline-text-4" id="text-1-1-1">
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="left">
+
+<col  class="right">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">Term</th>
+<th scope="col" class="text-right">Introduced</th>
+<th scope="col" class="text-left">Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">BR</td>
+<td class="text-right">1.1(2002)</td>
+<td class="text-left">Basic Rates(1 Mbits/s)</td>
+</tr>
+
+<tr>
+<td class="text-left">EDR</td>
+<td class="text-right">2.0(2004)</td>
+<td class="text-left">Enhanced Date Rates(2 and 3 Mbits/s)</td>
+</tr>
+
+<tr>
+<td class="text-left">HS</td>
+<td class="text-right">3.0(2009)</td>
+<td class="text-left">High Speed (Alternate MAC/PHY)</td>
+</tr>
+
+<tr>
+<td class="text-left">LE</td>
+<td class="text-right">4.0(2010)</td>
+<td class="text-left">Low Energy (1 Mbit/s ultra low powser</td>
+</tr>
+
+<tr>
+<td class="text-left">Bluetooth Smart</td>
+<td class="text-right">4.0</td>
+<td class="text-left">Single mode, LE-only radio</td>
+</tr>
+
+<tr>
+<td class="text-left">Bluetooth Smart Ready</td>
+<td class="text-right">4.0</td>
+<td class="text-left">Dual mode, BR/EDR and LE dual radio</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-2" class="outline-4">
+<h4 id="sec-1-1-2"><span class="section-number-4">1.1.2</span> Bluetooth: configurations</h4>
+<div class="outline-text-4" id="text-1-1-2">
+
+<figure>
+<p><img src="./images/001.png" class="img-responsive" alt="001.png">
+</p>
+</figure>
+
+<ul class="org-ul">
+<li>Bluetooth is target at short-range communication with 2.4GHz Frequency
+</li>
+<li>Communication Range:
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+</colgroup>
+<tbody>
+<tr>
+<td class="text-right">Power Class</td>
+<td class="text-right">Transmission Power Level(mW)</td>
+<td class="text-right">Advertised Range(m)</td>
+</tr>
+
+<tr>
+<td class="text-right">1</td>
+<td class="text-right">100</td>
+<td class="text-right">100</td>
+</tr>
+
+<tr>
+<td class="text-right">2</td>
+<td class="text-right">2.5</td>
+<td class="text-right">10</td>
+</tr>
+
+<tr>
+<td class="text-right">3</td>
+<td class="text-right">1</td>
+<td class="text-right">1</td>
+</tr>
+</tbody>
+</table>
+</li>
+
+<li>Bluetooth uses a radio technology called <code>frequency-hopping</code>
+spread spectrum, which chops up the data being sent and
+transmits chunks of it on up to <code>79 bands</code> (1 MHz each; centered
+from 2402 to 2480 MHz)
+</li>
+
+<li>Bluetooth is a <b>packet-based</b> protocol with a <b>master-slave</b> structure.
+</li>
+
+<li>One master may communicate with up to 7 slaves in a piconet; <b>all devices share the master's clock</b>.
+</li>
+
+<li>The devices can <b>switch roles</b>, by agreement, and <b>the slave can become the master</b>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-3" class="outline-4">
+<h4 id="sec-1-1-3"><span class="section-number-4">1.1.3</span> Bluetooth Stack</h4>
+<div class="outline-text-4" id="text-1-1-3">
+</div><ol class="org-ol"><li><a id="sec-1-1-3-1" name="sec-1-1-3-1"></a>Lower layers of Bluetooth stack<br ><div class="outline-text-5" id="text-1-1-3-1">
+
+<figure>
+<p><img src="./images/002.png" class="img-responsive" alt="002.png">
+</p>
+</figure>
+
+<ul class="org-ul">
+<li><b>Radio</b>: Transceiver operating in 2.4GHz ISM band
+</li>
+<li><b>Baseband</b>: Bluetooth link controller which carries out the
+baseband protocols(如信号编码) and other low-level link
+routines. 
+</li>
+<li><b>Link Manger</b> – Used for link set-up and control. The signals are
+interpreted and filtered out by the Link Manager on the
+receiving side and are not propagated to higher layers. 
+</li>
+<li><b>Lower HCI</b> – Host Controller Interface, well defined API to
+control the Bluetooth module 
+</li>
+<li><b>Physical HCI Transport</b> – UART, RS232, USB
+</li>
+</ul>
+</div>
+</li>
+
+<li><a id="sec-1-1-3-2" name="sec-1-1-3-2"></a>Upper layers of Bluetooth stack<br ><div class="outline-text-5" id="text-1-1-3-2">
+
+<figure>
+<p><img src="./images/003.png" class="img-responsive" alt="003.png">
+</p>
+</figure>
+
+<ul class="org-ul">
+<li><b>Upper HCI</b> - Host Controller Interface, well defined API to
+control the Bluetooth module 
+</li>
+<li><b>L2CAP</b> - Supports higher level protocol multiplexing, packet
+segmentation and reassembly, and the conveying of quality of
+service information.
+</li>
+<li><b>RFCOMM</b> – Serial port emulation protocol
+</li>
+<li><b>SDP</b> – Protocol for locating services provided by or available
+through a Bluetooth device. 
+</li>
+<li><b>SCO Manager and Bluetooth Stack Controller</b> are not part of the
+specification, but generally are components of an upper layer
+Bluetooth protocol stack.
+</li>
+</ul>
+</div>
+</li>
+
+<li><a id="sec-1-1-3-3" name="sec-1-1-3-3"></a>Typical System Architecture Today<br ><div class="outline-text-5" id="text-1-1-3-3">
+<p>
+<b>Lower layers of the stack reside in the Bluetooth hardware</b>
+(baseband processor and radio) from a silicon or module
+manufacturer such as TI, Ericsson, Philips, CSR, Taiyo Yuden,
+Silicon Wave, etc. 
+</p>
+
+<p>
+Application, profiles, and upper layers of the stack reside on a
+separate host processor and communication between upper and lower
+layers of the stack occurs over the HCI interface.
+</p>
+</div>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-1-1-4" class="outline-4">
+<h4 id="sec-1-1-4"><span class="section-number-4">1.1.4</span> Bluetooth LE: architecture</h4>
+<div class="outline-text-4" id="text-1-1-4">
+
+<figure>
+<p><img src="./images/004.png" class="img-responsive" alt="004.png">
+</p>
+</figure>
+</div>
+</div>
+
+
+<div id="outline-container-sec-1-1-5" class="outline-4">
+<h4 id="sec-1-1-5"><span class="section-number-4">1.1.5</span> Device discovery</h4>
+<div class="outline-text-4" id="text-1-1-5">
+<p>
+the process of searching for and detecting nearby Bluetooth devices.
+</p>
+<ul class="org-ul">
+<li>broadcast a “discovery” message and wait for replies
+</li>
+<li>Each reply consists of the address of the responding device and
+an integer identifying the general class of the device
+</li>
+</ul>
+</div>
+
+<ol class="org-ol"><li><a id="sec-1-1-5-1" name="sec-1-1-5-1"></a>Discoverability and Connectability<br ><div class="outline-text-5" id="text-1-1-5-1">
+<ol class="org-ol">
+<li>Inquiry Scan is On
+<ul class="org-ul">
+<li>The local device is detectable by other Bluetooth devices.
+</li>
+<li>discoverable
+</li>
+</ul>
+</li>
+<li>Page Scan is On
+<ul class="org-ul">
+<li>The local device still responds to connection requests by
+devices that have it’s address
+</li>
+<li>connectable
+</li>
+</ul>
+</li>
+</ol>
+</div>
+</li></ol>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2"><span class="section-number-3">1.2</span> Profile</h3>
+<div class="outline-text-3" id="text-1-2">
+<p>
+Bluetooth programming defines transport protocols and methods of
+communicating, but it also goes one step further to specify
+methods of using Bluetooth to accomplish higher level tasks. These
+methods and specifications are collectively called the <b>Bluetooth
+Profiles</b> 
+</p>
+
+<p>
+基于蓝牙的应用程序都是通过Profile来提供或获得彼此的服务，从而实现
+设备间的互操作性。 
+</p>
+
+<p>
+蓝牙Profile定义了蓝牙系统中从PHY到L2CAP各层间所需的功能和特性，也
+包括一些非核心规范之外的协议定义的功能和特性。 
+</p>
+
+<p>
+另外，Profile也定义了应用程序的行为和数据格式。只有当两个设备同时
+符合一个Profile的要求，它们之间才能进行互操作。 
+</p>
+
+
+<figure>
+<p><img src="./images/005.png" class="img-responsive" alt="005.png">
+</p>
+</figure>
+</div>
+
+<div id="outline-container-sec-1-2-1" class="outline-4">
+<h4 id="sec-1-2-1"><span class="section-number-4">1.2.1</span> GAP</h4>
+<div class="outline-text-4" id="text-1-2-1">
+<p>
+GAP即Generic Access Profile，是所有蓝牙设备必须实现的一个Profile，
+它定义了一个蓝牙设备的基本要求。 
+</p>
+
+<p>
+GAP也描述了设备发现，连接建立，安全，认证，关联模型和服务发现的行
+为和方法。 
+</p>
+
+<p>
+任何新实现的Profile都会基于GAP，提供的功能也是GAP所能提供的功能的
+超集。 
+</p>
+
+<p>
+处于最上层的Profile描述了应用程序之间的互操作，称为应用程序Profile。
+</p>
+
+
+<figure>
+<p><img src="./images/006.png" class="img-responsive" alt="006.png">
+</p>
+</figure>
+
+<p>
+对于BR/BER类型的蓝牙设备，它定义一个单一的角色，这个角色决定了一个
+蓝牙设备的功能（设备怎样发现对方，连接怎样建立，怎样使用安全认证模
+型） 
+</p>
+
+<p>
+对于LE类型的蓝牙设备，定义了4种特别的角色: <b>Broadcaster</b> ，
+<b>Observer</b> , <b>Peripheral</b> 和 <b>Central</b> 。一个LE设备可以支持所有的
+角色，只要底层的FW支持。但是，任何时刻只能充当一种角色。 
+</p>
+</div>
+
+
+<ol class="org-ol"><li><a id="sec-1-2-1-1" name="sec-1-2-1-1"></a>Broadcast mode and observation procedure<br ><div class="outline-text-5" id="text-1-2-1-1">
+<p>
+allow two devices to communicate in a unidirectional
+connectionless manner using the advertising events. 
+</p>
+
+<p>
+The broadcast mode provides a method for a device to send
+connectionless data in advertising events. 
+</p>
+</div>
+</li>
+
+<li><a id="sec-1-2-1-2" name="sec-1-2-1-2"></a>Discovery modes and procedures<br ><div class="outline-text-5" id="text-1-2-1-2">
+<p>
+Discovery mode
+</p>
+<ul class="org-ul">
+<li>non-discoverable
+</li>
+<li>Discoverable
+<ul class="org-ul">
+<li>general discoverable
+</li>
+<li>limited discoverable (for a limited period of time)
+</li>
+</ul>
+</li>
+<li>procedure
+Only a device in the Central role may support genearal
+discoverable and limited discoverable procedure.
+</li>
+<li>Name Discovery Procedure
+<ul class="org-ul">
+<li>obtain the Bluetooth Device Name of a remote connectable device.
+</li>
+<li>Performed when the complete name is not acquired during discovery procedures.
+</li>
+<li>The host should established a connection with remote device.
+</li>
+<li>The host shall read the device name characteristic using the GATT procedure Read Using Characteristic UUID
+</li>
+<li>When finished , the connection may be terminated.
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</li>
+
+<li><a id="sec-1-2-1-3" name="sec-1-2-1-3"></a>CONNECTION MODES AND PROCEDURES<br ><div class="outline-text-5" id="text-1-2-1-3">
+<p>
+Modes
+</p>
+<ul class="org-ul">
+<li>Non-connectable mode
+<ul class="org-ul">
+<li>Shall be supported by Peripheral devices.
+</li>
+<li>Implicitly supported by Central, Receiver, Broadcaster devices.
+</li>
+</ul>
+</li>
+<li>Directed connectable mode
+<ul class="org-ul">
+<li>shall accept a connection request from a known peer device
+</li>
+<li>Performing auto connection establishment procedure or the general connection establishment procedure.
+</li>
+<li>Only supported by Peripheral devices.
+</li>
+<li>When connection established ,will enter the non-connectable mode.
+</li>
+</ul>
+</li>
+<li>Undirected connectable mode
+<ul class="org-ul">
+<li>shall accept a connection request from a device performing
+the auto connection establishment procedure or the general
+connection establishment procedure.
+</li>
+<li>When connection established ,will enter the non-connectable mode.
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p>
+Procedures
+</p>
+<ul class="org-ul">
+<li>Auto connection establishment procedure
+<ul class="org-ul">
+<li>Only supported by Central role devices.
+</li>
+</ul>
+</li>
+<li>general connection establishment procedure
+<ul class="org-ul">
+<li>Only supported by Central role devices.
+</li>
+</ul>
+</li>
+<li>Selective connection establishment procedure
+<ul class="org-ul">
+<li>Only supported by Central role devices.
+</li>
+</ul>
+</li>
+<li>Direct connection establishment procedure
+<ul class="org-ul">
+<li>Only supported by Central role devices.
+</li>
+</ul>
+</li>
+<li>Connection Parameter Update procedure
+<ul class="org-ul">
+<li>Only supported by Central and Peripheral role devices.
+</li>
+</ul>
+</li>
+<li>Terminate Connection procedure
+<ul class="org-ul">
+<li>Only supported by Central and Peripheral role devices.
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</li>
+
+<li><a id="sec-1-2-1-4" name="sec-1-2-1-4"></a>BONDING MODES AND PROCEDURES<br ><div class="outline-text-5" id="text-1-2-1-4">
+<p>
+Bonding:
+</p>
+<ul class="org-ul">
+<li>allows two connected devices to exchange and store security and
+identity information to create a trusted relationship.
+</li>
+<li>When the devices store the bonding information, it is known as
+the phrases ‘devices have bonded’ or ‘a bond is created’.
+</li>
+<li>为了访问另一个设备受保护的信息，必须与对方进行配对。
+</li>
+</ul>
+
+<p>
+Modes:
+</p>
+<ul class="org-ul">
+<li>non-bondable mode
+<ul class="org-ul">
+<li>A device doesn’t support pairing is considered to be in
+non-bondable mode.
+</li>
+</ul>
+</li>
+<li>bondable mode
+</li>
+</ul>
+
+<p>
+Bonding Procedure
+</p>
+
+
+<figure>
+<p><img src="./images/007.png" class="img-responsive" alt="007.png">
+</p>
+</figure>
+</div>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-1-2-2" class="outline-4">
+<h4 id="sec-1-2-2"><span class="section-number-4">1.2.2</span> GATT</h4>
+<div class="outline-text-4" id="text-1-2-2">
+<p>
+GATT设计为可供应用程序或其他Profile使用，使得客户端与服务器端能进行通信。
+</p>
+
+<p>
+服务器包含了许多属性，GATT Profile定义了如何使用ATT协议来发现，读，
+写和获取这些属性的方法，以及配置属性的广播。 
+</p>
+
+
+<figure>
+<p><img src="./images/008.png" class="img-responsive" alt="008.png">
+</p>
+</figure>
+
+<p>
+GATT定义了两种角色：服务器和客户端
+</p>
+<ul class="org-ul">
+<li>客户端发起请求，并接受响应。
+</li>
+<li>服务器端接受请求，并发送响应，指示或通知。
+</li>
+<li>两种角色可动态变换，即一个设备可以同时充当客户端和服务器端角色。
+</li>
+<li>GATT和ATT可用于BR/EDR/LE。在LE中，是必须有的。
+
+
+<figure>
+<p><img src="./images/009.png" class="img-responsive" alt="009.png">
+</p>
+</figure>
+</li>
+</ul>
+
+<p>
+如果一个设备声称支持GATT Profile，则必须实现其定义的一些能力。
+</p>
+
+<p>
+GATT Profile主要处理如下一些场景：
+</p>
+<ul class="org-ul">
+<li>交换配置信息（Exchange）
+</li>
+<li>发现设备的服务和特征。（Discovery）
+</li>
+<li>读取一个特征值。（Read）
+</li>
+<li>写入一个特征值。（Write）
+</li>
+<li>通知一个特征值。（Notification, broadcast）
+</li>
+<li>指示一个特征值。（Indication, unicast）
+</li>
+</ul>
+</div>
+
+<ol class="org-ol"><li><a id="sec-1-2-2-1" name="sec-1-2-2-1"></a>基于GATT的Profile层次结构<br ><div class="outline-text-5" id="text-1-2-2-1">
+<p>
+GATT Profile指定了Profile数据交换的结构。这个结构定义用于Profile
+的基本元素： <b>服务和特征</b> 。包含在ATT的属性当中。
+</p>
+
+<p>
+最顶层是Profile，一个Profile是由一个或多个服务组成的，这些服务是实现某个用例必需的。
+</p>
+
+<p>
+一个服务则是由许多特征或其他服务的引用组成的。
+</p>
+
+<p>
+每个特征包含一个值和关于这个值的其他信息。
+</p>
+
+<p>
+所有的服务和特征以及特征的组件（如值或描述符）包含了Profile数据，
+都存储在服务器的属性（Attribute）中。 
+</p>
+
+<p>
+服务有两种类型：主服务和次服务。主服务提供设备的主要功能，次服务
+提供设备的辅助功能。至少被设备上的一个主服务引用。 
+</p>
+
+<p>
+为保持兼容早期的客户，一个服务定义的后续修改只能增加新的引用服务
+或可选的特征，服务定义的行为也不能修改。 
+</p>
+
+<p>
+服务可用在一个或多个profile中。
+</p>
+</div>
+
+<ol class="org-ol"><li><a id="sec-1-2-2-1-1" name="sec-1-2-2-1-1"></a>特征（Characteristic）<br ><div class="outline-text-6" id="text-1-2-2-1-1">
+<p>
+一个特征包含一个使用在服务中的值以及关于该值怎样访问的属性和配置
+信息，同时还包含该值如何显示或表示的信息。 
+</p>
+
+<p>
+一个特征的定义包含一个特征声明，特征属性和一个值。它也可能包含描
+述符，描述符描述了对应的特征值在服务器中的值或允许的配置。 
+</p>
+</div>
+</li></ol>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-1-2-3" class="outline-4">
+<h4 id="sec-1-2-3"><span class="section-number-4">1.2.3</span> HID Service</h4>
+<div class="outline-text-4" id="text-1-2-3">
+<p>
+This service exposes HID reports and other HID data intended for
+HID Hosts and HID Devices. 
+</p>
+
+<p>
+This service shall operate over the LE transport only. 
+</p>
+
+<p>
+HID devices act as a GATT Server.
+</p>
+
+<p>
+There are three different types of data transfers 
+</p>
+<ul class="org-ul">
+<li><b>Input Reports</b>  (control data from HID Host to HID Device, such as keypress)
+</li>
+<li><b>Output Reports</b> (control data from HID Host to HID Device such as an ‘LED on’ signal )
+</li>
+<li><b>Feature Reports</b> (configuration or application-specific data in either direction )
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2-4" class="outline-4">
+<h4 id="sec-1-2-4"><span class="section-number-4">1.2.4</span> HOGP Profile</h4>
+<div class="outline-text-4" id="text-1-2-4">
+<p>
+HOGP stands for Hid Over Gatt Profile
+</p>
+
+<p>
+This means: 
+</p>
+<ul class="org-ul">
+<li>A device with BLE support.
+</li>
+<li>Suport HID service over BLE protocol stack.
+</li>
+<li>Using GATT profile.
+</li>
+</ul>
+
+<p>
+Participants:
+</p>
+<ul class="org-ul">
+<li>HID Devices  (GATT server )
+</li>
+<li>HID Hosts (GATT client)
+</li>
+</ul>
+
+<p>
+Can be used in  BLE device only.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2-5" class="outline-4">
+<h4 id="sec-1-2-5"><span class="section-number-4">1.2.5</span> A2DP Profile</h4>
+<div class="outline-text-4" id="text-1-2-5">
+<p>
+A2DP stands for Advanced Audio Distribution Profile
+</p>
+
+<p>
+Typical usage is the streaming of music content from a stereo music player to headphones or speakers. 
+</p>
+
+<p>
+The A2DP focuses on audio streaming .
+</p>
+</div>
+
+
+<ol class="org-ol"><li><a id="sec-1-2-5-1" name="sec-1-2-5-1"></a>Profile Stacks<br ><div class="outline-text-5" id="text-1-2-5-1">
+
+<figure>
+<p><img src="./images/010.png" class="img-responsive" alt="010.png">
+</p>
+</figure>
+</div>
+</li>
+
+
+<li><a id="sec-1-2-5-2" name="sec-1-2-5-2"></a>Roles<br ><div class="outline-text-5" id="text-1-2-5-2">
+<p>
+Source(SRC) &amp; Sink(SNK)
+</p>
+
+
+<figure>
+<p><img src="./images/011.png" class="img-responsive" alt="011.png">
+</p>
+</figure>
+</div>
+</li>
+
+<li><a id="sec-1-2-5-3" name="sec-1-2-5-3"></a>Streaming Process and Packet Format<br ><div class="outline-text-5" id="text-1-2-5-3">
+
+<figure>
+<p><img src="./images/012.png" class="img-responsive" alt="012.png">
+</p>
+</figure>
+</div>
+</li></ol>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> Android蓝牙框架</h2>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. 蓝牙协议</a>
+<ul class="nav">
+<li><a href="#sec-1-1">1.1. 概述</a></li>
+<li><a href="#sec-1-2">1.2. Profile</a></li>
+</ul>
+</li>
+<li><a href="#sec-2">2. Android蓝牙框架</a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>

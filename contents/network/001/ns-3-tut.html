@@ -14,6 +14,7 @@ layout: default
   </div>
 </div>
 
+
 <div id="content" class="container">
 <div class="row"><div class="col-md-9"><h1 class="title">ns-3手册</h1>
 
@@ -435,7 +436,462 @@ Waf需要从它所在位置的ns-3树的顶端开始运行。它成为它的工�
 
 <div id="outline-container-sec-4" class="outline-2">
 <h2 id="sec-4"><span class="section-number-2">4</span> Conceptual Overview</h2>
+<div class="outline-text-2" id="text-4">
+<p>
+本部分介绍一些基本的概念，方便之后阅读代码或者编写ns-3程序。
+</p>
 </div>
+
+<div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> Key Abstractions</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+在本节中，我们会审查一些网络中常用的一些术语，但是在ns-3中有着特殊
+的意义。
+</p>
+</div>
+
+<div id="outline-container-sec-4-1-1" class="outline-4">
+<h4 id="sec-4-1-1"><span class="section-number-4">4.1.1</span> Node</h4>
+<div class="outline-text-4" id="text-4-1-1">
+<p>
+在因特网行语中，连接一个网络的计算设备称为 <i>主机</i> , 有时也称为 <i>终
+端系统</i> 。 由于ns-3是一个网络模拟器，而不是一个特别的因特网模拟器，
+所以我们有意地不使用主机这个术语，因为这个术语与因特网及相关的协议
+紧密相关。 相反地，我们使用一个更通用的术语，同时也被其他的模拟器
+使用，发源于图论中的术语 —— <b>结点</b> 。 
+</p>
+
+<p>
+在ns-3中，基本的计算设备抽象称为结点。该抽象是用C++的类 Node 表示。
+Node类提供了一系列方法用于管理模拟场景中的计算设备。 
+</p>
+
+<p>
+你应该将一个 Node想象成一台计算机，你可以向这台计算机添加功能。 比
+如你可以添加类似应用程序，协议栈和外围网卡之类的东西及相关驱动，使
+得这台计算机能够做一些有用的工作。在ns-3中，我们使用类似的基本模型。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-2" class="outline-4">
+<h4 id="sec-4-1-2"><span class="section-number-4">4.1.2</span> Application</h4>
+<div class="outline-text-4" id="text-4-1-2">
+<p>
+通常情况下，计算机软件被划分为两个比较大的类别。 <b>系统软件</b> 根据一
+些计算模型来组织各种各样的计算资源，例如内存，处理器周期，磁盘，网
+络等。系统软件通常并不使用这些资源来完成一些能够直接有利于某个用户
+的任务。 一个用户通常会运行一个应用程序，这个应用程序使用由系统软
+件控制的资源来完成一些目标。
+</p>
+
+<p>
+通常，系统软件与应用软件之间的边界线是在操作系统陷阱的特权级别上做
+出的。在ns-3中，没有真实的操作系统概念，特别是没有特权级别或系统调
+用的概念。但是，我们确实有应用程序的概念。就像在“真实世界”中执行各
+种任务的软件应用程序一样，ns-3应用程序运行在 ns-3 的Nodes上以驱动
+模拟世界中的模拟任务。
+</p>
+
+<p>
+在 ns-3中，应用程序是一个产生一些被模拟的活动的一个用户程序的基本
+抽象。该抽象是由C++中的类 Application来表示的。 Application类提供
+了一系列方法来管理模拟世界中的用户层的应用程序。 开发者会在面向对
+象编程中，特化Application类来创建新的应用程序。在本手册中，我们会
+使用类Application的特化类UdpEchoClientApplication以及
+UdpEchoServerApplication。 正如你所想的那样，这些应用程序构建了g
+个客户端/服务器应用程序集合用来产生和响应模拟的网络数据包。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-3" class="outline-4">
+<h4 id="sec-4-1-3"><span class="section-number-4">4.1.3</span> Channel</h4>
+<div class="outline-text-4" id="text-4-1-3">
+<p>
+在真实世界中，可以将一台计算机连接到一个网络中。通常，在这些网络中，
+数据流动时通过的媒介称为 <b>信道</b> 。 当你将Ethernet线缆插入墙上的插
+孔中，你就将你的计算机接入到了一个Ethernet的通信信道。 在ns-3模拟
+的世界中，你可以将一个Node连接到一个代表信道的对象中。这里，基本的
+通信子网抽象称之为信道，在C++中由类Channel来表示。
+</p>
+
+<p>
+Channel类提供了一些方法来管理通信的子网对象以及连接结点到信道上。
+Channels也可以按照面向对象编程的理念被特化（派生）。 一个Channel的
+特化可以模拟任何对象，甚至是最简单的一根线缆。特化的Channel类也可
+以模拟复杂的对象，如一个大型的Ethernet交换机，或是无线网络中，在三
+维方向上充满阻碍。
+</p>
+
+<p>
+我们会使用特化的Channel版本，称为CsmaChannel， PointToPointChannel
+以及WifiChannel。 例如，CsmaChannel模拟了一个实现了载波侦听多路访
+问通信媒介的一个通信子网。它给我们提供了像以太网的功能。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-4" class="outline-4">
+<h4 id="sec-4-1-4"><span class="section-number-4">4.1.4</span> Net Device</h4>
+<div class="outline-text-4" id="text-4-1-4">
+<p>
+在过去，通常情况下，如果你想连接一台计算机到一个网络上，你不得不购
+买一个特别的网线和一个称之为外部设备卡的硬件设备，这个硬件设备需要
+安装到你的计算机中。如果外设卡实现了一些网络功能，它们就被称为网卡。
+如今，大部分计算机都内置了一个网络卡。
+</p>
+
+<p>
+一个网卡必须需要一个控制硬件的软件驱动才能工作。 在Unix（或Linux）
+中，一些外围硬件归类为一个设备。设备是通过设备驱动来控制的。使用网
+络设备驱动控制的网络设备总体上称为 net设备。 在Unix和Linux中，你可
+以通过 eth0 来指代这些网络设备。
+</p>
+
+<p>
+在ns-3中， net设备抽象包含软件驱动和模拟的硬件。一个net设备要安装
+在一个Node中，才能使用Node，通过Channels与模拟环境中的其他Nodes进
+行通信。如同在一个真实的计算机中，一个Node可以通过多个NetDevices连
+接到多个Channel中。
+</p>
+
+<p>
+net设备抽象在C++中使用类eNetDevice表示。NetDevice提供了管理Node与
+Channel对象连接的方法。开发者也可以利用面向对象编程的思想来特化它。
+我们将会使用几个特化的NetDevice版本称为： CsmaNetDevice,
+PointToPointNetDevice, 以及WifiNetDevice。 如同一个以太网卡设计来
+与一个以太网之间进行工作，CsmaNetDevice设计用于一个CsmaChannel，
+PointToPointNetDevice设计用于一个PointToPointChannel。 一个
+WifiNetDevice设计用于一个WifiChannel。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-5" class="outline-4">
+<h4 id="sec-4-1-5"><span class="section-number-4">4.1.5</span> Topology Helpers</h4>
+<div class="outline-text-4" id="text-4-1-5">
+<p>
+在真实网络中，你会找到添加了（内建了）网卡的计算机。在ns-3中，我们
+会说你会找到挂载了NetDevices的Nodes。 在大型模拟网络中，你会需要安
+排Nodes，NetDevices以及Channels之间的许多连接。
+</p>
+
+<p>
+既然连接NetDevices与Nodes，NetDevices与Channels，分配IP地址等操作
+在ns-3中是一件很频繁的任务，我们提供了称之为拓扑助手来使这些任务尽
+量简单。例如，它可能会花费许多不同的ns-3核心操作来创建一个
+NetDevice，添加一个MAC地址，在一个Node上安装net设备，配置结点的协
+议栈，然后将NetDevices与一个Channel之间进行连接等。甚至需要更多的
+操作来将多个设备连接到多点信道上，然后将这些单个的网络一起连接成一
+个互联网。我们提供了拓扑助手对象来将这些许多特别的操作整合成一个简
+单使用的模型以方便您的使用。
+</p>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> A First ns-3 Script</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+当我们如前面所述的那样下载了系统后，你会在主目录下拥有一份称为repos
+的目录，在该目录下会有一份ns-3的发布版本。进入到发布版本的目录下，
+你会找下一个类似如下一样的目录结构：
+<img src="./images/003.png" class="img-responsive" alt="003.png">
+</p>
+
+<p>
+进入到 examples/tutorial 目录下，你会看到一个名为 first.cc 的文件。
+这是一个创建一个简单的点到点网络的脚本，在两个结点之间创建一个点到
+点的链路，并在结点之间响应单个数据包。让我们先一行行地看这个脚本，
+继续用你喜爱的编辑器打开first.cc文件吧。
+</p>
+</div>
+
+<div id="outline-container-sec-4-2-1" class="outline-4">
+<h4 id="sec-4-2-1"><span class="section-number-4">4.2.1</span> Boilerplate</h4>
+<div class="outline-text-4" id="text-4-2-1">
+<p>
+文件中的第一行是emacs模式行。它告诉emacs有关格式规范相关（编码风
+格）的信息。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
+</pre>
+</div>
+
+<p>
+这通常是一个充满争议的主题， 因此我们会马上路过这个主题。在ns-3项
+目中，像大部分大型项目，已经采用了一种编码风格，所有的贡献者都必须
+遵守。如果你想贡献你的代码到该项目中，你最终必须与文件
+doc/codingstd.txt描述的编码风格保持一致。
+</p>
+
+<p>
+我们建议你，适用ns-3代码的风格，并任何时候接受这个标准来修改代码。
+所有这些开发团队与贡献者都必须这样做。如果你使用emacs编辑器的话，
+emacs 模型行会使遵守编码风格这件事变得更容易。
+</p>
+
+<p>
+ns-3模拟器是用于GNU GPL来声明版本。你会在每个ns-3中的源码的头部看
+到如下声明。通常，你会看到如下样式的版权声明：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation;
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+*/
+</pre>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-sec-4-2-2" class="outline-4">
+<h4 id="sec-4-2-2"><span class="section-number-4">4.2.2</span> Module Includes</h4>
+<div class="outline-text-4" id="text-4-2-2">
+<p>
+通常代码中包含如下一些声明：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/applications-module.h"
+</pre>
+</div>
+
+<p>
+为了方便高级脚本用户处理大量的头文件包含，我们根据相对大点的模块来
+将头文件进行分组。我们提供了一个单个包含文件，能递归地加载用于每个
+模块中的所有包含文件。这样，我们就给了用户在一个相对大的粒度上加载
+一组头文件的能力。这不是最有效率的方法，但通常会使用编写脚本更容易
+些。
+</p>
+
+<p>
+在编译的过程中，每个ns-3的头文件放在一个称为ns3（在build目录下）的
+文件下，避免包含文件之间的名称冲突。 ns3/core-module.h文件对应与
+ns-3模块中的core， 代码位于src/core目录下。 在该目录下，你会找到大
+量的头文件。当你执行一次build，Waf会将公共头文件放置到build/debug
+或build/optimized目录下的ns目录下。 Waf也会自动地产生一个模块包含
+文件去加载所有的公共头文件。
+</p>
+
+<p>
+之前，我们已经执行了如下命令：
+</p>
+<pre class="example">
+./waf -d debug --enable-examples --enable-tests configure
+</pre>
+
+<p>
+为了配置项目执行debug build，包含examples和tests，你也会需要执行如
+下命令：
+</p>
+<pre class="example">
+./waf
+</pre>
+
+<p>
+来构建项目。如果你查看目录 ../../build/debug/ns3 ，你会找到上面显
+示的4个模块包含文件。你可以看下这些文件的内容，并发现它们确实在对
+应的模块中包含了许多公共头文件。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-3" class="outline-4">
+<h4 id="sec-4-2-3"><span class="section-number-4">4.2.3</span> Ns3 Namespace</h4>
+<div class="outline-text-4" id="text-4-2-3">
+<p>
+first.cc脚本中的下一行是一个命名空间的声明。
+</p>
+<pre class="example">
+using namespace ns3;
+</pre>
+
+<p>
+ns-3项目是实现在C++中的命名空间ns3中。这会将所有ns-3相关的声音组合
+到一个全局命名空间之外的一个范围，我们希望有助于与其他代码进行整合。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-4" class="outline-4">
+<h4 id="sec-4-2-4"><span class="section-number-4">4.2.4</span> Logging</h4>
+<div class="outline-text-4" id="text-4-2-4">
+<p>
+脚本的下一行如下：
+</p>
+<pre class="example">
+NS_LOG_COMPONENT_DEFINE ("FirstScriptExample");
+</pre>
+
+<p>
+我们使用这句话，作为一个方便的地方来与我们的Doxygen文件系统进行交
+互。
+</p>
+
+<p>
+这行声明了一个日志组件称为FirstScriptExample. 它允许根据名称你使能或禁用控
+制台打印信息。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-5" class="outline-4">
+<h4 id="sec-4-2-5"><span class="section-number-4">4.2.5</span> Main Function</h4>
+<div class="outline-text-4" id="text-4-2-5">
+<p>
+脚本的下一行如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">int
+main (int argc, char *argv[])
+{
+</pre>
+</div>
+
+<p>
+main函数。
+</p>
+
+<p>
+下一行设置时间分辨率到一个纳秒，也恰好是默认值：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">Time::SetResolution (Time::NS);
+</pre>
+</div>
+
+<p>
+分辨率是能表示的最小的时间值。你只能修改一次时间分辨率。一旦显式地
+设置了分辨率，我们就会释放内存，阻止进一步的更新。（如果你没有显式
+地设置分辨率，它会默认为一个纳秒，当模拟开始的时候会释放内存。）
+</p>
+
+<p>
+下面两行脚本用于使能两个日志组件，它被编译到Echo Client和Echco
+Server应用程序中：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
+LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
+</pre>
+</div>
+
+<p>
+Logging有不同的打印级别，上述代码设置的是INFO级别。
+</p>
+
+<p>
+现在我们会直接进入创建一个拓扑的业务逻辑以及运行一个模拟。我们使用
+拓扑助手对象来使这个工作更容易。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-6" class="outline-4">
+<h4 id="sec-4-2-6"><span class="section-number-4">4.2.6</span> Topology Helpers</h4>
+<div class="outline-text-4" id="text-4-2-6">
+<p>
+<b>NodeContainer</b>
+</p>
+
+<p>
+下面两行实际上是创建了两个ns-3 Node对象，代表模拟环境中的计算机。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">NodeContainer nodes;
+nodes.Create (2);
+</pre>
+</div>
+
+<p>
+Node代表一台计算机，而NodeContainer拓扑助手提供了一种方便的方法创
+建，管理和访问任何我们创建的Node对象来运行一次模拟。 
+</p>
+
+<p>
+<b>PointToPointHelper</b>
+</p>
+
+<p>
+我们要创建一个点到点的链路，这种模式我们会很快熟悉。 我们使用了一
+个拓扑助手对象来执行所需的底层工作来将链路整合在一起。
+PointToPointHelper会配置和连接ns-3 PointToPointNetDevice和
+PointToPointChannel对象。
+</p>
+
+<p>
+下面三行代码就是做的这些事情：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">PointToPointHelper pointToPoint;
+pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+</pre>
+</div>
+
+<p>
+上述代码分别设置了传递速率以及信道的传输延迟。
+</p>
+
+<p>
+<b>NetDeviceContainer</b>
+</p>
+
+<p>
+在这个点上，我们已经拥有了一个 NodeContainer，它包含两个节点。 下
+面要使用PointToPointHelper来创建PointToPointNetDevices并用
+PointToPointChannel对象将这些对象连接起来。我们使用
+PointToPointHelper来执行包含创建，配置和安装设备的工作。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">NetDeviceContainer devices;
+devices = pointToPoint.Install (nodes);
+</pre>
+</div>
+
+<p>
+上述两行代码会完成配置设备和信道。
+</p>
+
+<p>
+当执行了pointToPoint.Install(nodes)后，我们将拥有两个节点，每个都
+安装了一个点到点的网络设备以及一个点到点的信道。两个网络设置都配置
+为以5M/s的速度传递数据，通过的信道媒介上的延时为2毫秒。
+</p>
+</div>
+</div>
+</div>
+</div>
+
 
 <div id="outline-container-sec-5" class="outline-2">
 <h2 id="sec-5"><span class="section-number-2">5</span> Tweaking</h2>
@@ -470,7 +926,12 @@ Waf需要从它所在位置的ns-3树的顶端开始运行。它成为它的工�
 <li><a href="#sec-3-5">3.5. Running a Script</a></li>
 </ul>
 </li>
-<li><a href="#sec-4">4. Conceptual Overview</a></li>
+<li><a href="#sec-4">4. Conceptual Overview</a>
+<ul class="nav">
+<li><a href="#sec-4-1">4.1. Key Abstractions</a></li>
+<li><a href="#sec-4-2">4.2. A First ns-3 Script</a></li>
+</ul>
+</li>
 <li><a href="#sec-5">5. Tweaking</a></li>
 <li><a href="#sec-6">6. Building Topologies</a></li>
 <li><a href="#sec-7">7. Tracing</a></li>

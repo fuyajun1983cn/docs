@@ -1,0 +1,373 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Android Input System</h1>
+          <p>Android输入子系统框架研究笔记</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">Android Input System</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> Input system 概述</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+目前android对于linux系统中键盘、鼠标、触摸屏、游戏杆(joystick)等输入
+设备的支持都是通过标准的input输入系统。经过转换可以把用户的各种设备
+的输入通知当前的窗口，从而完成输入。 
+</p>
+</div>
+
+
+<div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1"><span class="section-number-3">1.1</span> 主要类</h3>
+<div class="outline-text-3" id="text-1-1">
+</div><div id="outline-container-sec-1-1-1" class="outline-4">
+<h4 id="sec-1-1-1"><span class="section-number-4">1.1.1</span> SystemService</h4>
+<div class="outline-text-4" id="text-1-1-1">
+<p>
+Zygote进程负责启动系统服务进程SystemServer，而系统服务进程
+SystemServer负责启动系统中的各种关键服务。这里创建
+inputManagerService，及WindowManagerService对象，启动input相关的
+service。 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-2" class="outline-4">
+<h4 id="sec-1-1-2"><span class="section-number-4">1.1.2</span> InputManagerService</h4>
+<div class="outline-text-4" id="text-1-1-2">
+<p>
+创建HubEvent，InputManager对象。并进一步通过InputManager创建
+InputReader、InputDispatcher实例及thread。 
+</p>
+
+<p>
+NOTES: EventHub：真正执行键盘/IR/motion等按键操作监控的类。然后把
+它作为参数来创建InputManager对象 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-3" class="outline-4">
+<h4 id="sec-1-1-3"><span class="section-number-4">1.1.3</span> InputManager</h4>
+<div class="outline-text-4" id="text-1-1-3">
+<p>
+主要用来总负责监控Input Event消息。这些Input Event一般都是分
+发给当前激活的Activity窗口来处理的，因此，当前激活的Activity
+窗口在创建的时候，会到WindowManagerService中去注册一个接收
+Input Event的通道，表明它要处理Input Event ，而当InputManager
+监控到有Input Event时，就会分给它处理。当前激活的Activity窗口
+不再处于激活状态时，它也会到WindowManagerService中去注销之
+前的接收通道，这样，InputManager就不会再把键盘消息分发给它来
+处理。
+</p>
+
+<p>
+NOTES:     InputManager创建InputReader，InputDispatchers对象，并启动InputDispatcherThread、InputReaderThread。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-4" class="outline-4">
+<h4 id="sec-1-1-4"><span class="section-number-4">1.1.4</span> InputReader</h4>
+<div class="outline-text-4" id="text-1-1-4">
+<p>
+主要通过EventHub，获得包含device/按键等的RAW Event。并做
+pre-process。并把event放到 <code>mlnBoundQueue</code> 中。 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-5" class="outline-4">
+<h4 id="sec-1-1-5"><span class="section-number-4">1.1.5</span> WindowManagerService</h4>
+<div class="outline-text-4" id="text-1-1-5">
+<p>
+创建InputManager和Activity之间通信的InputChannel, 这样InputManager
+可以通过InputChannel发送Event到UI线程。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-6" class="outline-4">
+<h4 id="sec-1-1-6"><span class="section-number-4">1.1.6</span> InputChannel</h4>
+<div class="outline-text-4" id="text-1-1-6">
+<p>
+在activity resume的时候， <code>ActivityThread</code> 会通过
+<code>android.view.WindowManagerImpl</code> 类为该Activity创建一个 <code>ViewRoot</code>
+对象， 并且会通过调用ViewRoot类的setView成员函数把与该Activity关联的View
+设置到这个ViewRoot中去，而Activity正是通过ViewRoot类的setView成员
+函数来注册Event消息接收通道的。 
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2"><span class="section-number-3">1.2</span> 代码路径</h3>
+<div class="outline-text-3" id="text-1-2">
+<ul class="org-ul">
+<li><code>frameworks/native/libs/input</code>
+      主要包含：InputChannel,inputPublisher,InputConsumer
+</li>
+<li><code>frameworks/base/service/input</code>
+主要包含：InputReader，InputReaderThread，InputDispatcher，
+InputDispatcherThread。
+</li>
+<li><code>frameworks/base/server/jni</code>
+      主要包含：NativeInputManager
+</li>
+<li><code>Alps/frameworks/base/server/wm</code>
+      主要包含：WindowManagerService.
+</li>
+<li><code>frameworks/base/core/java/android/view</code>
+      主要包含：ViewRootImpl.
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> InputManager工作flow</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1"><span class="section-number-3">2.1</span> InputManager的启动过程</h3>
+<div class="outline-text-3" id="text-2-1">
+<ol class="org-ol">
+<li>InputManager的创建
+<pre class="example">
+inputManager = new InputManagerService(context, wmHandler);
+</pre>
+
+<ul class="org-ul">
+<li>SystemService创建inputManagerService(JAVA)，也就是Java层的
+inputManager。
+</li>
+<li>inputManagerService(Java) 创建EventHub及inputManager(C++)
+</li>
+<li>inputManager(C++) 创建inputReader/inputDispatcher及inputDispatcherThread/inputReaderThread.
+</li>
+</ul>
+<p>
+其中创建EventHub，主要是为了从底层拿input Event。inputReader和
+inputDispatcher主要负责input Event接收和分发。
+inputDispatcherThread/inputReaderThread继承自Thread，分别用来运
+行前面所创建的一个inputDispatcher和inputReader对象。
+</p>
+</li>
+
+<li>InputManager的启动
+在systemService中创建完成inputManager相关的对象和thread后，就要
+正式启动inputManager开始工作。 
+
+<pre class="example">
+inputManager.start();
+</pre>
+e
+<p>
+从java层一直到C++层，最终会跑到如下code来让
+InputDispatcherThread和inputReaderThread  run起来。开始工作。 
+</p>
+
+
+<figure>
+<p><img src="./images/001.png" class="img-responsive" alt="001.png">
+</p>
+</figure>
+
+<ol class="org-ol">
+<li>inputDispatcher启动
+inputDispatcherThread继承自Thread，入口函数为ThreadLoop。
+</li>
+</ol>
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2"><span class="section-number-3">2.2</span> InputManager分发InputEvent流程</h3>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> InputChannel注册流程</h2>
+</div>
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> IR映射过程</h2>
+<div class="outline-text-2" id="text-4">
+<p>
+Key从driver scanCode到keycode的映射需要经过两次映射：
+键扫描码Scan Code  -&gt; 按键标签KeyCodeLabel-&gt;按键码Keycode
+</p>
+
+<ol class="org-ol">
+<li>第一次转换的map表path
+ system image path：system/usr/kaylayout/*.kl
+code path：frameworks/base/data/keyboard/*.kl
+
+<p>
+系统会根据device<sub>name加载device</sub><sub>name</sub>.kl文件，如果没有定义
+device<sub>name</sub>.kl文件，目前我们android BOX上系统会自动加载Generic.kl
+文件。
+</p>
+</li>
+
+<li>第二次转换的map表是
+/frameworks/base/include/ui/KeycodeLabels.h中定义的KEYCODES[]。
+
+
+<figure>
+<p><img src="./images/002.png" class="img-responsive" alt="002.png">
+</p>
+</figure>
+
+<p>
+在Parser中，首先读取frameworks/base/data/keyboards/*kl.然后一行一行的解析。
+</p>
+<ol class="org-ol">
+<li>如果判断第一个字符串(每个字符串以空格区分)为key,则读取第二个字
+符串code。并判断当前的map中是否有这个code。如果有，则不能添加
+到map中。
+</li>
+
+<li>否则读取第三个字符串，并从
+frameworks/native/include/input/keycodeLabel.h中找对应的值，找
+到就返回键值keycode。
+</li>
+
+<li>如果有第四个字符串，则是flags。如果没有则为0。
+</li>
+
+<li>最后，以map&lt;code, key&gt;的方式保存下来。如home键：
+(172,&lt;3 0&gt;)。
+</li>
+</ol>
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> 如何添加一个新Key</h2>
+<div class="outline-text-2" id="text-5">
+<p>
+假如添加一个linux键值为217，把它映射为android的键值Browser。
+</p>
+
+<ol class="org-ol">
+<li>android之前没有这个键值，需要定义
+<div class="org-src-container">
+
+<pre class="src src-java">///frameworks/base/core/java/android/view/KeyEvent.java
+ //定义这个新的键值
+public static final int KEYCODE_BROWSER = 211;
+</pre>
+</div>
+
+<p>
+可以看到里面有一些注释，标明了如何在android添加这个新的key，还需
+要修改的地方。 
+</p>
+
+
+<figure>
+<p><img src="./images/003.png" class="img-responsive" alt="003.png">
+</p>
+</figure>
+</li>
+
+<li>修改如下代码
+<div class="org-src-container">
+
+<pre class="src src-java">///frameworks/base/core/java/android/view/KeyEvent.java
+public final boolean isSystem() {
+    return native_isSystemKey(mKeyCode);
+}
+
+///frameworks/base/jni/android_view_KeyEvent.java
+static jboolean native_isSystemKey(JNIEnv* env, jobject clazz, jint keyCode) {
+    return KeyEvent::isSystemKey(keyCode);
+}
+
+///frameworks/base/libs/ui/Input.cpp
+bool KeyEvent::isSystemKey(int32_t keyCode) {
+    switch (keyCode) {
+        ……
+    case AKEYCODE_BROWSER:
+        return true;
+    }
+}
+</pre>
+</div>
+</li>
+
+<li><code>native/include/android/keycodes.h</code>
+<div class="org-src-container">
+
+<pre class="src src-java">enum {
+    ……
+    AKEYCODE_CALCULATOR = 210,
+    AKEYCODE_BROWSER = 211,
+}
+</pre>
+</div>
+</li>
+
+<li><code>frameworks/base/include/ui/KeycodeLabels.h</code>
+<div class="org-src-container">
+
+<pre class="src src-java">static const KeycodeLabel KEYCODES[] = {
+    ……
+    { "CALCULATOR", 210 },
+    {"BROWSER", 211}, 
+    { NULL, 0}
+}
+</pre>
+</div>
+
+<p>
+这个browser就是 <code>frameworks/base/data/keyboards/*kl</code> 中的，如：
+key 217 BROWSER , 这里的BROWSER就是我们定义的android键值的字符形
+式，217则是linux键值 
+</p>
+</li>
+</ol>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. Input system 概述</a>
+<ul class="nav">
+<li><a href="#sec-1-1">1.1. 主要类</a></li>
+<li><a href="#sec-1-2">1.2. 代码路径</a></li>
+</ul>
+</li>
+<li><a href="#sec-2">2. InputManager工作flow</a>
+<ul class="nav">
+<li><a href="#sec-2-1">2.1. InputManager的启动过程</a></li>
+<li><a href="#sec-2-2">2.2. InputManager分发InputEvent流程</a></li>
+</ul>
+</li>
+<li><a href="#sec-3">3. InputChannel注册流程</a></li>
+<li><a href="#sec-4">4. IR映射过程</a></li>
+<li><a href="#sec-5">5. 如何添加一个新Key</a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>

@@ -1,0 +1,567 @@
+#+TITLE: hostapd初始化流程源码分析
+
+* =hostapd_global_init=
+  数据结构 =struct hapd_interfaces= , 这是一个全局的数据结构， 它定义
+  了一系列的公共回调函数，保存了当前虚拟接口的数量，以及指向它们的指针。
+  
+  #+CAPTION: =struct hapd_interfaces= 数据结构定义
+  #+BEGIN_SRC c
+        struct hapd_interfaces {
+                int (*reload_config)(struct hostapd_iface *iface);
+                struct hostapd_config * (*config_read_cb)(const char *config_fname);
+                int (*ctrl_iface_init)(struct hostapd_data *hapd);
+                void (*ctrl_iface_deinit)(struct hostapd_data *hapd);
+                int (*for_each_interface)(struct hapd_interfaces *interfaces,
+                                          int (*cb)(struct hostapd_iface *iface,
+                                                    void *ctx), void *ctx);
+                int (*driver_init)(struct hostapd_iface *iface);
+
+                size_t count;
+                int global_ctrl_sock;
+                ...
+                struct hostapd_iface **iface;
+                ...
+        };  
+  #+END_SRC
+
+  其中 =count= 统计了当前创建的 =struct hostapd_iface= 的实例个数。 通
+  过 =iface= 双重指针，可以引用到任何一个 =struct hostapd_iface= 的实
+  例。所以接下来的初始化流程，一开始就涉及到对该数据结构实例的初始化。
+
+  首先是定义相应的一些回调函数，如下代码所示：
+  #+BEGIN_SRC c
+    os_memset(&interfaces, 0, sizeof(interfaces));
+    interfaces.reload_config = hostapd_reload_config;
+    interfaces.config_read_cb = hostapd_config_read;
+    interfaces.for_each_interface = hostapd_for_each_interface;
+    interfaces.ctrl_iface_init = hostapd_ctrl_iface_init;
+    interfaces.ctrl_iface_deinit = hostapd_ctrl_iface_deinit;
+    interfaces.driver_init = hostapd_driver_init;  
+  #+END_SRC
+
+** =hostapd_reload_config=
+    这个函数主要是加载新的配置文件，以更新 =struct hostapd_config= 的
+    内容。 
+
+    如果配置文件名为空，则一般认为配置信息是处于内存中，且假设配置信息
+    是被更新过了的， 则直接重载bss相关信息：
+    #+BEGIN_SRC c
+      if (iface->config_fname == NULL) {
+              /* Only in-memory config in use - assume it has been updated */
+              hostapd_clear_old(iface);
+              for (j = 0; j < iface->num_bss; j++)
+                  hostapd_reload_bss(iface->bss[j]);
+              return 0;
+          }    
+    #+END_SRC
+
+    在更新之前会冲刷旧的bss相关信息。
+
+    如果配置文件名不为空，则首先会通过 =config_read_cb= 回调函数解析配
+    置文件中的信息，并返回新的 =struct hostapd_config= 实例。
+
+    接下来会调用 =hostapd_clear_old= 来清除旧的bss信息。 将并新的
+    =struct hostapd_config= 分别挂到 =struct hostapd_iface= 和它所包含
+    的 bss实例中 (即 =struct hostapd_data=).  最后调用
+    =hostapd_reload_bss= 来重新设置 bss相关信息。
+
+    #+BEGIN_SRC c
+      hostapd_clear_old(iface);
+
+      oldconf = hapd->iconf;
+      iface->conf = newconf;
+
+      for (j = 0; j < iface->num_bss; j++) {
+        hapd = iface->bss[j];
+        hapd->iconf = newconf;
+        hapd->iconf->channel = oldconf->channel;
+        hapd->iconf->acs = oldconf->acs;
+        hapd->iconf->secondary_channel = oldconf->secondary_channel;
+        hapd->iconf->ieee80211n = oldconf->ieee80211n;
+        hapd->iconf->ieee80211ac = oldconf->ieee80211ac;
+        hapd->iconf->ht_capab = oldconf->ht_capab;
+        hapd->iconf->vht_capab = oldconf->vht_capab;
+        hapd->iconf->vht_oper_chwidth = oldconf->vht_oper_chwidth;
+        hapd->iconf->vht_oper_centr_freq_seg0_idx =
+          oldconf->vht_oper_centr_freq_seg0_idx;
+        hapd->iconf->vht_oper_centr_freq_seg1_idx =
+          oldconf->vht_oper_centr_freq_seg1_idx;
+        hapd->conf = newconf->bss[j];
+        hostapd_reload_bss(hapd);
+       }
+    #+END_SRC
+
+*** =hostapd_clear_old=
+    
+
+*** =hostapd_reload_bss=
+
+** =hostapd_config_read=
+    这个函数的主要作用就是去解析配置文件 (hostapd.conf)文件，最终返回
+    一个 =struct hostapd_config= 的实例, 它是某个接口范围下的全局配置
+    信息。在这个过程中，也同时初始化在该接口上运行的BSS的配置信息， 由
+    数据结构 =struct hostapd_bss_config= 来描述。
+
+    #+BEGIN_SRC c
+      struct hostapd_config {
+          struct hostapd_bss_config **bss, *last_bss;
+          size_t num_bss;
+            ...
+    #+END_SRC
+
+    =struct hostapd_config= 实例包含一个或多个bss的配置信息。 该函数首
+    先会调用 =hostapd_config_defaults= 来初始化 =struct
+    hostapd_config= 以及 =struct hostapd_bss_config= ， 其中
+    : conf->bss[0] = bss;
+    该函数配置了 =struct hostapd_config= 一些成员变量的默认值，同时也
+    调用了 =hostapd_config_defaults_bss= 函数来设置 =struct
+    hostapd_bss_config= 一些成员变量的默认值 。 
+
+    设置了一些默认值后，就会根据配置文件中的实际配置项，通过
+    =hostapd_config_fill= 来设置 =struct hostapd_config= 或 =struct
+    hostapd_bss_config= 的一些成员变量的值。 
+
+    NOTES: hostapd.config中有些配置项是接口范围的，有些配置项是bss相关
+    的。
+
+    接下来调用 =hostapd_set_security_params= 设置bss的认证与加密算法等
+    安全相关的信息。 
+
+    最后通过 =hostapd_config_check= 来检查配置项中是否有冲突的选项。
+
+*** =hostapd_config_defaults=
+
+*** =hostapd_config_fill=
+
+*** =hostapd_set_security_params=
+
+*** =hostapd_config_check=
+
+** =hostapd_for_each_interface=
+    该回调函数是一个工具函数，方便在代码中遍历 =struct interfaces= 挂
+    载的所有 =struct hostapd_iface= 实例，并在其上面调用相应的回调函数。
+
+    #+BEGIN_SRC c
+      int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
+                         int (*cb)(struct hostapd_iface *iface,
+                           void *ctx), void *ctx)
+      {
+          size_t i;
+          int ret;
+
+          for (i = 0; i < interfaces->count; i++) {
+              ret = cb(interfaces->iface[i], ctx);
+              if (ret)
+                  return ret;
+          }
+
+          return 0;
+      }    
+    #+END_SRC
+
+** =hostapd_ctrl_iface_init=
+    这个函数主要是初始化domain socket的socket文件路径，即根据
+    =ctrl_interface= 中配置的信息来初始化socket， 以便后续上层与
+    hostpad之间的socket通信畅通。
+
+** =hostapd_ctrl_iface_deinit=
+    清除 ctrol socket相关信息。
+
+** =hostapd_driver_init=
+    初始化驱动，根据源码编译时，使能了（注册）哪些驱动，就初始化相应的
+    驱动。 
+    如下全局变量包含当前被一些配置控制的驱动(=struct wpa_driver_ops=)实例：
+    #+BEGIN_SRC c
+      const struct wpa_driver_ops *const wpa_drivers[] =
+      {
+      #ifdef CONFIG_DRIVER_NL80211
+          &wpa_driver_nl80211_ops,
+      #endif /* CONFIG_DRIVER_NL80211 */
+      #ifdef CONFIG_DRIVER_WEXT
+          &wpa_driver_wext_ops,
+      #endif /* CONFIG_DRIVER_WEXT */
+      #ifdef CONFIG_DRIVER_HOSTAP
+          &wpa_driver_hostap_ops,
+      #endif /* CONFIG_DRIVER_HOSTAP */
+      #ifdef CONFIG_DRIVER_BSD
+          &wpa_driver_bsd_ops,
+      #endif /* CONFIG_DRIVER_BSD */
+      #ifdef CONFIG_DRIVER_OPENBSD
+          &wpa_driver_openbsd_ops,
+      #endif /* CONFIG_DRIVER_OPENBSD */
+      #ifdef CONFIG_DRIVER_NDIS
+          &wpa_driver_ndis_ops,
+      #endif /* CONFIG_DRIVER_NDIS */
+      #ifdef CONFIG_DRIVER_WIRED
+          &wpa_driver_wired_ops,
+      #endif /* CONFIG_DRIVER_WIRED */
+      #ifdef CONFIG_DRIVER_MACSEC_QCA
+          &wpa_driver_macsec_qca_ops,
+      #endif /* CONFIG_DRIVER_MACSEC_QCA */
+      #ifdef CONFIG_DRIVER_ROBOSWITCH
+          &wpa_driver_roboswitch_ops,
+      #endif /* CONFIG_DRIVER_ROBOSWITCH */
+      #ifdef CONFIG_DRIVER_ATHEROS
+          &wpa_driver_atheros_ops,
+      #endif /* CONFIG_DRIVER_ATHEROS */
+      #ifdef CONFIG_DRIVER_NONE
+          &wpa_driver_none_ops,
+      #endif /* CONFIG_DRIVER_NONE */
+          NULL
+      };
+    #+END_SRC
+
+    该函数会调用各个驱动回调函数中的  =global_init= ， 并构造 =struct
+    wpa_init_params= 实际，传递给驱动回调用函数中的 =hapd_init= 中。
+    并将底层驱动的一些能力信息更新到 =struct hostapd_iface= 实例中。 
+
+*** nl80211
+
+**** =global_init=
+
+**** =hapd_init=
+
+* =hostapd_periodic=
+  这是一个心跳函数，每 =HOSTAPD_CLEANUP_INTERVAL(10s)= 执行一次，遍历
+  每个接口实例，并对其调用 =hostapd_periodic_call= . 目前在函数
+  =hostapd_periodic_call= 函数中，主要执行 =hostapd_periodic_iface= 这
+  个函数。 
+
+** =hostapd_periodic_iface=
+    在这个函数中，主要做了两件事，第一件是调用 =ap_list_timer= . 第二
+    件是调用 =hostapd_acl_expire= 来更新 ACL cache.
+    
+*** =ap_list_timer=
+     当 =NEED_AP_MLME= 这个配置项是打开的时候， hostapd会自己维护一个周围
+     ap的列表， 并定期执行如下一些操作：
+     1. 动态更新AP列表。
+
+        每个AP在AP列表中有一个生命周期60s, 如果在60s内未收到某个AP的
+        beacon帧，则就认为该AP已经离开，从而将其从AP列表中删除。其中
+        =ap_table_expiration_time= 这个配置项可以修改AP最大的失效期，默
+        认是60s.
+
+     2. 检查当前是否需要修改hostapd的mode. 
+        
+        当启用 =olbc= 或 =olbc_ht= 检查时， 会根据周围AP的信息来决定是
+        否需要更新 HT Mode。 当然前提是hostapd启动时，配置文件中的
+        =ieee80111n= 是打开的。
+
+     3. 根据第二步的结果来决定 是否需要更新当前 hostapd 发出的Beacon帧
+        信息。
+
+**** AP List
+     AP list is a double linked list with head->prev pointing to the
+     end of the list and tail->next = NULL. Entries are moved to the
+     head of the list whenever a beacon has been received from the AP
+     in question. The tail entry in this link will thus be the least
+     recently used entry. 
+
+     数据结构 =struct ap_info= 主要描述周围的AP信息，并组成一个列表。 
+     #+BEGIN_SRC c
+       struct ap_info {
+           /* Note: next/prev pointers are updated whenever a new beacon is
+            ,* received because these are used to find the least recently used
+            ,* entries. */
+           struct ap_info *next; /* next entry in AP list */
+           struct ap_info *prev; /* previous entry in AP list */
+           struct ap_info *hnext; /* next entry in hash table list */
+           u8 addr[6];
+           u8 supported_rates[WLAN_SUPP_RATES_MAX];
+           int erp; /* ERP Info or -1 if ERP info element not present */
+
+           int channel;
+
+           int ht_support;
+
+           struct os_reltime last_beacon;
+       };
+     #+END_SRC
+
+     成员变量说明：
+     - =addr= 
+       ap的MAC地址信息。
+     - =supported_rates=
+       AP所支持的速率信息。
+     - =erp=
+       该AP是否支持802.11g
+     - =channel=
+       AP所在的信道。
+     - =ht_support=
+       是否支持 HT Operation.
+     - =last_beacon=
+       最近一次收到该AP的Beacon帧的时间。 这个值会在函数
+       =ap_list_process_beacon= 中被更新到。
+
+***** AP List维护
+      数据结构 =struct hostapd_iface= 定义了如下几个相关的成员变量：
+      #+BEGIN_SRC c
+        /**
+         ,* struct hostapd_iface - hostapd per-interface data structure
+         ,*/
+        struct hostapd_iface {
+          ...
+            int num_ap; /* number of entries in ap_list */
+            struct ap_info *ap_list; /* AP info list head */
+            struct ap_info *ap_hash[STA_HASH_SIZE];
+          ...
+        };
+      #+END_SRC
+      其中维护 =ap_list= 的相关函数是: =ap_ap_list_add=,
+      =ap_ap_list_del=, 维护 =ap_hash= 的相关函数是:
+      =ap_ap_hash_add=, =ap_ap_hash_del=. 同时对这两个列表进行维护的相
+      关函数是: =ap_ap_add= , =ap_free_ap=, =hostapd_free_aps=. 
+
+***** =ap_list_process_beacon=
+      该函数主要是处理接收到的周围AP的Beacon帧时，检查是否有必要更新当
+      前的Beacon帧相关信息， 由 =handle_beacon= (src/ap/ieee802_11.c)
+      调用。 
+
+      主要执行如下一些操作：
+      - 检查当前收到的Beacon帧所在的AP是否已经存在，如果不存在，则添加
+        到ap list中。
+        #+BEGIN_SRC c
+          ap = ap_get_ap(iface, mgmt->bssid);
+              if (!ap) {
+                  ap = ap_ap_add(iface, mgmt->bssid);
+                  if (!ap) {
+                      wpa_printf(MSG_INFO,
+                             "Failed to allocate AP information entry");
+                      return;
+                  }
+                  new_ap = 1;
+              }        
+        #+END_SRC
+      - 接下来是根据Beacon帧中的一些IE信息，更新相应的 =struct
+        ap_info= 域信息。
+        1. 速率集，包含基本速率集与扩展速率集。
+           #+BEGIN_SRC c
+                 merge_byte_arrays(ap->supported_rates, WLAN_SUPP_RATES_MAX,
+                           elems->supp_rates, elems->supp_rates_len,
+                           elems->ext_supp_rates, elems->ext_supp_rates_len);
+                        
+           #+END_SRC
+
+        2. 是否支持802.11g
+           #+BEGIN_SRC c
+                 if (elems->erp_info) /* 802.11g */
+                     ap->erp = elems->erp_info[0];
+                 else
+                     ap->erp = -1;           
+           #+END_SRC
+
+        3. 当前发送该Beacon帧的AP位于哪个Channel
+           #+BEGIN_SRC c
+                 if (elems->ds_params)
+                     ap->channel = elems->ds_params[0];
+                 else if (elems->ht_operation)
+                     ap->channel = elems->ht_operation[0];
+                 else if (fi)
+                     ap->channel = fi->channel; /* assume on the same channel with us ==>Yajun */
+           #+END_SRC
+
+        4. 是否支持HT Operation
+           #+BEGIN_SRC c
+                 if (elems->ht_capabilities)
+                     ap->ht_support = 1;
+                 else
+                     ap->ht_support = 0;           
+           #+END_SRC
+
+      - 更新Beacon接收的时间
+        #+BEGIN_SRC c
+          os_get_reltime(&ap->last_beacon);           
+        #+END_SRC
+
+      - 将当前这个AP放入AP列表中的头部
+        #+BEGIN_SRC c
+          if (!iface->olbc &&
+                  ap_list_beacon_olbc(iface, ap)) {
+                  iface->olbc = 1;
+                  wpa_printf(MSG_DEBUG, "OLBC AP detected: " MACSTR
+                         " (channel %d) - enable protection",
+                         MAC2STR(ap->addr), ap->channel);
+                  set_beacon++;
+              }           
+        #+END_SRC
+
+        1. 判断是否检测到OLBC AP
+           #+BEGIN_SRC c
+             if (!iface->olbc &&
+                     ap_list_beacon_olbc(iface, ap)) {
+                     iface->olbc = 1;
+                     wpa_printf(MSG_DEBUG, "OLBC AP detected: " MACSTR
+                            " (channel %d) - enable protection",
+                            MAC2STR(ap->addr), ap->channel);
+                     set_beacon++;
+                 }           
+           #+END_SRC
+
+      - 判断是否检测到OLBC HT Ap
+        #+BEGIN_SRC c
+          #ifdef CONFIG_IEEE80211N
+              if (!iface->olbc_ht && !ap->ht_support &&
+                  (ap->channel == 0 ||
+                   ap->channel == iface->conf->channel ||
+                   ap->channel == iface->conf->channel +
+                   iface->conf->secondary_channel * 4)) {
+                  iface->olbc_ht = 1;
+                  hostapd_ht_operation_update(iface);
+                  wpa_printf(MSG_DEBUG, "OLBC HT AP detected: " MACSTR
+                         " (channel %d) - enable protection",
+                         MAC2STR(ap->addr), ap->channel);
+                  set_beacon++;
+              }
+          #endif /* CONFIG_IEEE80211N */
+        #+END_SRC
+
+      - 根据需要判断是否需要更新hostapd的beacon信息
+        #+BEGIN_SRC c
+              if (set_beacon)
+                  ieee802_11_update_beacons(iface);           
+        #+END_SRC
+
+***** =ap_list_beacon_olbc=
+      该函数主要是检测是否需要触发保护机制。 802.11中规范中提到，针对
+      802.11g与802.11legacy/b等设备之间的数据通信要执行一种保护机制，
+      具体条件如下：
+      1. an HR-DSSS (802.11b) client association will trigger protection.
+      2. if an 802.11g AP hears a beacon frame from an 802.11 or
+         802.11b access point or ad hoc client, the protection
+         mechanism will be triggered.
+      3. If an ERP AP hears a management frame (other than a probe
+         request) where the supported rate includes only 802.11 or
+         802.11b rates, the =NonERP_Present= bit may be set to 1. 
+
+      有了上述的理论支持，这个函数的实现逻辑就比较清晰了。该函数主要进
+      行了如下一些检查步骤：
+      1. 当前hostapd启动时的mode。 
+         
+         如果未设置或当前hw mode不是 =HOSTAPD_MODE_IEEE80211G= ，或是
+         发送Beacon帧的AP与当前hostapd处于不同的信道，则无需进行后面的
+         检测 ：
+         #+BEGIN_SRC c
+           if (iface->current_mode == NULL ||
+                   iface->current_mode->mode != HOSTAPD_MODE_IEEE80211G ||
+                   iface->conf->channel != ap->channel)
+                   return 0;         
+         #+END_SRC
+
+      2. 如果Beacon帧中包含ERP IE信息，且其位
+         =ERP_INFO_NON_ERP_PRESENT= 被置起，则需要进行OLBC保护机制。
+
+      3. 如果Beacon帧中的速率集中包含有 6Mbps, 9Mbps或大于11Mbps, 则说
+         明该AP支持802.11g协议以上的AP，则不需要开启OLBC保护机制。 
+
+         NOTES: 802.11 legacy data rates: 1,2Mbps. 802.11b HR DSSS
+         data rates: 5.5Mbps, 11Mbps.
+
+***** =hostapd_ht_operation_update=
+      如果当前发送Beacon帧的AP不支持HT Operation，则需要开启HT
+      Operation Protection。 在Beacon帧中，有一个HT Protection的域，它
+      有4个可能的值0~3. 保护 模式会动态变化，取决于周围的设备或者关联
+      的HT AP。使用的保护机制 主要有：RTS/CTS, CTS-to-Self, Dual-CTS或
+      者其他的保护方法 . 
+      4种保护模式：
+      - Mode 0—Greenfield (No Protection) Mode 
+
+        This mode is referred to as Greenfield because only HT radios
+        are in use.
+
+      - Mode 1—HT Nonmember Protection Mode
+
+        在该模式下，BSS中所有的STA都必须是HT STA.
+
+      - Mode 2—HT 20 MHz Protection Mode
+
+        the 20/40-capable HT stations must use protection when
+        transmitting on a 40 MHz channel in order to prevent the 20
+        MHz–only HT stations from transmitting at the same time.
+
+      - Mode 3—Non-HT Mixed Mode
+
+        This protection mode is used when one or more non-HT stations
+        are associated to the HT access point. 
+
+       这个函数的目的就是决定当前hostapd应该切换到哪种HT Protection
+        Mode。 
+        首先是从Mode 0, 1到Mode 2, 3之间的转换判断：
+        #+BEGIN_SRC c
+              if (!(iface->ht_op_mode & HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT)
+                  && iface->num_sta_ht_no_gf) {
+                  iface->ht_op_mode |= HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT;//from mode 0,1 to mode 2
+                  op_mode_changes++;
+              } else if ((iface->ht_op_mode &
+                      HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT) &&
+                     iface->num_sta_ht_no_gf == 0) {
+                  iface->ht_op_mode &= ~HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT;//from mode 2,3 to mode 0, 1
+                  op_mode_changes++;
+              }        
+        #+END_SRC
+
+        =iface->ht_op_mode= 代表当前hostapd当前所处的HT Operation
+        Mode。 如果当前hostapd不处于Mode 2， 且
+        =iface->num_sta_ht_no_gf= 的值不为0， 这说明当前有非GreenFiled
+        的HT STA关联到当前的hostapd，此时HT Operation Mode必须切换到
+        =HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT= . 反过来，如果当前
+        hostapd的HT Operation Mode处于Mode 2， 且当前与hostapd关联的非
+        GreenField的HT STA数量为0， 则应该去掉当前的Mode 2. 
+
+        #+BEGIN_SRC c
+              if (!(iface->ht_op_mode & HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT) &&
+                  (iface->num_sta_no_ht || iface->olbc_ht)) {
+                  iface->ht_op_mode |= HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT;//should change to mode 3
+                  op_mode_changes++;
+              } else if ((iface->ht_op_mode &
+                      HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT) &&
+                     (iface->num_sta_no_ht == 0 && !iface->olbc_ht)) {
+                  iface->ht_op_mode &= ~HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT;//should change from mode 3 
+                  op_mode_changes++;
+              }        
+        #+END_SRC
+        
+        如果当前HT Operation Mode不包含Mode 3， 且
+        =iface->num_sta_no_ht= 数量不为0，即有非HT的STA关联到hostapd，
+        或是当前侦测到周围有OLBC HT AP， 则需要将当前的HT Operation
+        Mode的Mode 3对应的Bit位置起。反过来，如果当前HT Operation Mode
+        包含Mode 3（对应的Bit位被置起），但是此时没有非HT的STA关联到
+        hostapd，或是没有侦测到周围有OLBC HT AP，则此时可以将对应的
+        Mode 3 Bit位清除。
+
+        最后，根据前面分析的结果，来设置相应的HT Operation Mode：
+        #+BEGIN_SRC c
+          if (iface->num_sta_no_ht)
+            new_op_mode = HT_PROT_NON_HT_MIXED;//mode 3
+           else if (iface->conf->secondary_channel && iface->num_sta_ht_20mhz)
+             new_op_mode = HT_PROT_20MHZ_PROTECTION;//mode 2
+           else if (iface->olbc_ht)
+             new_op_mode = HT_PROT_NONMEMBER_PROTECTION;//mode 1
+           else
+             new_op_mode = HT_PROT_NO_PROTECTION; //mode 0
+
+          cur_op_mode = iface->ht_op_mode & HT_OPER_OP_MODE_HT_PROT_MASK;
+          if (cur_op_mode != new_op_mode) {
+            iface->ht_op_mode &= ~HT_OPER_OP_MODE_HT_PROT_MASK;
+            iface->ht_op_mode |= new_op_mode;
+            op_mode_changes++;
+           }
+        #+END_SRC
+
+*** =hostapd_acl_expire=
+    ACL cache expiration callback
+    
+* =fst_global_init=
+  
+** =fst_global_add_ctrl=
+
+* =hostapd_interface_init=
+
+* =hostapd_interface_init_bss=
+
+* =hostapd_driver_init=
+
+* =hostapd_setup_interface=
+
+* =hostapd_global_ctrl_iface_init=
+
+* =hostapd_global_run=
