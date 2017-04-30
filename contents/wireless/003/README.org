@@ -123,6 +123,9 @@
     GAP即Generic Access Profile，是所有蓝牙设备必须实现的一个Profile，
     它定义了一个蓝牙设备的基本要求。 
 
+    #+CAPTION: Profile Stack
+    [[./images/016.png]]
+
     GAP也描述了设备发现，连接建立，安全，认证，关联模型和服务发现的行
     为和方法。 
 
@@ -213,7 +216,28 @@
      Bonding Procedure
 
      [[./images/007.png]]
-       
+
+*** L2CAP(Logical Link Control and Adaptation Layer Protocol)
+    利用协议复用能力和数据分块与重组，L2CAP为上层协议提供了面向连接和
+    无连接的数据服务。L2CAP允许上层协议和应用发送和接收上层数据包长度
+    达到64K。L2CAP也支持每信道上的数据流控制和重传。 
+
+    L2CAP层提供了逻辑信道，称为L2CAP信道，这些信道在一个或多个逻辑链路
+    （ACL）上被复用。 
+
+    L2CAP功能结构图所下：
+
+    [[./images/017.png]]
+
+    L2CAP的操作模式:
+
+    1. Basic L2CAP Mode （default）
+    2. Flow Control Mode
+    3. Retransmission Mode
+    4. Enhanced Retransmission Mode (for reliable channels)
+    5. Streaming Mode (for streaming application)
+    
+      
 *** GATT
     GATT设计为可供应用程序或其他Profile使用，使得客户端与服务器端能进行通信。
 
@@ -240,6 +264,38 @@
     - 通知一个特征值。（Notification, broadcast）
     - 指示一个特征值。（Indication, unicast）
 
+
+    GATT可用于任何物理链路之上，使用ATT协议，L2CAP频道。
+
+    GATT 构建在ATT之上，它建立了ATT传输和保存数据的通用操作和框架。
+    GATT定义了两种角色：服务器和客户端。这两个角色不一定与上述的GAP四
+    个角色中的某个角色绑定。是由上层更高的Profile指定。GATT和ATT可用于
+    BR/EDR/LE。在LE中，是必须有的。 
+
+    
+**** GATT数据格式
+
+     GATT传输的数据包含在ATT协议PDU（协议数据单元）中。主要有如下一些形式的
+     数据：命令，请求，响应，指示，通知。下面是PDU的结构图： 
+
+     [[./images/013.png]]
+
+     数据操作码（Opcode）包含上述五种类型，与之相应的数据存储在属性参
+     数里。其中命令和请求是作用于服务器端设备属性集中的值。服务端的一
+     个属性由如下四部分组成：属性句柄、属性类型、属性值以及属性权限。
+     它的逻辑表示如下图所示：
+
+     [[./images/014.png]]
+
+     其中，属性句柄是索引，取值范围：0x0001 ～ 0xFFFF，服务器上属性句
+     柄值不会随时间改变。属性类型是一个UUID，代表某种类型。属性值代表
+     该属性的实际数据，而属性权限则由上层Profile指定为读写权限。 
+
+     GATT服务器存储通过ATT协议传输的数据并接受来自GATT客户端的ATT请求，
+     命令和确认信息。GATT同时指定了GATT服务器的数据格式。属性被格式化
+     为服务集(Services)和特征集(Characteristics)。服务包含一系列特征集。
+     特征集包含一个单一值以及一个或多个描述特征值的描述符。 
+
 **** 基于GATT的Profile层次结构
      GATT Profile指定了Profile数据交换的结构。这个结构定义用于Profile
      的基本元素： *服务和特征* 。包含在ATT的属性当中。
@@ -252,6 +308,8 @@
 
      所有的服务和特征以及特征的组件（如值或描述符）包含了Profile数据，
      都存储在服务器的属性（Attribute）中。 
+
+     [[./images/015.png]]
 
      服务有两种类型：主服务和次服务。主服务提供设备的主要功能，次服务
      提供设备的辅助功能。至少被设备上的一个主服务引用。 
@@ -267,7 +325,21 @@
 
       一个特征的定义包含一个特征声明，特征属性和一个值。它也可能包含描
       述符，描述符描述了对应的特征值在服务器中的值或允许的配置。 
-      
+
+**** GATT Profile定义的特性
+     
+     1. Server Configuration
+     2. Primary Service Discovery
+     3. Relationship Discovery
+     4. Characteristic Discovery
+     5. Characteristic Descriptor Discovery
+     6. Reading a Characteristic Value
+     7. Writing a Characteristic Value
+     8. Notification of a Characteristic Value
+     9. Indication of a Characteristic Value
+     10. Reading a Characteristic Descriptor
+     11. Writing a Characteristic Descriptor
+
 *** HID Service
     This service exposes HID reports and other HID data intended for
     HID Hosts and HID Devices. 
@@ -318,4 +390,137 @@
      
      [[./images/012.png]]
 
-* Android蓝牙框架
+** 蓝牙设备认证基本流程
+
+    [[./images/018.png]]
+    
+* Bluedroid架构简介
+  Bluedroid总框架图如下所示：
+  #+BEGIN_EXAMPLE
+                            Java                                                                                   
+    +--------------------------------+                                                                              
+      +-----------------+     C++/C                                                                                 
+      |       BTIF      |                                                                                           
+      +-----------------+                                                                                           
+      |       BTA       |                                                                                           
+      +-----------------+                                                                                           
+      | Bluedroid Stack |                                                                                           
+      +-----------------+  user space                                                                               
+    +---------------------------------+                                                                             
+                          kernel space         
+
+  #+END_EXAMPLE
+
+  下面对各个部分进行简介。
+
+** Java Application/JNI
+    
+    Bluetooth app运行于Java层，并通过JNI和协议栈的接口（stack’s
+    Interface Layer，BTIF）进行如下交互：
+    
+    NOTES: JNI层的作用是将Java调用转化为C函数的调用，同时为应用和协议
+    栈提供了调用/回调的交互能力。
+
+    
+** BTIF (Bluetooth Profile Interface)
+
+    Bluetooth Profile Interface在Bluetooth Application task (BTA)和JNI
+    层之间充当了胶水层的角色，对上层（JNI）提供了所有profile功能性的接
+    口。这一层上有一个Bluetooth Interface Instance，所有Profile的操作
+    函数都注册在其中（GAP, AV, DM, PAN, HF,HH, HL, Storage, Sockets）。
+    Client应用通过操作这个Instance来操作Profile。 
+
+** BTA
+
+    这一层实现了各种Profile状态机。用户通过驱动状态机来操作Profile。
+    Profile状态机包含以下几个主要组成部分：
+
+    - =BTA_profilexx_act.c=  
+      包含对应Profile的“Action”函数，一般来说由Profile状态机调用
+    - =BTA_profilexx_api.c=
+      对应Profile的API的具体实现。通常它们是提供给用户使用，完成
+      usecase的函数和回调
+    - =BTA_profilexx_ci.c=
+      对应Profile的“call-in”函数的实现（供Profile以外的模块调用）
+    - =BTA_profilexx_co.c=
+      对应Profile的“call-out”函数的实现（调用Profile以外的模块）
+    - =BTA_profilexx_main.c=
+      对应Profile的状态机和处理协议栈上传消息的handler的具体实现。主要
+      负责维护Profile状态的变化及其引起的“Action” 
+
+
+    例如，调用 =BTA_profilexx_act.c=中的API函数时，各部分的执行流程图
+    如下所示：
+
+    #+BEGIN_EXAMPLE
+                                                       seq2 +---------------------+   seq3   +-----------------------+
+                                                       +----> BTA_Profilexx_API.c <----------> BTA's SYS Msg Posting |
+                                                       |    +----------^----------+          +-----------^-----------+
+                                                       |               |                                 |            
+                                                       |               |seq7                             | seq4       
+                                                       |               |                                 |            
+      +--------------+  seq1   +------------------+    |    +----------v-----------+   seq5  +-----------v-------+    
+      | User Command <---------> BTIF_Exposed_API +----+----> BTA_Profilexx_Main.c <---------> OS Message Posted |    
+      +--------------+  seq9   +------------------+    seq8 +----------^-----------+         +-------------------+    
+                                                                       |                                              
+                                                                       |seq6                                          
+                                                                       |                                              
+                                                            +----------v---------+                                    
+                                                            | BTA_Profilexx.Ci.c |                                    
+                                                            +--------------------+                   
+    #+END_EXAMPLE
+
+    
+** Core Stack
+
+    #+BEGIN_EXAMPLE
+      +------------------------------------------+
+      |          +--------------------+          |
+      |          |  LIBBT_BRCM_Stack  |          |
+      |          +--------------------+          |
+      |   +---------+ +-----+ +------+ +-----+   |
+      |   |         | |A2DP | |AVCTP | |AVDTP|   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | |BNEP | | PAN  | |HID  |   |
+      |   | BT      | +-----+ +------+ +-----+   |
+      |   | Manager | +-----+ +------+ +-----+   |
+      |   |         | |L2CAP| |RFCOMM| |SDP  |   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | |MCAP | |SMP   | |GATT |   |
+      |   +---------+ +-----+ +------+ +-----+   |
+      |         +------------------------+       |
+      |         | Host Control Interface |       |
+      |         +------------------------+       |
+      +------------------------------------------+    
+    #+END_EXAMPLE
+
+    
+** HCI and HAL Layers
+
+    HCI层由libbt-hci共享库组成，负责通讯层（transport layer，如UART H4
+    或者SMD channel）和协议栈之间的交互。 HAL层由libbt-vendor共享库组成，
+    是各厂商的解决方案的特定实现。HAL层实现了各厂商对OPCODE的处理逻辑，
+    这些OPCODE声明在HCI层的 =bt_vendor_lib.h= 中。 
+
+** TASK管理
+
+    Bluedroid中，协议栈，蓝牙规范和蓝牙应用都运行在一个用户进程
+    "com.android.bluetooth"之中。 
+
+    蓝牙代码在以下四种task代表的上下文（context）中运行： 
+
+    - =BTIF_TASK=
+    - =BTU_TASK=
+    - =A2DP_MEDIA_TASK=
+    - =GKI_TIMER_TASK=
+
+    task之间通过消息（message）来交换信息。
+
+    调用JNI层的API函数会通过消息转发机制，在 =BTIF_TASK= 中执行。
+    JNI，HAL回调在 =BTIF_TASK= 中执行。
+    有需要时， =BTIF_TASK= 中的调用可切换到 =BTU_TASK= 中执行。
+    蓝牙规范（Profiles）和协议的实现代码在 =BTU_TASK= 中执行。
+    蓝牙传输驱动程序中有一条rx线程（ =bt_hc_worker_thread= ）负责从UART/SMD中
+    读取数据。 

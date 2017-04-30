@@ -344,6 +344,16 @@
     [[./images/2016/2016030814.png]]
 *** =skb_cloned=
     Is the buffer a clone.
+*** =skb_copy_expand= 
+    alloc a new skb and copy the packet
+    用于扩展当前的 =skb_buffer= 的使用空间。 
+*** =skb_copy= 
+    Creates a copy of the =sk_buff=, copying both the =sk_buff= structure and the packet data.
+    Used when the caller wishes to modify the packet data.
+    [[./images/2016/2016030813.png]]
+*** =skb_copy_to_linear_data=
+*** =skb_copy_from_linear_data=
+    Use memcpy() to copy skb->data.
 ** =skb_set_tail_pointer=
 ** =skb_tail_pointer= 获取TAIL指针
 ** =skb_end_pointer=
@@ -359,6 +369,13 @@
 *** =skb_pull=
     Truncates len bytes at the beginning of a data.
     [[./images/2016/2016030812.png]]
+*** =skb_pull_rcsum= 
+    This function performs an =skb_pull= on the packet and updates the
+    =CHECKSUM_COMPLETE= checksum.  It should be used on receive path
+    processing instead of =skb_pull= unless you know that the checksum
+    difference is zero (e.g., a valid IP header) or you are setting
+    =ip_summed= to =CHECKSUM_NONE=. 
+    
 *** =skb_reserve=
     Increases headroom by len bytes, this is only allowed for an empty buffer.
     [[./images/2016/2016030808.png]]
@@ -371,20 +388,25 @@
 ** =skb_trim=
    Trim skb to len bytes.
    [[./images/2016/2016030810.png]]
-** =skb_shinfo=  share info
-** =skb_headlen=  header length
+   
+** =skb_shinfo=  
+    share info
+    
+** =skb_headlen=  
+    header length
+    
 ** =skb_tailroom=
+    the number of bytes of free space at the tail of an =sk_buff= 
+
 ** =skb_headroom=
-** =skb_copy_expand= 
-   alloc a new skb and copy the packet
-   用于扩展当前的 =skb_buffer= 的使用空间。 
-** =skb_copy= 
-   Creates a copy of the =sk_buff=, copying both the =sk_buff= structure and the packet data.
-   Used when the caller wishes to modify the packet data.
-   [[./images/2016/2016030813.png]]
-** =skb_copy_to_linear_data=
-** =skb_copy_from_linear_data=
-   Use memcpy() to copy skb->data.
+    the number of bytes of free space at the head of an =sk_buff=. 
+
+** =skb_reset_network_header=
+
+** =skb_reset_transport_header=
+
+** =skb_reset_mac_len=
+    
 ** 队列操作
     #+BEGIN_SRC c
       //queue
@@ -472,4 +494,6 @@
     }  
   #+END_SRC
   
+  在不可中断的上下文中，调用 =netif_rx_ni= 。 其他情况下，调用
+  =netif_rx= 。 
   

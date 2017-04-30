@@ -275,10 +275,17 @@
     化。因为我们走的是通用的初始化流程，如果硬件上没有电压波动导致模组
     异常的问题的话，模组厂应该之前有遇到过类似的问题才对。
 
+** Suspend/Resume操作
 
-    suspend时保持SDIO BUS处于上电状态：
-    : sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER)
-
+    对于cob的情况，有如下两点需要注意：
+    1. host端需要设置 nonremovable， 
+       : mmc->caps |= MMC_CAP_NONREMOVABLE
+       如果没有设置的话， resume的时候会跑进detect， 检测到卡被移除了，
+       从而执行了移除操作。 
+    2. host端需要设置keep power. driver suspend时保持SDIO BUS处于上电状态：
+       : sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER)
+       如果没有设置，sdio在resume 的时候就会跑sdio reset和go idle
+       （CMD0）后进入 =init_card= , 第一个CMD就不会响应了。
 
 参考网址：
 
@@ -288,3 +295,4 @@ http://www.cnblogs.com/RandyQ/p/3607107.html
 http://blog.csdn.net/wh_19910525/article/details/7392518
 
 http://blog.sina.com.cn/s/blog_4b4b54da0102vivr.html
+

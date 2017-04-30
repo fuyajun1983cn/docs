@@ -233,6 +233,167 @@
 
         [[file:./images/2016/2016083001.png]]
 
+        wlanProcessTxFrame, 这个函数由kalHardStartXmit()或
+        nicProcessForwardPkt()调用。
+
+        wlanProcessTxFrame这个函数目的有：
+        1. 确定数据的优先级。
+        2. 设置Packet的相关信息： 头部长度，到达时间等信息。
+
+**** 解析上层发送过来的数据包信息
+     #+BEGIN_SRC c
+       #define WLAN_GET_FIELD_BE16(_memAddr_p, _value_p) \
+           { \
+               PUINT_8 __cp = (PUINT_8)(_memAddr_p); \
+               ,*(PUINT_16)(_value_p) = ((UINT_16)__cp[0] << 8) | ((UINT_16)__cp[1]); \
+           }
+
+       BOOLEAN
+       kalQoSFrameClassifierAndPacketInfo(IN P_GLUE_INFO_T prGlueInfo,
+                          IN P_NATIVE_PACKET prPacket, OUT P_TX_PACKET_INFO prTxPktInfo)
+       {
+           UINT_32 u4PacketLen;
+           UINT_16 u2EtherTypeLen; /*数据包的类型*/
+           struct sk_buff *prSkb = (struct sk_buff *)prPacket;
+           PUINT_8 aucLookAheadBuf = NULL;
+           UINT_8 ucEthTypeLenOffset = ETHER_HEADER_LEN - ETHER_TYPE_LEN;
+           PUINT_8 pucNextProtocol = NULL;
+           UINT_16 u2KeyInfo = 0;
+           UINT_8  ucEAPoLKey = 0;
+           UINT_8  ucEapOffset = ETHER_HEADER_LEN;
+
+           u4PacketLen = prSkb->len;
+
+           if (u4PacketLen < ETHER_HEADER_LEN) {
+               DBGLOG(INIT, WARN, "Invalid Ether packet length: %lu\n", u4PacketLen);
+               return FALSE;
+           }
+
+           aucLookAheadBuf = prSkb->data; /*struct sk_buff 的数据部分起始位置 */
+
+           /* Reset Packet Info */
+           kalMemZero(prTxPktInfo, sizeof(TX_PACKET_INFO));
+
+           /* 4 <0> Obtain Ether Type/Len 网络包是大端格式*/
+           WLAN_GET_FIELD_BE16(&aucLookAheadBuf[ucEthTypeLenOffset], &u2EtherTypeLen);
+
+           /* 4 <1> Skip 802.1Q header (VLAN Tagging) */
+           if (u2EtherTypeLen == ETH_P_VLAN) {
+               prTxPktInfo->u2Flag |= BIT(ENUM_PKT_VLAN_EXIST);
+               ucEthTypeLenOffset += ETH_802_1Q_HEADER_LEN;
+               WLAN_GET_FIELD_BE16(&aucLookAheadBuf[ucEthTypeLenOffset], &u2EtherTypeLen);
+           }
+           /* 4 <2> Obtain next protocol pointer */
+           pucNextProtocol = &aucLookAheadBuf[ucEthTypeLenOffset + ETHER_TYPE_LEN];
+
+           /* 4 <3> Handle ethernet format */
+           switch (u2EtherTypeLen) {
+
+               /* IPv4 */
+           case ETH_P_IPV4:
+               /* IPv4 header length check */
+               if (u4PacketLen < (ucEthTypeLenOffset + ETHER_TYPE_LEN + IPV4_HDR_LEN)) {
+                   DBGLOG(INIT, WARN, "Invalid IPv4 packet length: %lu\n", u4PacketLen);
+                   break;
+               }
+
+               kalIPv4FrameClassifier(prGlueInfo, prPacket, pucNextProtocol, prTxPktInfo);
+               break;
+
+       #if 0
+               /* IPv6 */
+           case ETH_P_IPV6:
+               {
+                   PUINT_8 pucIpHdr = pucNextProtocol;
+                   UINT_8 ucIpVersion;
+
+                   /* IPv6 header length check */
+                   if (u4PacketLen < (ucEthTypeLenOffset + ETHER_TYPE_LEN + IPV6_HDR_LEN)) {
+                       DBGLOG(INIT, WARN, "Invalid IPv6 packet length: %lu\n", u4PacketLen);
+                       return FALSE;
+                   }
+
+                   /* IPv6 version check */
+                   ucIpVersion = (pucIpHdr[0] & IP_VERSION_MASK) >> IP_VERSION_OFFSET;
+                   if (ucIpVersion != IP_VERSION_6) {
+                       DBGLOG(INIT, WARN, "Invalid IPv6 packet version: %u\n", ucIpVersion);
+                       return FALSE;
+                   }
+
+                   /* Get the DSCP value from the header of IP packet. */
+                   ucUserPriority = ((pucIpHdr[0] & IPV6_HDR_TC_PREC_MASK) >> IPV6_HDR_TC_PREC_OFFSET);
+               }
+               break;
+       #endif
+
+           case ETH_P_ARP:
+               {
+                   UINT_16 u2ArpOp;
+
+                   WLAN_GET_FIELD_BE16(&pucNextProtocol[ARP_OPERATION_OFFSET], &u2ArpOp);
+
+                   DBGLOG(SW4, INFO, "ARP %s PKT[0x%p] TAR MAC/IP[" MACSTR "]/[" IPV4STR "]\n",
+                          u2ArpOp == ARP_OPERATION_REQUEST ? "REQ" : "RSP",
+                          prPacket, MAC2STR(&pucNextProtocol[ARP_TARGET_MAC_OFFSET]),
+                          IPV4TOSTR(&pucNextProtocol[ARP_TARGET_IP_OFFSET]));
+
+                   prTxPktInfo->u2Flag |= BIT(ENUM_PKT_ARP);
+               }
+               break;
+
+           case ETH_P_1X:
+           case ETH_P_PRE_1X:
+       #if CFG_SUPPORT_WAPI
+           case ETH_WPI_1X:
+       #endif
+               prTxPktInfo->u2Flag |= BIT(ENUM_PKT_1X);
+               DBGLOG(RSN, INFO, "T1x like normal data, PKT[0x%p]\n", prPacket);
+
+               if (u2EtherTypeLen == ETH_P_1X) {
+                   /* Leave EAP to check */
+                   ucEAPoLKey = aucLookAheadBuf[1 + ucEapOffset];
+                   if (ucEAPoLKey != ETH_EAPOL_KEY)
+                       prTxPktInfo->u2Flag |= BIT(ENUM_PKT_NON_PROTECTED_1X);
+                   else {
+                       WLAN_GET_FIELD_BE16(&aucLookAheadBuf[5 + ucEapOffset], &u2KeyInfo);
+                       /* BIT3 is pairwise key bit */
+                       DBGLOG(RSN, INFO, "u2KeyInfo=%d\n", u2KeyInfo);
+                       if (u2KeyInfo & BIT(3))
+                           prTxPktInfo->u2Flag |= BIT(ENUM_PKT_NON_PROTECTED_1X);
+                   }
+               }
+       #if CFG_SUPPORT_WAPI
+               else if (u2EtherTypeLen == ETH_WPI_1X)
+                   prTxPktInfo->u2Flag |= BIT(ENUM_PKT_NON_PROTECTED_1X);
+       #endif
+               break;
+
+           default:
+               /* 4 <4> Handle 802.3 format if LEN <= 1500 */
+               if (u2EtherTypeLen <= ETH_802_3_MAX_LEN)
+                   prTxPktInfo->u2Flag |= BIT(ENUM_PKT_802_3);
+               break;
+           }
+
+           /* 4 <4.1> Check for PAL (BT over Wi-Fi) */
+           /* Move to kalBowFrameClassifier */
+
+           /* 4 <5> Return the value of Priority Parameter. */
+           /* prSkb->priority is assigned by Linux wireless utility function(cfg80211_classify8021d) */
+           /* at net_dev selection callback (ndo_select_queue) */
+           prTxPktInfo->ucPriorityParam = prSkb->priority;
+
+           /* 4 <6> Retrieve Packet Information - DA */
+           /* Packet Length/ Destination Address */
+           prTxPktInfo->u4PacketLen = u4PacketLen;
+
+           kalMemCopy(prTxPktInfo->aucEthDestAddr, aucLookAheadBuf, PARAM_MAC_ADDR_LEN);
+
+           return TRUE;
+       }               /* end of kalQoSFrameClassifier() */     
+     #+END_SRC
+
+
 *** RX
 
          #+BEGIN_SRC plantuml :exports both :file ./images/2016/2016083002.png :cmdline -charset UTF-8
@@ -261,7 +422,13 @@
          [[file:./images/2016/2016083002.png]]
 
          SDIO RX can only go to CR4 (PP->CR4->HIF)
-         USB RX can use either CR4 (PP->CR4->HIF) or directly to HIF (PP->HIF)
+         USB RX can use either CR4 (PP->CR4->HIF) or directly to HIF
+         (PP->HIF)
+
+**** 数据帧处理
+     nicRxProcessDataPacket
+
+     向上回报一个数据包： kalRxIndicateOnePkt。
 
 *** FW download
        

@@ -1581,6 +1581,7 @@
     =ip_send_skb=. Let’s continue on in =dst_neigh_output= and continue
     approaching the Linux kernel’s netdevice subsystem. 
 
+
 *** =dst_neigh_output=
     The =dst_neigh_output= function does two important things for
     us. First, recall from earlier in this blog post we saw that if a
@@ -1690,36 +1691,909 @@
     pointers tracking the data are updated with =skb_push=, the skb is
     passed to =dev_queue_xmit= to enter the Linux net device subsystem. 
 
-*** n->output
+*** =n->output=
+    If the destination is not =NUD_CONNECTED= or the hardware header has
+    not been cached the code proceeds down the =n->output= path. What is
+    attached to the output function pointer on the neigbour structure?
+    Well, it depends. To understand how this is setup, we’ll need to
+    understand a bit more about how the neighbour cache works. 
 
-**** neigh_resolve_output
+    A =struct neighbour= contains several important fields. The
+    =nud_state= field as we saw above, an =output= function, and an =ops=
+    structure. Recall how earlier we saw that =__neigh_create= is called
+    from =ip_finish_output2= if no existing entry was found in the
+    cache.  When =__neigh_creaet= is called a neighbour is allocated
+    with its =output= [[https://github.com/torvalds/linux/blob/v3.13/net/core/neighbour.c#L294][function initially set]] to =neigh_blackhole=.  As
+    the =__neigh_create= code progresses, it will adjust the value of
+    =output= to point to appropriate =output= functions based on the state
+    of the neighbour. 
+
+    For example, =neigh_connect= will be used to set the =output= pointer
+    to =neigh->ops->connected_output= when the code determines the
+    neighbour to be connected. Alternatively, =neigh_suspect= will be
+    used to set the output pointer to =neigh->ops->output= when the code
+    suspects that the neighbour may be down (for example if has been
+    more than =/proc/sys/net/ipv4/neigh/default/delay_first_probe_time=
+    seconds since a probe was sent). 
+
+    In other words: =neigh->output= is set to another pointer, either
+    =neigh->ops_connected_output= or =neigh->ops->output= depending on
+    it’s state. Where does =neigh->ops= come from? 
+
+    After the neighbour is allocated, =arp_constructor= (from
+    [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/arp.c#L220-L313][./net/ipv4/arp.c]]) is called to set some of the fields of the
+    =struct neighbour=. In particular, this function checks the device
+    associated with this neighbour and if the device exposes a
+    =header_ops= structure that contains a =cache= function ([[https://github.com/torvalds/linux/blob/v3.13/net/ethernet/eth.c#L342-L348][ethernet
+    devices do]]) =neigh->ops=  is set to the following structure
+    defined in [[https://github.com/torvalds/linux/blob/v3.13/net/ipv4/arp.c#L138-L144][./net/ipv4/arp.c]]: 
+    
+    #+BEGIN_SRC c
+      static const struct neigh_ops arp_hh_ops = {
+              .family =               AF_INET,
+              .solicit =              arp_solicit,
+              .error_report =         arp_error_report,
+              .output =               neigh_resolve_output,
+              .connected_output =     neigh_resolve_output,
+      };    
+    #+END_SRC
+
+    So, regardless of whether or not the neighbour is considered
+    “connected” or “suspect” by the neighbour cache code, the
+    =neigh_resolve_output= function will be attached to =neigh->output=
+    and will be called when =n->output= is called above. 
+
+**** =neigh_resolve_output=
+     This function’s purpose is to attempt to resolve a neighbour
+     that is not connected or one which is connected, but has no
+     cached hardware header. Let’s take a look at how this function
+     works: 
+
+     #+BEGIN_SRC c
+       /* Slow and careful. */
+
+       int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
+       {
+               struct dst_entry *dst = skb_dst(skb);
+               int rc = 0;
+
+               if (!dst)
+                       goto discard;
+
+               if (!neigh_event_send(neigh, skb)) {
+                       int err;
+                       struct net_device *dev = neigh->dev;
+                       unsigned int seq;     
+     #+END_SRC
+
+     The code starts by doing some basic checks and proceeds to
+     calling =neigh_event_send=. The =neigh_event_send= function is short
+     wrapper around =__neigh_event_send= which will do the heavy lifting
+     to resolve the neighbour. You can read the source for
+     =__neigh_event_send= in [[https://github.com/torvalds/linux/blob/v3.13/net/core/neighbour.c#L964-L1028][./net/core/neighbour.c]], but the high-level
+     takeaway from the code is that there are three cases users will
+     most interested in: 
+     1. Neighbours in state =NUD_NONE= (the default state when
+        allocated) will cause an immediate ARP request to be sent
+        assuming the values set in
+        =/proc/sys/net/ipv4/neigh/default/app_solicit= and
+        =/proc/sys/net/ipv4/neigh/default/mcast_solicit= allow probes to
+        be sent (if not, the state is marked as =NUD_FAILED=). The
+        neighbour state will be updated and set to =NUD_INCOMPLETE=.
+     2. Neighbours in state =NUD_STALE= will be updated to =NUD_DELAYED=
+        and a timer will be set to probe them later (later is the time
+        now + =/proc/sys/net/ipv4/neigh/default/delay_first_probe_time=
+        seconds).
+     3. Any neighbours in =NUD_INCOMPLETE= (including things from case 1
+        above) will be checked to ensure that the number of queued
+        packets for an unresolved neighbour is less than or equal to
+        =/proc/sys/net/ipv4/neigh/default/unres_qlen=. If there are
+        more, packets are dequeued and dropped until the length is
+        below or equal to the value in proc. A statistics counter in
+        the neighbour cache stats is bumped for all occurrences of
+        this. 
+
+     If an immediate ARP probe is needed it will be
+     sent. =__neigh_event_send= will return either =0= indicating that the
+     neighbour is considered “connected” or “delayed” or =1=
+     otherwise. The return value of =0= allows =neigh_resolve_output= to
+     continue: 
+
+     #+BEGIN_SRC c
+       if (dev->header_ops->cache && !neigh->hh.hh_len)
+                               neigh_hh_init(neigh, dst);     
+     #+END_SRC
+
+     If the device’s protocol implementation (ethernet in our case)
+     associated with the neighbour supports caching the hardware
+     header and it is currently not cached, the call to =neigh_hh_init=
+     will cache it. 
+
+     #+BEGIN_SRC c
+       do {
+                               __skb_pull(skb, skb_network_offset(skb));
+                               seq = read_seqbegin(&neigh->ha_lock);
+                               err = dev_hard_header(skb, dev, ntohs(skb->protocol),
+                                                     neigh->ha, NULL, skb->len);
+                       } while (read_seqretry(&neigh->ha_lock, seq));     
+     #+END_SRC
+
+     Next, a [[https://en.wikipedia.org/wiki/Seqlock][seqlock]] is used to synchronize access to the neighbour
+     structure’s hardware address which will be read by
+     =dev_hard_header= when attempting to create the ethernet header for
+     the skb. Once the seqlock has allowed execution to continue,
+     error checking takes place: 
+     
+     #+BEGIN_SRC c
+       if (err >= 0)
+                               rc = dev_queue_xmit(skb);
+                       else
+                               goto out_kfree_skb;
+               }     
+     #+END_SRC
+
+     If the ethernet header was written without returning an error,
+     the skb is handed down to =dev_queue_xmit= to pass through the
+     Linux network device subsystem for transmit. If there was an
+     error, a =goto= will drop the skb, set the return code and return
+     the error: 
+
+     #+BEGIN_SRC c
+       out:
+               return rc;
+       discard:
+               neigh_dbg(1, "%s: dst=%p neigh=%p\n", __func__, dst, neigh);
+       out_kfree_skb:
+               rc = -EINVAL;
+               kfree_skb(skb);
+               goto out;
+       }
+       EXPORT_SYMBOL(neigh_resolve_output);     
+     #+END_SRC
+
+     Before we proceed into the Linux network device subsystem, let’s
+     take a look at some files for monitoring and turning the IP
+     protocol layer. 
 
 *** Monitoring: IP protocol layer
 
-**** /proc/net/snmp
+**** =/proc/net/snmp=
+     #+CAPTION: Monitor detailed IP protocol statistics by reading =/proc/net/snmp=.
+     #+BEGIN_SRC sh
+       $ cat /proc/net/snmp
+       Ip: Forwarding DefaultTTL InReceives InHdrErrors InAddrErrors ForwDatagrams InUnknownProtos InDiscards InDelivers OutRequests OutDiscards OutNoRoutes ReasmTimeout ReasmReqds ReasmOKs ReasmFails FragOKs FragFails FragCreates
+       Ip: 1 64 25922988125 0 0 15771700 0 0 25898327616 22789396404 12987882 51 1 10129840 2196520 1 0 0 0
+       ...     
+     #+END_SRC
 
-**** /proc/net/netstat
+     This file contains statistics for several protocol layers. The IP
+     protocol layer appears first. The first line contains space
+     separate names for each of the corresponding values in the next
+     line. 
+
+     In the IP protocol layer, you will find statistics counters being
+     bumped. Those counters are referenced by a C enum. All of the
+     valid enum values and the field names they correspond to in
+     =/proc/net/snmp= can be found in [[https://github.com/torvalds/linux/blob/v3.13/include/uapi/linux/snmp.h#L10-L59][include/uapi/linux/snmp.h]]:
+
+     #+BEGIN_SRC c
+       enum
+       {
+         IPSTATS_MIB_NUM = 0,
+       /* frequently written fields in fast path, kept in same cache line */
+         IPSTATS_MIB_INPKTS,     /* InReceives */
+         IPSTATS_MIB_INOCTETS,     /* InOctets */
+         IPSTATS_MIB_INDELIVERS,     /* InDelivers */
+         IPSTATS_MIB_OUTFORWDATAGRAMS,   /* OutForwDatagrams */
+         IPSTATS_MIB_OUTPKTS,      /* OutRequests */
+         IPSTATS_MIB_OUTOCTETS,      /* OutOctets */
+
+         /* ... */     
+     #+END_SRC
+
+     Some interesting statistics:
+     - =OutRequests=: Incremented each time an IP packet is attempted
+       to be sent. It appears that this is incremented for every send,
+       successful or not.
+     - =OutDiscards=: Incremented each time an IP packet is
+       discarded. This can happen if appending data to the skb (for
+       corked sockets) fails, or if the layers below IP return an
+       error.
+     - =OutNoRoute=: Incremented in several places, for example in the
+       UDP protocol layer (=udp_sendmsg=) if no route can be generated
+       for a given destination. Also incremented when an application
+       calls “connect” on a UDP socket but no route can be found.
+     - =FragOKs=: Incremented once per packet that is fragmented. For
+       example, a packet split into 3 fragments will cause this
+       counter to be incremented once.
+     - =FragCreates=: Incremented once per fragment that is
+       created. For example, a packet split into 3 fragments will
+       cause this counter to be incremented thrice.
+     - =FragFails=: Incremented if fragmentation was attempted, but is
+       not permitted (because the “Don’t Fragment” bit is
+       set). Also incremented if outputting the fragment fails. 
+
+**** =/proc/net/netstat=
+     #+CAPTION: Monitor extended IP protocol statistics by reading =/proc/net/netstat=.
+     #+BEGIN_SRC sh
+       $ cat /proc/net/netstat | grep IpExt
+       IpExt: InNoRoutes InTruncatedPkts InMcastPkts OutMcastPkts InBcastPkts OutBcastPkts InOctets OutOctets InMcastOctets OutMcastOctets InBcastOctets OutBcastOctets InCsumErrors InNoECTPkts InECT0Pktsu InCEPkts
+       IpExt: 0 0 0 0 277959 0 14568040307695 32991309088496 0 0 58649349 0 0 0 0 0     
+     #+END_SRC
+
+     The format is similar to =/proc/net/snmp=, except the lines are
+     prefixed with =IpExt=. 
+
+     Some interesting statistics:
+     - =OutMcastPkts=: Incremented each time a packet destined for a
+       multicast address is sent.
+     - =OutBcastPkts=: Incremented each time a packet destined for a
+       broadcast address is sent.
+     - =OutOctects=: The number of packet bytes output.
+     - =OutMcastOctets=: The number of multicast packet bytes output.
+     - =OutBcastOctets=: The number of broadcast packet bytes output.
+
+     Note that each of these is incremented in really specific
+     locations in the IP layer. Code gets moved around from time to
+     time and double counting errors or other accounting bugs can
+     sneak in. If these statistics are important to you, you are
+     strongly encouraged to read the IP protocol layer source code for
+     the metrics that are important to you so you understand when they
+     are (and are not) being incremented. 
 
 ** Linux netdevice subsystem
+    Before we pick up on the packet transmit path with =dev_queue_xmit=,
+    let’s take a moment to talk about some important concepts which
+    will appear in the coming sections. 
 
 *** Linux traffic control
+    Linux supports a feature called [[http://tldp.org/HOWTO/Traffic-Control-HOWTO/intro.html][traffic control]]. This feature
+    allows system administrators to control how packets are transmit
+    from a machine. This blog post will not dive into the details of
+    every aspect of Linux traffic control. 
 
-*** dev_queue_xmit and __dev_queue_xmit
+    [[http://tldp.org/HOWTO/Traffic-Control-HOWTO/intro.html][This document]] provides a great in-depth examination of the system,
+    its control, and its features. There a few concepts that are worth
+    mentioning to make the code seen next easier to understand. 
 
-**** netdev_pick_tx
+    The traffic control system contains several different sets of
+    queuing systems that provide different features for controlling
+    traffic flow. Individual queuing systems are commonly called
+    =qdisc= and also known as queuing disciplines. You can think of
+    qdiscs as schedulers; qdiscs decide when and how packets are
+    transmit. 
 
-**** __netdev_pick_tx
+    On Linux every interface has a default qdisc associated with
+    it. For network hardware that supports only a single transmit
+    queue, the default qdisc =pfifo_fast= is used. Network hardware that
+    supports multiple transmit queues uses the default qdisc of
+    =mq=. You can check your system by running =tc qdisc=. 
+
+    It is also important to note that some devices support traffic
+    control in hardware which can allow an administrator to offload
+    traffic control to the network hardware and conserve CPU resources
+    on the system. 
+
+    Now that those ideas have been introduced, let’s proceed down
+    =dev_queue_xmit= from [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L2890-L2894][./net/core/dev.c.]]
+
+*** =dev_queue_xmit= and =__dev_queue_xmit=
+    =dev_queue_xmit= is a simple wrapper around =__dev_queue_xmit=: 
+    
+    #+BEGIN_SRC c
+      int dev_queue_xmit(struct sk_buff *skb)
+      {
+              return __dev_queue_xmit(skb, NULL);
+      }
+      EXPORT_SYMBOL(dev_queue_xmit);    
+    #+END_SRC
+
+    Following that, =__dev_queue_xmit= is where the heavy lifting gets
+    done. Let’s take a look and step through this code piece by
+    piece.  [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L2808-L2825][Follow along]]: 
+
+    #+BEGIN_SRC c
+      static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+      {
+              struct net_device *dev = skb->dev;
+              struct netdev_queue *txq;
+              struct Qdisc *q;
+              int rc = -ENOMEM;
+
+              skb_reset_mac_header(skb);
+
+              /* Disable soft irqs for various locks below. Also
+               ,* stops preemption for RCU.
+               ,*/
+              rcu_read_lock_bh();
+
+              skb_update_prio(skb);    
+    #+END_SRC
+
+    The code above starts out by:
+    1. Declaring variables.
+    2. Preparing the skb to be processed by calling
+       =skb_reset_mac_header=. This resets the skb’s internal pointers
+       so that the ethernet header can be accessed.
+    3. =rcu_read_lock_bh= is called to prepare for reading RCU protected
+       data structures in the code below. [[https://www.kernel.org/doc/Documentation/RCU/checklist.txt][Read more about safely using
+       RCU]].
+    4. =skb_update_prio= is called to set the skb’s priority, if [[https://github.com/torvalds/linux/blob/v3.13/Documentation/cgroups/net_prio.txt][the
+       network priority cgroup is being used.]]
+
+       
+    Now, we’ll get to the more complicated parts of transmitting data
+    ;) 
+    
+    #+BEGIN_SRC c
+      txq = netdev_pick_tx(dev, skb, accel_priv);    
+    #+END_SRC
+
+    Here the code attempts to determine which transmit queue to
+    use. As you’ll see later in this post, some network devices
+    expose multiple transmit queues for transmitting data. Let’s see
+    how this works in detail. 
+
+**** =netdev_pick_tx=
+     The =netdev_pick_tx= code lives in
+     [[https://github.com/torvalds/linux/blob/v3.13/net/core/flow_dissector.c#L397-L417][./net/core/flow_dissector.c]]. Let’s take a look: 
+
+     #+BEGIN_SRC c
+       struct netdev_queue *netdev_pick_tx(struct net_device *dev,
+                                           struct sk_buff *skb,
+                                           void *accel_priv)
+       {
+               int queue_index = 0;
+
+               if (dev->real_num_tx_queues != 1) {
+                       const struct net_device_ops *ops = dev->netdev_ops;
+                       if (ops->ndo_select_queue)
+                               queue_index = ops->ndo_select_queue(dev, skb,
+                                                                   accel_priv);
+                       else
+                               queue_index = __netdev_pick_tx(dev, skb);
+
+                       if (!accel_priv)
+                               queue_index = dev_cap_txqueue(dev, queue_index);
+               }
+
+               skb_set_queue_mapping(skb, queue_index);
+               return netdev_get_tx_queue(dev, queue_index);
+       }     
+     #+END_SRC
+
+     As you can see above, if the network device supports only a
+     single TX queue, the more complex code is skipped and that single
+     TX queue is returned. Most devices used on higher end servers
+     will have multiple TX queues. There are two cases for devices
+     with multiple TX queues: 
+
+     1. The driver implements =ndo_select_queue=, which can be used to
+        choose a TX queue more intelligently in a hardware or feature
+        specific way, or
+     2. The driver does not implement =ndo_select_queue=, so the kernel
+        should pick the device itself. 
+
+
+     As of the 3.13 kernel, not many drivers implement
+     =ndo_select_queue=. The bnx2x and ixgbe drivers implement this
+     function, but it is only used for [[https://en.wikipedia.org/wiki/Fibre_Channel_over_Ethernet][fibre channel over ethernet
+     (FCoE)]] . In light of this, let’s assume that the network device
+     does not implement =ndo_select_queue= and/or that FCoE is not being
+     used. In that case, the kernel will choose the tx queue with
+     =__netdev_pick_tx=. 
+
+     Once =__netdev_pick_tx= determines what the queue is index,
+     =skb_set_queue_mapping= will cache that value (it will be used
+     later in the traffic control code) and =netdev_get_tx_queue= will
+     look up and return a pointer to that queue. Let’s take a look at
+     how =__netdev_pick_tx= works before going back up to
+     =__dev_queue_xmit=. 
+
+**** =__netdev_pick_tx=
+     Let’s take a look at how the kernel chooses the TX queue to use
+     for transmitting data.  From [[https://github.com/torvalds/linux/blob/v3.13/net/core/flow_dissector.c#L375-L395][./net/core/flow_dissector.c]]: 
+
+     #+BEGIN_SRC c
+       u16 __netdev_pick_tx(struct net_device *dev, struct sk_buff *skb)
+       {
+               struct sock *sk = skb->sk;
+               int queue_index = sk_tx_queue_get(sk);
+
+               if (queue_index < 0 || skb->ooo_okay ||
+                   queue_index >= dev->real_num_tx_queues) {
+                       int new_index = get_xps_queue(dev, skb);
+                       if (new_index < 0)
+                               new_index = skb_tx_hash(dev, skb);
+
+                       if (queue_index != new_index && sk &&
+                           rcu_access_pointer(sk->sk_dst_cache))
+                               sk_tx_queue_set(sk, new_index);
+
+                       queue_index = new_index;
+               }
+
+               return queue_index;
+       }     
+     #+END_SRC
+
+     The code begins first by checking if the transmit queue has
+     already been cached on the socket by calling =sk_tx_queue_get=, If
+     it hasn’t been cached, -1 is returned. 
+
+     The next if-statement checks if any of the following are true:
+     - The =queue_index= is < 0. This will happen if the queue hasn’t
+       been set yet.
+     - If the =ooo_okay= flag is set. If this flag is set, this means
+       that out of order packets are allowed now. The protocol layers
+       must set this flag appropriately. The TCP protocol layer sets
+       this flag when all outstanding packets for a flow have been
+       acknowledged. When this happens, the kernel can choose a
+       different TX queue for this packet. The UDP protocol layer does
+       not set this flag – so UDP packets will never have =ooo_okay= set
+       to a non-zero value.
+     - If the queue index is larger than the number of queues. This
+       can happen if the user has recently changed the queue count on
+       the device via =ethtool=. More on this later. 
+
+
+     In any of those cases, the code descends into the slow path to
+     get the transmit queue. This begins with =get_xps_queue= which
+     attempts to use a user-configured map linking transmit queues to
+     CPUs. This is called “Transmit Packet Steering.” We’ll look
+     more closely at what Transmit Packet Steering (XPS) is and how it
+     works shortly. 
+
+     If =get_xps_queue= returns -1 because this kernel does not support
+     XPS, or XPS was not configured by the system administrator, or
+     the mapping configured refers to an invalid queue the code will
+     continue on to call =skb_tx_hash=. 
+
+     Once the queue is selected by either XPS or by the kernel
+     automatically with =skb_tx_hash=, the queue is cached on the socket
+     object with =sk_tx_queue_set= and returned. Let’s see how XPS and
+     =skb_tx_hash= work before continuing through =dev_queue_xmit=. 
 
 ***** Transmit Packet Steering (XPS)
+      Transmit Packet Steering (XPS) is a feature that allows the
+      system administrator to determine which CPUs can process
+      transmit operations for each available transmit queue supported
+      by the device. The aim of this feature is mainly to avoid lock
+      contention when processing transmit requests. Other benefits
+      like reducing cache evictions and avoiding remote memory access
+      on [[https://en.wikipedia.org/wiki/Non-uniform_memory_access][NUMA machines]] are also expected when using XPS. 
 
-***** skb_tx_hash
+      You can read more about how XPS works by [[https://github.com/torvalds/linux/blob/v3.13/Documentation/networking/scaling.txt#L364-L422][checking the kernel
+      documentation for XPS]]. We’ll examine how to tune XPS for your
+      system below, but for now, all you need to know is that to
+      configure XPS the system administrator can define a bitmap
+      mapping transmit queues to CPUs. 
 
-*** Resuming __dev_queue_xmit
+      The function call in the code above to =get_xps_queue= will
+      consult this user-specified map in order to determine which
+      transmit queue should be used. If =get_xps_queue= returns -1,
+      =skb_tx_hash= will be used instead. If =get_xps_queue= returns -1,
+      =skb_tx_hash= will be used instead. 
 
-*** __dev_xmit_skb
+***** =skb_tx_hash=
+      If XPS is not included in the kernel, or is not configured, or
+      suggests a queue that is not available (because perhaps the user
+      adjusted the queue count) =skb_tx_hash= takes over to determine
+      which queue the data should be sent on. Understanding precisely
+      how =skb_tx_hash= works is important depending on your transmit
+      workload. Note that this code has been adjusted over time, so if
+      you are using a different kernel version than this document, you
+      should consult your kernel source directly. 
+
+      Let’s take a look at how it works, from
+      [[https://github.com/torvalds/linux/blob/v3.13/include/linux/netdevice.h#L2331-L2340][./include/linux/netdevice.h]]. 
+
+      #+BEGIN_SRC c
+        /*
+         ,* Returns a Tx hash for the given packet when dev->real_num_tx_queues is used
+         ,* as a distribution range limit for the returned value.
+         ,*/
+        static inline u16 skb_tx_hash(const struct net_device *dev,
+                                      const struct sk_buff *skb)
+        {
+                return __skb_tx_hash(dev, skb, dev->real_num_tx_queues);
+        }      
+      #+END_SRC
+
+      The code simply calls down to =__skb_tx_hash=, from
+      [[https://github.com/torvalds/linux/blob/v3.13/net/core/flow_dissector.c#L239-L271][./net/core/flow_dissector.c]]. There’s some interesting code in
+      this function, so let’s take a look: 
+
+      #+BEGIN_SRC c
+        /*
+         ,* Returns a Tx hash based on the given packet descriptor a Tx queues' number
+         ,* to be used as a distribution range.
+         ,*/
+        u16 __skb_tx_hash(const struct net_device *dev, const struct sk_buff *skb,
+                          unsigned int num_tx_queues)
+        {
+                u32 hash;
+                u16 qoffset = 0;
+                u16 qcount = num_tx_queues;
+
+                if (skb_rx_queue_recorded(skb)) {
+                        hash = skb_get_rx_queue(skb);
+                        while (unlikely(hash >= num_tx_queues))
+                                hash -= num_tx_queues;
+                        return hash;
+                }      
+      #+END_SRC
+
+      The first if stanza in this function is an interesting short
+      circuit. The function name =skb_rx_queue_recorded= is a bit
+      misleading. An skb has a =queue_mapping= field that is used both
+      for rx and tx. At any rate, this if statement can be true if
+      your system is receiving packets and forwarding them
+      elsewhere. If that isn’t the case, the code continues. 
+
+      #+BEGIN_SRC c
+        if (dev->num_tc) {
+                        u8 tc = netdev_get_prio_tc_map(dev, skb->priority);
+                        qoffset = dev->tc_to_txq[tc].offset;
+                        qcount = dev->tc_to_txq[tc].count;
+                }      
+      #+END_SRC
+
+      To understand this piece of code, it is important to mention
+      that a program can set the priority of data sent on a
+      socket. This can be done by using =setsockopt= with the =SOL_SOCKET=
+      and =SO_PRIORITY= level and optname, respectively. See the
+      [[http://man7.org/linux/man-pages/man7/socket.7.html][socket(7) man page]] for more information about =SO_PRIORITY=. 
+
+      Note that if you have used the =setsockopt= option =IP_TOS= to set
+      the TOS flags on the IP packets sent on a particular socket (or
+      on a per-packet basis if passed as an ancillary message to
+      =sendmsg=) in your application, the kernel will translate the TOS
+      options set by you to a priority which end up in
+      =skb->priority=. 
+
+      As was mentioned earlier, some network devices support hardware
+      based traffic control systems. If =num_tc= is non-zero, that means
+      this device supports hardware based traffic control. 
+
+      If that number is non-zero it means that this device supports
+      hardware based traffic control. The priority map which maps
+      packet priority to hardware based traffic control will be
+      consulted. The appropriate traffic class for the data’s
+      priority will be selected based on this map. 
+
+      Next, the range of appropriate transmit queues for the traffic
+      class will be generated. They will be used to determine the
+      transmit queue. 
+
+      If =num_tc= was zero (because the network device does not support
+      hardware based traffic control), the =qcount= and =qoffset=
+      variables are set to the number of transmit queues and 0,
+      respectively. 
+
+      Using =qcount= and =qoffset=, the index of the transmit queue will
+      be calculated: 
+
+      #+BEGIN_SRC c
+        if (skb->sk && skb->sk->sk_hash)
+                        hash = skb->sk->sk_hash;
+                else
+                        hash = (__force u16) skb->protocol;
+                hash = __flow_hash_1word(hash);
+
+                return (u16) (((u64) hash * qcount) >> 32) + qoffset;
+        }
+        EXPORT_SYMBOL(__skb_tx_hash);      
+      #+END_SRC
+
+      Finally, the appropriate queue index is returned back up to
+      =__netdev_pick_tx=. 
+
+*** Resuming =__dev_queue_xmit=
+    At this point the appropriate transmit queue has been selected.  
+
+    #+BEGIN_SRC c
+      q = rcu_dereference_bh(txq->qdisc);
+
+      #ifdef CONFIG_NET_CLS_ACT
+              skb->tc_verd = SET_TC_AT(skb->tc_verd, AT_EGRESS);
+      #endif
+              trace_net_dev_queue(skb);
+              if (q->enqueue) {
+                      rc = __dev_xmit_skb(skb, q, dev, txq);
+                      goto out;
+              }    
+    #+END_SRC
+
+    It starts by obtaining a reference to the queuing discipline
+    associated with this queue. Recall that earlier we saw that the
+    default for single transmit queue devices is the =pfifo_fast= qdisc,
+    whereas for multiqueue devices it is the =mq= qdisc. 
+
+    Next, the code assigns a traffic classification “verdict” to the
+    outgoing data, if the packet classification API has been enabled
+    in your kernel. Next, the queue discipline is checked to see if
+    there is a way to queue data. Some queuing disciplines like the
+    =noqueue= qdisc do not have a queue. If there is a queue, the code
+    calls down to =__dev_xmit_skb= to continue processing the data for
+    transmit. Afterward, execution jumps to the end of this
+    function. We’ll take a look at =__dev_xmit_skb= shortly. For now,
+    let’s see what happens if there is no queue, starting with a very
+    helpful comment: 
+
+    #+BEGIN_SRC c
+      /* The device has no queue. Common case for software devices:
+                 loopback, all the sorts of tunnels...
+
+                 Really, it is unlikely that netif_tx_lock protection is necessary
+                 here.  (f.e. loopback and IP tunnels are clean ignoring statistics
+                 counters.)
+                 However, it is possible, that they rely on protection
+                 made by us here.
+
+                 Check this and shot the lock. It is not prone from deadlocks.
+                 Either shot noqueue qdisc, it is even simpler 8)
+               ,*/
+              if (dev->flags & IFF_UP) {
+                      int cpu = smp_processor_id(); /* ok because BHs are off */    
+    #+END_SRC
+
+    As the comment illustrates, the only devices that could have a
+    qdisc with no queues are the loopback device and tunnel
+    devices. If the device is currently up, then the current CPU is
+    saved. It used for the next check which is a bit tricky, let’s
+    take a look: 
+
+    #+BEGIN_SRC c
+      if (txq->xmit_lock_owner != cpu) {
+
+        if (__this_cpu_read(xmit_recursion) > RECURSION_LIMIT)
+          goto recursion_alert;    
+    #+END_SRC
+
+    There’s two cases: the transmit lock on this device queue is
+    owned by this CPU or not. If so, a counter variable
+    =xmit_recursion=, which is allocated per-CPU, is checked here to
+    determine if the count is over the =RECURSION_LIMIT=. It is possible
+    that one program could attempt to send data and get preempted
+    right around this place in the code. Another program could be
+    selected by the scheduler to run. If that second program attempts
+    to send data as well and lands here. So, the =xmit_recursion=
+    counter is used to prevent more than =RECURSION_LIMIT= programs from
+    racing here to transmit data. Let’s keep going: 
+
+    #+BEGIN_SRC c
+      HARD_TX_LOCK(dev, txq, cpu);
+
+                              if (!netif_xmit_stopped(txq)) {
+                                      __this_cpu_inc(xmit_recursion);
+                                      rc = dev_hard_start_xmit(skb, dev, txq);
+                                      __this_cpu_dec(xmit_recursion);
+                                      if (dev_xmit_complete(rc)) {
+                                              HARD_TX_UNLOCK(dev, txq);
+                                              goto out;
+                                      }
+                              }
+                              HARD_TX_UNLOCK(dev, txq);
+                              net_crit_ratelimited("Virtual device %s asks to queue packet!\n",
+                                                   dev->name);
+                      } else {
+                              /* Recursion is detected! It is possible,
+                               ,* unfortunately
+                               ,*/
+      recursion_alert:
+                              net_crit_ratelimited("Dead loop on virtual device %s, fix it urgently!\n",
+                                                   dev->name);
+                      }
+              }    
+    #+END_SRC
+
+    The remainder of the code starts by trying to take the transmit
+    lock. The device’s transmit queue to be used is checked to see if
+    transmit is stopped. If not, the =xmit_recursion= variable is
+    incremented and the data is passed down closer to the device to be
+    transmit. We’ll see =dev_hard_start_xmit= in more detail
+    later. Once this completes, the locks are released and a warning
+    is printed. 
+    
+    Alternatively, if the current CPU is transmit lock owner, or if
+    the =RECURSION_LIMIT= is hit, no transmit is done, but a warning is
+    printed. The remaining code in the function sets the error code
+    and returns. 
+
+    Since we are interested in real ethernet devices, let’s continue
+    down the code path that would have been taken for those earlier
+    via =__dev_xmit_skb=. 
+
+*** =__dev_xmit_skb=
+    And now we descend into =__dev_xmit_skb= from [[https://github.com/torvalds/linux/blob/v3.13/net/core/dev.c#L2684-L2745][./net/core/dev.c]] armed
+    with the queuing discipline, network device, and transmit queue
+    reference: 
+
+    #+BEGIN_SRC c
+      static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
+                                       struct net_device *dev,
+                                       struct netdev_queue *txq)
+      {
+              spinlock_t *root_lock = qdisc_lock(q);
+              bool contended;
+              int rc;
+
+              qdisc_pkt_len_init(skb);
+              qdisc_calculate_pkt_len(skb, q);
+              /*
+               ,* Heuristic to force contended enqueues to serialize on a
+               ,* separate lock before trying to get qdisc main lock.
+               ,* This permits __QDISC_STATE_RUNNING owner to get the lock more often
+               ,* and dequeue packets faster.
+               ,*/
+              contended = qdisc_is_running(q);
+              if (unlikely(contended))
+                      spin_lock(&q->busylock);    
+    #+END_SRC
+    
+    This code begins by using =qdisc_pkt_len_init= and
+    =qdisc_calculate_pkt_len= to compute an accurate length for the data
+    that will be used by the qdisc later. This is necessary for skbs
+    that will pass through hardware based send offloading (such as UDP
+    Fragmentation Offloading, as we saw earlier) as the additional
+    headers that will be added when fragmentation occurs need to be
+    taken into account. 
+
+    Next, a lock is used to help reduce contention on the qdisc’s
+    main lock (a second lock we’ll see later). If qdisc is currently
+    running, then other programs attempting to transmit will contend
+    on the qdisc’s busylock. This allows the running qdisc to process
+    packets and contend with a smaller number of programs for the
+    second, main lock. This trick increases throughput as the number
+    of contenders is reduced. You can read the original commit message
+    describing this [[https://github.com/torvalds/linux/commit/79640a4ca6955e3ebdb7038508fa7a0cd7fa5527][here]]. Next the main lock is taken:
+
+    #+BEGIN_SRC c
+      spin_lock(root_lock);    
+    #+END_SRC
+
+    Now, we approach an if statement that handles 3 possible cases: 
+    1. The qdisc is deactivated.
+    2. The qdisc allows packets to bypass the queuing system, there
+       are no other packets to send, and the qdisc is not currently
+       running. A qdisc allows packet bypass for “work-conserving”
+       qdisc - in other words, a qdisc that does not delay packet
+       transmit for traffic shaping purposes.
+    3. All other cases.
+
+    Let’s take a look at what happens in each of these cases, in
+    order starting with a deactivated qdisc: 
+
+    #+BEGIN_SRC c
+      if (unlikely(test_bit(__QDISC_STATE_DEACTIVATED, &q->state))) {
+                      kfree_skb(skb);
+                      rc = NET_XMIT_DROP;    
+    #+END_SRC
+
+    This is straightforward. If the qdisc is deactivated, free the
+    data and set the return code to =NET_XMIT_DROP=. Next, a qdisc
+    allowing packet bypass, with no other outstanding packets, that is
+    not currently running: 
+
+    #+BEGIN_SRC c
+      } else if ((q->flags & TCQ_F_CAN_BYPASS) && !qdisc_qlen(q) &&
+                         qdisc_run_begin(q)) {
+                      /*
+                       ,* This is a work-conserving queue; there are no old skbs
+                       ,* waiting to be sent out; and the qdisc is not running -
+                       ,* xmit the skb directly.
+                       ,*/
+                      if (!(dev->priv_flags & IFF_XMIT_DST_RELEASE))
+                              skb_dst_force(skb);
+
+                      qdisc_bstats_update(q, skb);
+
+                      if (sch_direct_xmit(skb, q, dev, txq, root_lock)) {
+                              if (unlikely(contended)) {
+                                      spin_unlock(&q->busylock);
+                                      contended = false;
+                              }
+                              __qdisc_run(q);
+                      } else
+                              qdisc_run_end(q);
+
+                      rc = NET_XMIT_SUCCESS;    
+    #+END_SRC
+
+    This if statement is a bit tricky. The entire statement evaluates
+    as =true= if all of the following are true: 
+    1. =q->flags & TCQ_F_CAN_BYPASS=: The qdisc allows packets to bypass
+       the queuing system. This will be true for “work-conserving”
+       qdiscs; i.e. qdiscs that do not delay packet transmit for
+       traffic shaping purposes are considered “work-conserving” and
+       allow packet bypass. The =pfifo_fast= qdisc allows packets to
+       bypass the queuing system.
+    2. =!qdisc_qlen(q)=: The qdisc’s queue has no data in it that is
+       waiting to be transmit.
+    3. =qdisc_run_begin(p)=: This function call will either set the
+       qdisc’s state as “running” and return true or return false
+       if the qdisc was already running. 
+
+
+    If all of the above evaluate to true, then:
+    - The =IFF_XMIT_DST_RELEASE= flag is checked. If enabled, this flag
+      indicates that the kernel is allowed to free the skb’s
+      destination cache structure. The code in this function checks if
+      the flag is disabled and forces a reference count on that
+      structure.
+    - =qdisc_bstats_update= is used to increment the number of bytes and
+      packet sent by the qdisc.
+    - =sch_direct_xmit= is used to attempt to transmit the
+      packet. We’ll dive more into =sch_direct_xmit= shortly as it is
+      used in the slower code path, too. 
+
+
+    The return value of =sch_direct_xmit= is checked for two cases:
+    1. The queue is not empty (=>0= returned). In this case, lock
+       preventing contention from other programs is released and
+       =__qdisc_run= is called to restart the qdisc processing.
+    2. The queue was empty (=0= is returned). In this case =qdisc_run_end=
+       is used to turn off qdisc processing. 
+
+    In either case, the return value =NET_XMIT_SUCCESS= is set as the
+    return code. That wasn’t too bad. Let’s check the last case,
+    which is catch all: 
+    
+    #+BEGIN_SRC c
+      } else {
+                      skb_dst_force(skb);
+                      rc = q->enqueue(skb, q) & NET_XMIT_MASK;
+                      if (qdisc_run_begin(q)) {
+                              if (unlikely(contended)) {
+                                      spin_unlock(&q->busylock);
+                                      contended = false;
+                              }
+                              __qdisc_run(q);
+                      }
+              }    
+    #+END_SRC
+
+    In all other cases:
+    1. Call =skb_dst_force= to force a reference count bump on the
+       skb’s destination cache reference.
+    2. Queue the data to the qdisc by calling the =enqueue= function of
+       the queue disc. Store the return code.
+    3. Call =qdisc_run_begin(p)= to mark the qdisc as running. If it was
+       not already running, the =busylock= is released and
+       =__qdisc_run(p)= is called to start qdisc processing. 
+
+    The function then finishes up by releasing some locks and
+    returning the return code: 
+    
+    #+BEGIN_SRC c
+      spin_unlock(root_lock);
+              if (unlikely(contended))
+                      spin_unlock(&q->busylock);
+              return rc;    
+    #+END_SRC
 
 *** Tuning: Transmit Packet Steering (XPS)
+    
+    For XPS to work, it must be enabled in the kernel configuration
+    (it is on Ubuntu for kernel 3.13.0), and a bitmask describing
+    which CPUs should process packets for a given interface and TX
+    queue. 
 
+    These bitmasks are similar to the [[https://blog.packagecloud.io/eng/2016/06/22/monitoring-tuning-linux-networking-stack-receiving-data/#receive-packet-steering-rps][RPS]] bitmasks and you can find
+    some [[https://github.com/torvalds/linux/blob/v3.13/Documentation/networking/scaling.txt#L147-L150][documentation]] about these bitmasks in the kernel
+    documentation.
+
+    In short, the bitmasks to modify are found in:
+
+    =/sys/class/net/DEVICE_NAME/queues/QUEUE/xps_cpus=
+
+    So, for eth0 and transmit queue 0, you would modify the file: 
+    =/sys/class/net/eth0/queues/tx-0/xps_cpus= with a hexadecimal
+    number indicating which CPUs should process transmit completions
+    from =eth0= ’s transmit queue 0. As the  [[https://github.com/torvalds/linux/blob/v3.13/Documentation/networking/scaling.txt#L412-L422][documentation points
+    out]], XPS may be unnecessary in certain configurations. 
+    
 ** Queuing disciplines!
 
 *** qdisc_run_begin and qdisc_run_end
