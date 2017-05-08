@@ -1,0 +1,921 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Linux网络子系统学习笔记</h1>
+          <p>简单阐述了Linux网络子系统的流程，包含基本数据结构，数据发送与接收等。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">LINUX网络子系统学习笔记</h1>
+
+
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1">重要数据结构</h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1"><code>struct softnet_data</code></h3>
+<div class="outline-text-3" id="text-1-1">
+<div class="org-src-container">
+
+<pre class="src src-c">/*
+ * Incoming packets are placed on per-cpu queues
+ */
+struct softnet_data {
+        struct Qdisc            *output_queue;
+        struct Qdisc            **output_queue_tailp;
+        struct list_head        poll_list; /*有需要处理报文的NAPI设备*/
+        struct sk_buff          *completion_queue;
+        struct sk_buff_head     process_queue;
+
+        /* stats */
+        unsigned int            processed;
+        unsigned int            time_squeeze;
+        unsigned int            cpu_collision;
+        unsigned int            received_rps;
+
+#ifdef CONFIG_RPS
+        struct softnet_data     *rps_ipi_list;
+
+        /* Elements below can be accessed between CPUs for RPS */
+        struct call_single_data csd ____cacheline_aligned_in_smp;
+        struct softnet_data     *rps_ipi_next;
+        unsigned int            cpu;
+        unsigned int            input_queue_head;  /*旧接口的输入队列*/
+        unsigned int            input_queue_tail;
+#endif
+        unsigned int            dropped;
+        //在incoming frame被Driver处理之前，存储的位置
+        struct sk_buff_head     input_pkt_queue;
+        struct napi_struct      backlog; /*虚拟的NAPI设备 backlog*/
+
+#ifdef CONFIG_NET_FLOW_LIMIT
+        struct sd_flow_limit __rcu *flow_limit;
+#endif
+};
+
+/*
+ * Structure for NAPI scheduling similar to tasklet but with weighting
+ */
+struct napi_struct {
+        /* The poll_list must only be managed by the entity which
+         * changes the state of the NAPI_STATE_SCHED bit.  This means
+         * whoever atomically sets that bit can add this napi_struct
+         * to the per-cpu poll_list, and whoever clears that bit
+         * can remove from the list right before clearing the bit.
+         */
+        //This is a bidirectional list of devices with input frames waiting to be processed.
+        struct list_head        poll_list;
+
+        unsigned long           state;
+        int                     weight;
+        unsigned int            gro_count;
+        int                     (*poll)(struct napi_struct *, int);
+#ifdef CONFIG_NETPOLL
+        spinlock_t              poll_lock;
+        int                     poll_owner;
+#endif
+        //represents a device that has scheduled net_rx_action for execution on the associated CPU.
+        struct net_device       *dev;
+        struct sk_buff          *gro_list;
+        struct sk_buff          *skb;
+        struct list_head        dev_list;
+        struct hlist_node       napi_hash_node;
+        unsigned int            napi_id;
+};
+</pre>
+</div>
+<p>
+定义一个 <code>per_cpu</code> 变量 <code>softnet_data</code>
+</p>
+<pre class="example">
+DECLARE_PER_CPU(struct softnet_data,softnet_data);
+</pre>
+<p>
+在函数  <code>net_dev_init</code> 对其进行了初始化。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2"><code>struct sk_buff</code></h3>
+<div class="outline-text-3" id="text-1-2">
+
+<figure>
+<p><img src="http://blog.ifjy.me/images/2016/2016071101.png" class="img-responsive" alt="2016071101.png">
+</p>
+</figure>
+</div>
+</div>
+<div id="outline-container-sec-1-3" class="outline-3">
+<h3 id="sec-1-3"><code>struct net_device</code></h3>
+</div>
+<div id="outline-container-sec-1-4" class="outline-3">
+<h3 id="sec-1-4"><code>struct netdev_queue</code></h3>
+<div class="outline-text-3" id="text-1-4">
+<p>
+encapsulates all of the information about a single transmit
+queue. 结构定义如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">struct netdev_queue {
+/*
+ * read mostly part
+ */
+        struct net_device       *dev;
+        struct Qdisc __rcu      *qdisc;
+        struct Qdisc            *qdisc_sleeping;
+#ifdef CONFIG_SYSFS
+        struct kobject          kobj;
+#endif
+#if defined(CONFIG_XPS) &amp;&amp; defined(CONFIG_NUMA)
+        int                     numa_node;
+#endif
+/*
+ * write mostly part
+ */
+        spinlock_t              _xmit_lock ____cacheline_aligned_in_smp;
+        int                     xmit_lock_owner;
+        /*
+         * please use this field instead of dev-&gt;trans_start
+         */
+        unsigned long           trans_start;
+
+        /*
+         * Number of TX timeouts for this queue
+         * (/sys/class/net/DEV/Q/trans_timeout)
+         */
+        unsigned long           trans_timeout;
+
+  /*
+   * __QUEUE_STATE_DRV_XOFF is used by drivers to stop the transmit queue.
+   * netif_tx_* functions below are used to manipulate this flag.
+   * __QUEUE_STATE_STACK_XOFF flag is used by the stack to stop the transmit
+   * queue independently.  The netif_xmit_*stopped functions below are called
+   * o check if the queue has been stopped by the driver or stack
+   */
+        unsigned long           state;
+
+#ifdef CONFIG_BQL
+        struct dql              dql;
+#endif
+} ____cacheline_aligned_in_smp;
+</pre>
+</div>
+<p>
+引入这个结构体是为了支持多队列发送，即发送数据被放到不同优先级的队
+列中。
+</p>
+
+
+<figure>
+<p><img src="http://blog.ifjy.me/images/2016/2016110701.png" class="img-responsive" alt="2016110701.png">
+</p>
+</figure>
+
+<p>
+为此，引入了新的接口：
+</p>
+<pre class="example">
+struct net_device *alloc_etherdev_mq(int sizeof_priv, unsigned int queue_count);
+</pre>
+<p>
+其中， 参数 <code>queue_count</code>  表示设备支持的最大传输队列数量。实际使
+用的传输队列的数量保存在 <code>net_device</code> 的 <code>real_num_tx_queues</code> 中。
+为了判断将要发送的数据包应该发送到哪个队列中，调用如下函数：
+</p>
+<pre class="example">
+u16 skb_get_queue_mapping(struct sk_buff *skb);
+</pre>
+<p>
+返回的值范围为 [0, real<sub>num</sub><sub>tx</sub><sub>queue</sub>)。
+针对某个发送队列上的接口如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">struct netdev_queue *netdev_get_tx_queue(struct net_device *dev,
+                                         u16 index);
+
+void netif_tx_start_queue(struct netdev_queue *dev_queue);
+void netif_tx_wake_queue(struct netdev_queue *dev_queue);
+void netif_tx_stop_queue(struct netdev_queue *dev_queue);
+</pre>
+</div>
+<p>
+针对所有队列的接口：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">void netif_tx_start_all_queues(struct net_device *dev);
+void netif_tx_wake_all_queues(struct net_device *dev);
+void netif_tx_stop_all_queues(struct net_device *dev);
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2">接收数据</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1">概述</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+L2层数据包的处理是通过中断来触发的。当中断发生后，内核会调用Driver相应的
+中断处理函数。中断处理函数会立即响应，并将主要工作放到下半部去执行。
+</p>
+<ol class="org-ol">
+<li>拷贝数据包到一个 <code>struct sk_buff</code> 的数据结构里面。 如果使用DMA，
+则只需要初始化一个指针。
+</li>
+<li>初始化一些 <code>sk_buff</code> 所需要的一些参数，供后续上层网络层使用。用
+于标识上层协议处理函数。
+</li>
+<li>更新其他的一些设备相关的参数。
+</li>
+<li>通过调度 <code>NET_RX_SOFTIRQ</code> 软为断来告知内核有新的数据帧到达。
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2">开启和禁用设备</h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+<code>net_device-&gt;state</code> 这个值可以显示网络设备当前的状态， 当为 <code>_
+   _LINK_STATE_START</code> 代表设备已经使能。 <code>_LINK_STATE_XOFF</code> 用于显示地
+开启或关闭数据发送。 接收则没有相关的状态标记来开启或关闭。
+<code>netif_running</code> 用于检查当前网络设备的运行状态。 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-3" class="outline-3">
+<h3 id="sec-2-3">队列</h3>
+<div class="outline-text-3" id="text-2-3">
+<p>
+有两个队列，发送队列和接收队列。 每个队列都有一个指向相关设备的指针
+以及存储数据包的 <code>sk_buff</code> 数据结构。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-4" class="outline-3">
+<h3 id="sec-2-4">通知一个数据包的到来</h3>
+<div class="outline-text-3" id="text-2-4">
+</div><div id="outline-container-sec-2-4-1" class="outline-4">
+<h4 id="sec-2-4-1">通过调用 <code>netif_rx</code> 来通知内核</h4>
+<div class="outline-text-4" id="text-2-4-1">
+<p>
+一般的逻辑如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">skb = dev_alloc_skb(pkt_len + 5);
+... ... ...
+if (skb != NULL) {
+skb-&gt;dev = dev;
+skb_reserve(skb, 2);
+/* Align IP on 16 byte boundaries */
+... ... ...
+/* copy the DATA into the sk_buff structure */
+... ... ...
+skb-&gt;protocol = eth_type_trans(skb, dev);
+netif_rx(skb);
+dev-&gt;last_rx = jiffies;
+... ... ...
+}
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-2-4-2" class="outline-4">
+<h4 id="sec-2-4-2">利用NAPI新机制</h4>
+<div class="outline-text-4" id="text-2-4-2">
+<p>
+NAPI与旧机制的不同点主要有两个地方：
+</p>
+<ol class="org-ol">
+<li>驱动必须提供poll方法。
+</li>
+<li>调用帧的接口
+<div class="org-src-container">
+
+<pre class="src src-c">//直接调用此接口通知内核收到数据帧
+napi_schedule(...); // obsolete: netif_rx_schedule(...);
+
+//或通过分为如下两个调用
+netif_rx_schedule_prep(...)
+__netif_rx_schedule(...)
+</pre>
+</div>
+</li>
+</ol>
+<p>
+当收到数据后，Driver都会将接收帧的设备加入到 <code>poll_list</code> 队列中，并
+调度 <code>NET_RX_SOFTIRQ</code> 软中断执行。 最终会被 =net<sub>rx</sub><sub>action</sub>=。 两者
+之间的差异如下图所示：
+<img src="http://blog.ifjy.me/images/2016/2016032301.png" class="img-responsive" alt="2016032301.png">
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-2-5" class="outline-3">
+<h3 id="sec-2-5"><code>netif_rx</code> 函数流程图</h3>
+<div class="outline-text-3" id="text-2-5">
+<p>
+<code>netif_rx_ni</code> 是非中断环境下运行的版本。
+<img src="http://blog.ifjy.me/images/2016/2016032302.png" class="img-responsive" alt="2016032302.png">
+</p>
+</div>
+</div>
+<div id="outline-container-sec-2-6" class="outline-3">
+<h3 id="sec-2-6">下半部处理</h3>
+<div class="outline-text-3" id="text-2-6">
+<p>
+处理 <code>NET_RX_SOFTIRQ</code> 软中断消息函数 <code>net_rx_action</code> 。
+对于NAPI驱动来说，它会调用driver注册的poll函数。
+<img src="http://blog.ifjy.me/images/2016/2016032303.png" class="img-responsive" alt="2016032303.png"> 
+在 <code>net_dev_init</code> 初始化阶段， 会注册poll函数为 <code>process_backlog</code> 。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-2-7" class="outline-3">
+<h3 id="sec-2-7"><code>netif_receive_skb</code></h3>
+<div class="outline-text-3" id="text-2-7">
+<p>
+此函数是处理帧的具体函数，它的执行逻辑大概如下图所示：
+<img src="http://blog.ifjy.me/images/2016/2016032401.png" class="img-responsive" alt="2016032401.png">
+</p>
+
+<p>
+图中提到的Diverter可以修改数据包的目的地址。
+执行到这个函数后，接收到的数据包将会根据需要传递到L3层去处理。 L3层
+会注册相关的协议处理函数。
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3">发送数据</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1">概述</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+发送数据相关的软中断为： <code>NET_TX_SOFTIRQ</code> ，对应的处理函数为
+<code>net_tx_action</code> 。 <code>softnet_data</code> 也有一个对应的列表 <code>output_queue</code>
+，它代表有数据有发送的设备列表。只有 <code>__LINK_STATE_XOFF</code> 标记被清掉
+的情况下，该设备才会被调度去发送数据。一旦设备被调度去发送数据，则
+会置上这个标记： <code>__LINK_STATE_SCHED</code> 。 <code>dev_queue_xmit</code> 的作用类
+似 <code>netif_rx</code> 。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2">禁用和开启数据传输</h3>
+<div class="outline-text-3" id="text-3-2">
+<p>
+<code>__LINK_STATE_XOFF</code> 这个标记代表当前是否允许数据发送。 主要检查
+<code>net_device-&gt;state</code> 的值。 <code>__LINK_STATE_SCHED</code> 这个标记代码当前是
+否已经调度了数据发送。
+</p>
+</div>
+
+<div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1"><code>netif_start_queue</code></h4>
+<div class="outline-text-4" id="text-3-2-1">
+<p>
+开启当前设备上的数据传输。 当设备停止后，也可以再次调用该
+函数重新开启数据传输。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2"><code>netif_stop_queue</code></h4>
+<div class="outline-text-4" id="text-3-2-2">
+<p>
+停止在当前设备上的数据传输。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-3" class="outline-4">
+<h4 id="sec-3-2-3"><code>netif_queue_stopped</code></h4>
+<div class="outline-text-4" id="text-3-2-3">
+<p>
+检测发送队列的状态：禁用或者开启
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">static inline int netif_queue_stopped(const struct net_device *dev)
+{
+  return test_bit(_ _LINK_STATE_XOFF, &amp;dev-&gt;state);
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-4" class="outline-4">
+<h4 id="sec-3-2-4"><code>netif_wake_queue</code></h4>
+<div class="outline-text-4" id="text-3-2-4">
+<p>
+当传输数据的Buffer不够时，就会暂时关闭数据传输，等到当前这些数据传
+输完成或者有足够的空间传输至少一帧数据时，重新开启数据传输,就需要
+调用些函数。 <code>netif_wake_queue</code> 与 <code>netif_start_queue</code> 相比，除了
+开启数据传输外，还会检查发送队列中是否有数据待传。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-5" class="outline-4">
+<h4 id="sec-3-2-5">停止当前网卡上的数据传输</h4>
+<div class="outline-text-4" id="text-3-2-5">
+<div class="org-src-container">
+
+<pre class="src src-c">netif_carrier_off(...)
+netif_tx_stop_all_queues(...)
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3" class="outline-3">
+<h3 id="sec-3-3">调度数据传输</h3>
+<div class="outline-text-3" id="text-3-3">
+<p>
+内核提供了函数 <code>dev_queue_xmit</code> 来传输一个数据帧，该函数从设备的发
+送队列中拿出一帧数据，并将其传递给 <code>hard_start_xmit</code> 方法。
+<code>dev_queue_xmit</code> 并不总是能够传输数据，比如设备的发送队列被禁用，或
+者无法获得当前发送队列的锁，对于后面这种情况，内核提供了另一个函数
+<code>__netif_schedule</code> 。 一般不直接调用这个函数，而是通过使用如下两个
+函数：
+</p>
+</div>
+
+<div id="outline-container-sec-3-3-1" class="outline-4">
+<h4 id="sec-3-3-1"><code>netif_schedule</code></h4>
+<div class="outline-text-4" id="text-3-3-1">
+<div class="org-src-container">
+
+<pre class="src src-c">static inline void netif_schedule(struct net_device *dev)
+{
+  if (!test_bit(_ _LINK_STATE_XOFF, &amp;dev-&gt;state))
+    _ _netif_schedule(dev);
+}
+</pre>
+</div>
+
+<p>
+一般在驱动代码之外被调用，如 <code>net_tx_action</code> 或传输控制。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-2" class="outline-4">
+<h4 id="sec-3-3-2"><code>netif_wake_queue</code></h4>
+<div class="outline-text-4" id="text-3-3-2">
+<p>
+开启设备的数据发送，如果之前传输已经被调度，再次调用这个函数将是一
+个空操作。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">static inline void netif_wake_queue(struct net_device *dev)
+{
+  ...
+  f (test_and_clear_bit(_ _LINK_STATE_XOFF, &amp;dev-&gt;state))
+    _ _netif_schedule(dev);
+}
+</pre>
+</div>
+
+<p>
+一般在设备驱动中调用。
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4" class="outline-3">
+<h3 id="sec-3-4">Queuing Discipline Interface</h3>
+<div class="outline-text-3" id="text-3-4">
+<p>
+内核使用的一种算法，用于以最有效率的顺序安排数据的发送。每种Traffic
+Control的入队规则都提供了不同的函数指针以供上层调用以完成不同的任务。
+比较重要的函数有：
+</p>
+</div>
+
+<div id="outline-container-sec-3-4-1" class="outline-4">
+<h4 id="sec-3-4-1">enqueue</h4>
+<div class="outline-text-4" id="text-3-4-1">
+<p>
+入队
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4-2" class="outline-4">
+<h4 id="sec-3-4-2">dequeue</h4>
+<div class="outline-text-4" id="text-3-4-2">
+<p>
+出队
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4-3" class="outline-4">
+<h4 id="sec-3-4-3">requeue</h4>
+<div class="outline-text-4" id="text-3-4-3">
+<p>
+重新入队
+</p>
+
+<p>
+每当驱动准备调度数据发送时，通过函数 <code>qdisc_run</code> 来选择下一帧需要传
+输的数据, 这个函数会间接地调用与入队规则相关的 <code>dequeue</code> 虚函数。实
+际的工作实际上在函数 <code>qdisc_restart</code> 里面做的。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">static inline void qdisc_run(struct net_device *dev)
+{
+  while (!netif_queue_stopped(dev) &amp;&amp; qdisc_restart(dev) &lt; 0)
+    /* NOTHING */;
+}
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5" class="outline-3">
+<h3 id="sec-3-5"><code>qdisc_restart</code></h3>
+<div class="outline-text-3" id="text-3-5">
+<p>
+根据各种入队规则的 <code>dequeue</code> 方法的返回值，来采取不同的动作。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">int qdisc_restart(struct net_device *dev)
+{
+  struct Qdisc *q = dev-&gt;qdisc;
+  struct sk_buff *skb;
+  if ((skb = q-&gt;dequeue(q)) != NULL) {
+
+    //传输数据需要两个Lock
+    //dev-&gt;queue_lock 保护quue
+    //dev-&gt;xmit_lock  由hard_start_xmit管理
+
+    if (!spin_trylock(&amp;dev-&gt;xmit_lock)) {
+      //其他CPU已经在通过该设备传送数据了
+    collision:
+      ...
+      goto requeue;
+    }
+    ...
+ requeue:
+    q-&gt;ops-&gt;requeue(skb, q);
+    netif_schedule(dev);
+
+
+    if (!netif_queue_stopped(dev)) {
+      int ret;
+      if (netdev_nit)
+        dev_queue_xmit_nit(skb, dev);
+      ret = dev-&gt;hard_start_xmit(skb, dev);
+      if (ret == NETDEV_TX_OK) {
+        if (!nolock) {
+          dev-&gt;xmit_lock_owner = -1;
+          spin_unlock(&amp;dev-&gt;xmit_lock);
+        }
+        spin_lock(&amp;dev-&gt;queue_lock);
+        return -1;
+      }
+      if (ret == NETDEV_TX_LOCKED &amp;&amp; nolock) {
+        spin_lock(&amp;dev-&gt;queue_lock);
+        goto collision;
+      }
+    }
+  }
+}
+</pre>
+</div>
+
+<p>
+<code>hard_start_xmit</code> 是每个WiFi驱动必须提供的一个回调函数。一般通过
+<code>qdisc_run</code> ，如果不使用Traffic Control机制，则可以直接调用该函数接
+口。 返回可能有：
+</p>
+</div>
+
+<div id="outline-container-sec-3-5-1" class="outline-4">
+<h4 id="sec-3-5-1"><code>NETDEV_TX_OK</code></h4>
+<div class="outline-text-4" id="text-3-5-1">
+<p>
+传输正常
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5-2" class="outline-4">
+<h4 id="sec-3-5-2"><code>NETDEV_TX_BUSY</code></h4>
+<div class="outline-text-4" id="text-3-5-2">
+<p>
+NIC没有足够的空间来发送当前数据帧。 这种情况下，通常会调用
+<code>netif_stop_queue</code> 。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5-3" class="outline-4">
+<h4 id="sec-3-5-3"><code>NETDEV_TX_LOCKED</code></h4>
+<div class="outline-text-4" id="text-3-5-3">
+<p>
+驱动已经被锁住。
+</p>
+
+<p>
+总的来说，如下三种情况下，会导致当前发送的数据帧被重新放入到发送队
+列中：
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5-4" class="outline-4">
+<h4 id="sec-3-5-4">The queue is disabled ( <code>netif_queue_stopped(dev)</code> is true).</h4>
+</div>
+
+<div id="outline-container-sec-3-5-5" class="outline-4">
+<h4 id="sec-3-5-5">Another CPU is holding the lock on the driver.</h4>
+</div>
+
+<div id="outline-container-sec-3-5-6" class="outline-4">
+<h4 id="sec-3-5-6">The driver failed ( <code>hard_start_xmit</code> did not return <code>NEtdEV_TX_OK</code>).</h4>
+</div>
+</div>
+
+<div id="outline-container-sec-3-6" class="outline-3">
+<h3 id="sec-3-6"><code>net_tx_action</code></h3>
+<div class="outline-text-3" id="text-3-6">
+<p>
+与软中断 <code>NET_RX_SOFTIRQ</code> 关联的处理函数。通过函数调用
+<code>raise_softirq_irqoff(NET_TX_SOFTIRQ)</code> 触发。主要在如下两种情况下调
+用：
+</p>
+<ol class="org-ol">
+<li>当启用数据传输时，调用 <code>netif_wake_queue</code> 触发。
+</li>
+<li>当数据传输完成时，调用 <code>dev_kfree_skb_irq</code> 来释放内存。
+</li>
+</ol>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4">协议处理</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1">网络模型</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+网络模型通常有OSI 7层参考模型和TCP/IP 4层参考模型，如图所示：
+</p>
+
+
+<figure>
+<p><img src="http://blog.ifjy.me/images/2016/2016042510.png" class="img-responsive" alt="2016042510.png">
+</p>
+</figure>
+
+<p>
+被传输的数据包在不同的协议层，称呼不一样。 链路层称为frame，网络层
+称为packet, 传输层称为segment，应用层称之为message。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2">协议家族</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+主要的协议家族有：
+</p>
+<ol class="org-ol">
+<li><code>PF_INET</code>
+</li>
+<li><code>PF_PACKET</code>
+It's the Linux way to capture frames at the link layer and
+inject frames into the link layer, directly bypassing all the
+intermediate protocol layers.
+</li>
+<li><code>PF_NETLINK</code>
+      Used as the preferred interface for network configuration.
+</li>
+<li><code>PF_KEY</code>
+      Used as a key management interface for network security services. IPsec is one of these services.
+</li>
+<li><code>PF_LLC</code>
+      Logical Link Control (LLC)
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3" class="outline-3">
+<h3 id="sec-4-3">驱动如何调用L3协议处理器</h3>
+<div class="outline-text-3" id="text-4-3">
+<p>
+当设备驱动接收到一帧数据，它会保存到 <code>sk_buffer</code> 中，并初始化它的
+protocol域：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">struct sk_buff
+{
+  ... ... ...
+  unsigned short
+  ... ... ...
+};
+</pre>
+</div>
+
+<p>
+<code>netif_receive_skb</code> 函数会根据protocol的值，来决定调用哪个协议处理
+函数。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-4" class="outline-3">
+<h3 id="sec-4-4">协议处理函数注册</h3>
+<div class="outline-text-3" id="text-4-4">
+<p>
+每个协议由 <code>packet_type</code> 结构体描述。内核中调用 <code>dev_add_pack</code> 注册
+一种协议处理函数。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">struct packet_type
+{
+  unsigned short type; //协议代码
+  struct net_device *dev;//协议使能的设备，为NULL时，代表所有设备
+  int (*func) (struct sk_buff *, struct net_device *,
+           struct packet_type *);
+  void *af_packet_priv;
+  struct list_head *list;
+};
+</pre>
+</div>
+
+<p>
+<code>dev_remove_pack</code> 注册协议处理函数。如下是IPv4的初始化代码：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">static struct packet_type ip_packet_type =
+  {
+    .type = _ _constant_htons(ETH_P_IP),
+    .func = ip_rcv,
+  }
+  ...
+  void _ _init ip_init(void)
+  {
+    dev_add_pack(&amp;ip_packet_type);
+    ...
+  }
+</pre>
+</div>
+
+<p>
+<code>eth_type_trans</code> performs two main tasks: setting the packet type
+setting the protocol.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c">static void tr_rx(struct device *dev)
+{
+  ...
+  skb-&gt;protocol=tr_type_trans(skb, dev);
+  ...
+  netif_rx(skb);
+  ...
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-5" class="outline-3">
+<h3 id="sec-4-5">参考网址</h3>
+<div class="outline-text-3" id="text-4-5">
+<ol class="org-ol">
+<li><a href="https://wiki.linuxfoundation.org/networking/start">https://wiki.linuxfoundation.org/networking/start</a>
+</li>
+<li><a href="https://wireless.wiki.kernel.org/en/users/Drivers/iwlwifi">https://wireless.wiki.kernel.org/en/users/Drivers/iwlwifi</a>
+</li>
+<li><a href="http://yaoyang.blog.51cto.com/7657153/1263630">http://yaoyang.blog.51cto.com/7657153/1263630</a>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">重要数据结构</a>
+<ul class="nav">
+<li><a href="#sec-1-1"><code>struct softnet_data</code></a></li>
+<li><a href="#sec-1-2"><code>struct sk_buff</code></a></li>
+<li><a href="#sec-1-3"><code>struct net_device</code></a></li>
+<li><a href="#sec-1-4"><code>struct netdev_queue</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-2">接收数据</a>
+<ul class="nav">
+<li><a href="#sec-2-1">概述</a></li>
+<li><a href="#sec-2-2">开启和禁用设备</a></li>
+<li><a href="#sec-2-3">队列</a></li>
+<li><a href="#sec-2-4">通知一个数据包的到来</a>
+<ul class="nav">
+<li><a href="#sec-2-4-1">通过调用 <code>netif_rx</code> 来通知内核</a></li>
+<li><a href="#sec-2-4-2">利用NAPI新机制</a></li>
+</ul>
+</li>
+<li><a href="#sec-2-5"><code>netif_rx</code> 函数流程图</a></li>
+<li><a href="#sec-2-6">下半部处理</a></li>
+<li><a href="#sec-2-7"><code>netif_receive_skb</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-3">发送数据</a>
+<ul class="nav">
+<li><a href="#sec-3-1">概述</a></li>
+<li><a href="#sec-3-2">禁用和开启数据传输</a>
+<ul class="nav">
+<li><a href="#sec-3-2-1"><code>netif_start_queue</code></a></li>
+<li><a href="#sec-3-2-2"><code>netif_stop_queue</code></a></li>
+<li><a href="#sec-3-2-3"><code>netif_queue_stopped</code></a></li>
+<li><a href="#sec-3-2-4"><code>netif_wake_queue</code></a></li>
+<li><a href="#sec-3-2-5">停止当前网卡上的数据传输</a></li>
+</ul>
+</li>
+<li><a href="#sec-3-3">调度数据传输</a>
+<ul class="nav">
+<li><a href="#sec-3-3-1"><code>netif_schedule</code></a></li>
+<li><a href="#sec-3-3-2"><code>netif_wake_queue</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-3-4">Queuing Discipline Interface</a>
+<ul class="nav">
+<li><a href="#sec-3-4-1">enqueue</a></li>
+<li><a href="#sec-3-4-2">dequeue</a></li>
+<li><a href="#sec-3-4-3">requeue</a></li>
+</ul>
+</li>
+<li><a href="#sec-3-5"><code>qdisc_restart</code></a>
+<ul class="nav">
+<li><a href="#sec-3-5-1"><code>NETDEV_TX_OK</code></a></li>
+<li><a href="#sec-3-5-2"><code>NETDEV_TX_BUSY</code></a></li>
+<li><a href="#sec-3-5-3"><code>NETDEV_TX_LOCKED</code></a></li>
+<li><a href="#sec-3-5-4">The queue is disabled ( <code>netif_queue_stopped(dev)</code> is true).</a></li>
+<li><a href="#sec-3-5-5">Another CPU is holding the lock on the driver.</a></li>
+<li><a href="#sec-3-5-6">The driver failed ( <code>hard_start_xmit</code> did not return <code>NEtdEV_TX_OK</code>).</a></li>
+</ul>
+</li>
+<li><a href="#sec-3-6"><code>net_tx_action</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-4">协议处理</a>
+<ul class="nav">
+<li><a href="#sec-4-1">网络模型</a></li>
+<li><a href="#sec-4-2">协议家族</a></li>
+<li><a href="#sec-4-3">驱动如何调用L3协议处理器</a></li>
+<li><a href="#sec-4-4">协议处理函数注册</a></li>
+<li><a href="#sec-4-5">参考网址</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>

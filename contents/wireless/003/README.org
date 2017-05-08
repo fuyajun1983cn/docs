@@ -1,0 +1,526 @@
+#+TITLE: 蓝牙学习总结 
+
+* 蓝牙协议
+
+** 概述
+    
+*** Bluetooth: terminology
+    | Term                  | Introduced | Means                                 |
+    |-----------------------+------------+---------------------------------------|
+    | BR                    |  1.1(2002) | Basic Rates(1 Mbits/s)                |
+    | EDR                   |  2.0(2004) | Enhanced Date Rates(2 and 3 Mbits/s)  |
+    | HS                    |  3.0(2009) | High Speed (Alternate MAC/PHY)        |
+    | LE                    |  4.0(2010) | Low Energy (1 Mbit/s ultra low powser |
+    | Bluetooth Smart       |        4.0 | Single mode, LE-only radio            |
+    | Bluetooth Smart Ready |        4.0 | Dual mode, BR/EDR and LE dual radio   |
+    |-----------------------+------------+---------------------------------------|
+    
+*** Bluetooth: configurations
+    [[./images/001.png]]
+
+    - Bluetooth is target at short-range communication with 2.4GHz Frequency
+    - Communication Range:
+      
+      | Power Class | Transmission Power Level(mW) | Advertised Range(m) |
+      | 1           | 100                          | 100                 |
+      | 2           | 2.5                          | 10                  |
+      | 3           | 1                            | 1                   |
+      |-------------+------------------------------+---------------------|
+
+    - Bluetooth uses a radio technology called =frequency-hopping=
+      spread spectrum, which chops up the data being sent and
+      transmits chunks of it on up to =79 bands= (1 MHz each; centered
+      from 2402 to 2480 MHz)
+
+    - Bluetooth is a *packet-based* protocol with a *master-slave* structure.
+
+    - One master may communicate with up to 7 slaves in a piconet; *all devices share the master's clock*.
+
+    - The devices can *switch roles*, by agreement, and *the slave can become the master*
+
+*** Bluetooth Stack
+    
+**** Lower layers of Bluetooth stack
+     
+     [[./images/002.png]]
+
+     - *Radio*: Transceiver operating in 2.4GHz ISM band
+     - *Baseband*: Bluetooth link controller which carries out the
+       baseband protocols(如信号编码) and other low-level link
+       routines. 
+     - *Link Manger* – Used for link set-up and control. The signals are
+       interpreted and filtered out by the Link Manager on the
+       receiving side and are not propagated to higher layers. 
+     - *Lower HCI* – Host Controller Interface, well defined API to
+       control the Bluetooth module 
+     - *Physical HCI Transport* – UART, RS232, USB
+
+**** Upper layers of Bluetooth stack
+     
+     [[./images/003.png]]
+
+     - *Upper HCI* - Host Controller Interface, well defined API to
+       control the Bluetooth module 
+     - *L2CAP* - Supports higher level protocol multiplexing, packet
+       segmentation and reassembly, and the conveying of quality of
+       service information.
+     - *RFCOMM* – Serial port emulation protocol
+     - *SDP* – Protocol for locating services provided by or available
+       through a Bluetooth device. 
+     - *SCO Manager and Bluetooth Stack Controller* are not part of the
+       specification, but generally are components of an upper layer
+       Bluetooth protocol stack.
+
+**** Typical System Architecture Today
+     *Lower layers of the stack reside in the Bluetooth hardware*
+     (baseband processor and radio) from a silicon or module
+     manufacturer such as TI, Ericsson, Philips, CSR, Taiyo Yuden,
+     Silicon Wave, etc. 
+
+     Application, profiles, and upper layers of the stack reside on a
+     separate host processor and communication between upper and lower
+     layers of the stack occurs over the HCI interface.
+
+*** Bluetooth LE: architecture
+
+    [[./images/004.png]]
+
+    
+*** Device discovery
+    the process of searching for and detecting nearby Bluetooth devices.
+    - broadcast a “discovery” message and wait for replies
+    - Each reply consists of the address of the responding device and
+      an integer identifying the general class of the device
+
+**** Discoverability and Connectability
+     1. Inquiry Scan is On
+        - The local device is detectable by other Bluetooth devices.
+        - discoverable
+     2. Page Scan is On
+        - The local device still responds to connection requests by
+          devices that have it’s address
+        - connectable
+
+** Profile
+    Bluetooth programming defines transport protocols and methods of
+    communicating, but it also goes one step further to specify
+    methods of using Bluetooth to accomplish higher level tasks. These
+    methods and specifications are collectively called the *Bluetooth
+    Profiles* 
+
+    基于蓝牙的应用程序都是通过Profile来提供或获得彼此的服务，从而实现
+    设备间的互操作性。 
+
+    蓝牙Profile定义了蓝牙系统中从PHY到L2CAP各层间所需的功能和特性，也
+    包括一些非核心规范之外的协议定义的功能和特性。 
+
+    另外，Profile也定义了应用程序的行为和数据格式。只有当两个设备同时
+    符合一个Profile的要求，它们之间才能进行互操作。 
+
+    [[./images/005.png]]
+
+*** GAP
+    GAP即Generic Access Profile，是所有蓝牙设备必须实现的一个Profile，
+    它定义了一个蓝牙设备的基本要求。 
+
+    #+CAPTION: Profile Stack
+    [[./images/016.png]]
+
+    GAP也描述了设备发现，连接建立，安全，认证，关联模型和服务发现的行
+    为和方法。 
+
+    任何新实现的Profile都会基于GAP，提供的功能也是GAP所能提供的功能的
+    超集。 
+
+    处于最上层的Profile描述了应用程序之间的互操作，称为应用程序Profile。
+
+    [[./images/006.png]]
+
+    对于BR/BER类型的蓝牙设备，它定义一个单一的角色，这个角色决定了一个
+    蓝牙设备的功能（设备怎样发现对方，连接怎样建立，怎样使用安全认证模
+    型） 
+
+    对于LE类型的蓝牙设备，定义了4种特别的角色: *Broadcaster* ，
+    *Observer* , *Peripheral* 和 *Central* 。一个LE设备可以支持所有的
+    角色，只要底层的FW支持。但是，任何时刻只能充当一种角色。 
+
+    
+**** Broadcast mode and observation procedure
+     allow two devices to communicate in a unidirectional
+     connectionless manner using the advertising events. 
+
+     The broadcast mode provides a method for a device to send
+     connectionless data in advertising events. 
+
+**** Discovery modes and procedures
+     Discovery mode
+     - non-discoverable
+     - Discoverable
+       + general discoverable
+       + limited discoverable (for a limited period of time)
+     - procedure
+       Only a device in the Central role may support genearal
+       discoverable and limited discoverable procedure.
+     - Name Discovery Procedure
+       - obtain the Bluetooth Device Name of a remote connectable device.
+       - Performed when the complete name is not acquired during discovery procedures.
+       - The host should established a connection with remote device.
+       - The host shall read the device name characteristic using the GATT procedure Read Using Characteristic UUID
+       - When finished , the connection may be terminated.
+
+**** CONNECTION MODES AND PROCEDURES
+     Modes
+     - Non-connectable mode
+       - Shall be supported by Peripheral devices.
+       - Implicitly supported by Central, Receiver, Broadcaster devices.
+     - Directed connectable mode
+       + shall accept a connection request from a known peer device
+       + Performing auto connection establishment procedure or the general connection establishment procedure.
+       + Only supported by Peripheral devices.
+       + When connection established ,will enter the non-connectable mode.
+     - Undirected connectable mode
+       + shall accept a connection request from a device performing
+         the auto connection establishment procedure or the general
+         connection establishment procedure.
+       + When connection established ,will enter the non-connectable mode.
+
+         
+     Procedures
+     - Auto connection establishment procedure
+       - Only supported by Central role devices.
+     - general connection establishment procedure
+       + Only supported by Central role devices.
+     - Selective connection establishment procedure
+       + Only supported by Central role devices.
+     - Direct connection establishment procedure
+       + Only supported by Central role devices.
+     - Connection Parameter Update procedure
+       + Only supported by Central and Peripheral role devices.
+     - Terminate Connection procedure
+       + Only supported by Central and Peripheral role devices.
+
+**** BONDING MODES AND PROCEDURES
+     Bonding:
+     - allows two connected devices to exchange and store security and
+       identity information to create a trusted relationship.
+     - When the devices store the bonding information, it is known as
+       the phrases ‘devices have bonded’ or ‘a bond is created’.
+     - 为了访问另一个设备受保护的信息，必须与对方进行配对。
+
+     Modes:
+     - non-bondable mode
+       - A device doesn’t support pairing is considered to be in
+         non-bondable mode.
+     - bondable mode
+
+     Bonding Procedure
+
+     [[./images/007.png]]
+
+*** L2CAP(Logical Link Control and Adaptation Layer Protocol)
+    利用协议复用能力和数据分块与重组，L2CAP为上层协议提供了面向连接和
+    无连接的数据服务。L2CAP允许上层协议和应用发送和接收上层数据包长度
+    达到64K。L2CAP也支持每信道上的数据流控制和重传。 
+
+    L2CAP层提供了逻辑信道，称为L2CAP信道，这些信道在一个或多个逻辑链路
+    （ACL）上被复用。 
+
+    L2CAP功能结构图所下：
+
+    [[./images/017.png]]
+
+    L2CAP的操作模式:
+
+    1. Basic L2CAP Mode （default）
+    2. Flow Control Mode
+    3. Retransmission Mode
+    4. Enhanced Retransmission Mode (for reliable channels)
+    5. Streaming Mode (for streaming application)
+    
+      
+*** GATT
+    GATT设计为可供应用程序或其他Profile使用，使得客户端与服务器端能进行通信。
+
+    服务器包含了许多属性，GATT Profile定义了如何使用ATT协议来发现，读，
+    写和获取这些属性的方法，以及配置属性的广播。 
+
+    [[./images/008.png]]
+
+    GATT定义了两种角色：服务器和客户端
+    - 客户端发起请求，并接受响应。
+    - 服务器端接受请求，并发送响应，指示或通知。
+    - 两种角色可动态变换，即一个设备可以同时充当客户端和服务器端角色。
+    - GATT和ATT可用于BR/EDR/LE。在LE中，是必须有的。
+      
+      [[./images/009.png]]
+
+    如果一个设备声称支持GATT Profile，则必须实现其定义的一些能力。
+
+    GATT Profile主要处理如下一些场景：
+    - 交换配置信息（Exchange）
+    - 发现设备的服务和特征。（Discovery）
+    - 读取一个特征值。（Read）
+    - 写入一个特征值。（Write）
+    - 通知一个特征值。（Notification, broadcast）
+    - 指示一个特征值。（Indication, unicast）
+
+
+    GATT可用于任何物理链路之上，使用ATT协议，L2CAP频道。
+
+    GATT 构建在ATT之上，它建立了ATT传输和保存数据的通用操作和框架。
+    GATT定义了两种角色：服务器和客户端。这两个角色不一定与上述的GAP四
+    个角色中的某个角色绑定。是由上层更高的Profile指定。GATT和ATT可用于
+    BR/EDR/LE。在LE中，是必须有的。 
+
+    
+**** GATT数据格式
+
+     GATT传输的数据包含在ATT协议PDU（协议数据单元）中。主要有如下一些形式的
+     数据：命令，请求，响应，指示，通知。下面是PDU的结构图： 
+
+     [[./images/013.png]]
+
+     数据操作码（Opcode）包含上述五种类型，与之相应的数据存储在属性参
+     数里。其中命令和请求是作用于服务器端设备属性集中的值。服务端的一
+     个属性由如下四部分组成：属性句柄、属性类型、属性值以及属性权限。
+     它的逻辑表示如下图所示：
+
+     [[./images/014.png]]
+
+     其中，属性句柄是索引，取值范围：0x0001 ～ 0xFFFF，服务器上属性句
+     柄值不会随时间改变。属性类型是一个UUID，代表某种类型。属性值代表
+     该属性的实际数据，而属性权限则由上层Profile指定为读写权限。 
+
+     GATT服务器存储通过ATT协议传输的数据并接受来自GATT客户端的ATT请求，
+     命令和确认信息。GATT同时指定了GATT服务器的数据格式。属性被格式化
+     为服务集(Services)和特征集(Characteristics)。服务包含一系列特征集。
+     特征集包含一个单一值以及一个或多个描述特征值的描述符。 
+
+**** 基于GATT的Profile层次结构
+     GATT Profile指定了Profile数据交换的结构。这个结构定义用于Profile
+     的基本元素： *服务和特征* 。包含在ATT的属性当中。
+
+     最顶层是Profile，一个Profile是由一个或多个服务组成的，这些服务是实现某个用例必需的。
+
+     一个服务则是由许多特征或其他服务的引用组成的。
+
+     每个特征包含一个值和关于这个值的其他信息。
+
+     所有的服务和特征以及特征的组件（如值或描述符）包含了Profile数据，
+     都存储在服务器的属性（Attribute）中。 
+
+     [[./images/015.png]]
+
+     服务有两种类型：主服务和次服务。主服务提供设备的主要功能，次服务
+     提供设备的辅助功能。至少被设备上的一个主服务引用。 
+
+     为保持兼容早期的客户，一个服务定义的后续修改只能增加新的引用服务
+     或可选的特征，服务定义的行为也不能修改。 
+
+     服务可用在一个或多个profile中。
+
+***** 特征（Characteristic）
+      一个特征包含一个使用在服务中的值以及关于该值怎样访问的属性和配置
+      信息，同时还包含该值如何显示或表示的信息。 
+
+      一个特征的定义包含一个特征声明，特征属性和一个值。它也可能包含描
+      述符，描述符描述了对应的特征值在服务器中的值或允许的配置。 
+
+**** GATT Profile定义的特性
+     
+     1. Server Configuration
+     2. Primary Service Discovery
+     3. Relationship Discovery
+     4. Characteristic Discovery
+     5. Characteristic Descriptor Discovery
+     6. Reading a Characteristic Value
+     7. Writing a Characteristic Value
+     8. Notification of a Characteristic Value
+     9. Indication of a Characteristic Value
+     10. Reading a Characteristic Descriptor
+     11. Writing a Characteristic Descriptor
+
+*** HID Service
+    This service exposes HID reports and other HID data intended for
+    HID Hosts and HID Devices. 
+
+    This service shall operate over the LE transport only. 
+
+    HID devices act as a GATT Server.
+
+    There are three different types of data transfers 
+    - *Input Reports*  (control data from HID Host to HID Device, such as keypress)
+    - *Output Reports* (control data from HID Host to HID Device such as an ‘LED on’ signal )
+    - *Feature Reports* (configuration or application-specific data in either direction )
+    
+*** HOGP Profile
+    HOGP stands for Hid Over Gatt Profile
+
+    This means: 
+    - A device with BLE support.
+    - Suport HID service over BLE protocol stack.
+    - Using GATT profile.
+    
+    Participants:
+    - HID Devices  (GATT server )
+    - HID Hosts (GATT client)
+
+    Can be used in  BLE device only.
+
+*** A2DP Profile
+    A2DP stands for Advanced Audio Distribution Profile
+
+    Typical usage is the streaming of music content from a stereo music player to headphones or speakers. 
+
+    The A2DP focuses on audio streaming .
+
+    
+**** Profile Stacks
+     
+     [[./images/010.png]]
+
+     
+**** Roles
+     
+     Source(SRC) & Sink(SNK)
+
+     [[./images/011.png]]
+
+**** Streaming Process and Packet Format
+     
+     [[./images/012.png]]
+
+** 蓝牙设备认证基本流程
+
+    [[./images/018.png]]
+    
+* Bluedroid架构简介
+  Bluedroid总框架图如下所示：
+  #+BEGIN_EXAMPLE
+                            Java                                                                                   
+    +--------------------------------+                                                                              
+      +-----------------+     C++/C                                                                                 
+      |       BTIF      |                                                                                           
+      +-----------------+                                                                                           
+      |       BTA       |                                                                                           
+      +-----------------+                                                                                           
+      | Bluedroid Stack |                                                                                           
+      +-----------------+  user space                                                                               
+    +---------------------------------+                                                                             
+                          kernel space         
+
+  #+END_EXAMPLE
+
+  下面对各个部分进行简介。
+
+** Java Application/JNI
+    
+    Bluetooth app运行于Java层，并通过JNI和协议栈的接口（stack’s
+    Interface Layer，BTIF）进行如下交互：
+    
+    NOTES: JNI层的作用是将Java调用转化为C函数的调用，同时为应用和协议
+    栈提供了调用/回调的交互能力。
+
+    
+** BTIF (Bluetooth Profile Interface)
+
+    Bluetooth Profile Interface在Bluetooth Application task (BTA)和JNI
+    层之间充当了胶水层的角色，对上层（JNI）提供了所有profile功能性的接
+    口。这一层上有一个Bluetooth Interface Instance，所有Profile的操作
+    函数都注册在其中（GAP, AV, DM, PAN, HF,HH, HL, Storage, Sockets）。
+    Client应用通过操作这个Instance来操作Profile。 
+
+** BTA
+
+    这一层实现了各种Profile状态机。用户通过驱动状态机来操作Profile。
+    Profile状态机包含以下几个主要组成部分：
+
+    - =BTA_profilexx_act.c=  
+      包含对应Profile的“Action”函数，一般来说由Profile状态机调用
+    - =BTA_profilexx_api.c=
+      对应Profile的API的具体实现。通常它们是提供给用户使用，完成
+      usecase的函数和回调
+    - =BTA_profilexx_ci.c=
+      对应Profile的“call-in”函数的实现（供Profile以外的模块调用）
+    - =BTA_profilexx_co.c=
+      对应Profile的“call-out”函数的实现（调用Profile以外的模块）
+    - =BTA_profilexx_main.c=
+      对应Profile的状态机和处理协议栈上传消息的handler的具体实现。主要
+      负责维护Profile状态的变化及其引起的“Action” 
+
+
+    例如，调用 =BTA_profilexx_act.c=中的API函数时，各部分的执行流程图
+    如下所示：
+
+    #+BEGIN_EXAMPLE
+                                                       seq2 +---------------------+   seq3   +-----------------------+
+                                                       +----> BTA_Profilexx_API.c <----------> BTA's SYS Msg Posting |
+                                                       |    +----------^----------+          +-----------^-----------+
+                                                       |               |                                 |            
+                                                       |               |seq7                             | seq4       
+                                                       |               |                                 |            
+      +--------------+  seq1   +------------------+    |    +----------v-----------+   seq5  +-----------v-------+    
+      | User Command <---------> BTIF_Exposed_API +----+----> BTA_Profilexx_Main.c <---------> OS Message Posted |    
+      +--------------+  seq9   +------------------+    seq8 +----------^-----------+         +-------------------+    
+                                                                       |                                              
+                                                                       |seq6                                          
+                                                                       |                                              
+                                                            +----------v---------+                                    
+                                                            | BTA_Profilexx.Ci.c |                                    
+                                                            +--------------------+                   
+    #+END_EXAMPLE
+
+    
+** Core Stack
+
+    #+BEGIN_EXAMPLE
+      +------------------------------------------+
+      |          +--------------------+          |
+      |          |  LIBBT_BRCM_Stack  |          |
+      |          +--------------------+          |
+      |   +---------+ +-----+ +------+ +-----+   |
+      |   |         | |A2DP | |AVCTP | |AVDTP|   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | |BNEP | | PAN  | |HID  |   |
+      |   | BT      | +-----+ +------+ +-----+   |
+      |   | Manager | +-----+ +------+ +-----+   |
+      |   |         | |L2CAP| |RFCOMM| |SDP  |   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | +-----+ +------+ +-----+   |
+      |   |         | |MCAP | |SMP   | |GATT |   |
+      |   +---------+ +-----+ +------+ +-----+   |
+      |         +------------------------+       |
+      |         | Host Control Interface |       |
+      |         +------------------------+       |
+      +------------------------------------------+    
+    #+END_EXAMPLE
+
+    
+** HCI and HAL Layers
+
+    HCI层由libbt-hci共享库组成，负责通讯层（transport layer，如UART H4
+    或者SMD channel）和协议栈之间的交互。 HAL层由libbt-vendor共享库组成，
+    是各厂商的解决方案的特定实现。HAL层实现了各厂商对OPCODE的处理逻辑，
+    这些OPCODE声明在HCI层的 =bt_vendor_lib.h= 中。 
+
+** TASK管理
+
+    Bluedroid中，协议栈，蓝牙规范和蓝牙应用都运行在一个用户进程
+    "com.android.bluetooth"之中。 
+
+    蓝牙代码在以下四种task代表的上下文（context）中运行： 
+
+    - =BTIF_TASK=
+    - =BTU_TASK=
+    - =A2DP_MEDIA_TASK=
+    - =GKI_TIMER_TASK=
+
+    task之间通过消息（message）来交换信息。
+
+    调用JNI层的API函数会通过消息转发机制，在 =BTIF_TASK= 中执行。
+    JNI，HAL回调在 =BTIF_TASK= 中执行。
+    有需要时， =BTIF_TASK= 中的调用可切换到 =BTU_TASK= 中执行。
+    蓝牙规范（Profiles）和协议的实现代码在 =BTU_TASK= 中执行。
+    蓝牙传输驱动程序中有一条rx线程（ =bt_hc_worker_thread= ）负责从UART/SMD中
+    读取数据。 
