@@ -52,7 +52,8 @@
     #+END_SRC
 
     其中 macroexpand 用于调试，可以查看一个宏展开后的样子。','表示
-    backquote, 被backquote的元素在执行宏定义的代码时，不会被解析。
+    backquote, 被backquote的元素在执行宏定义的代码时，会被解析出实际的
+    值。
 
     #+BEGIN_SRC emacs-lisp
       (defmacro limited-save-excursion (&rest subexprs)
@@ -64,8 +65,7 @@
                (goto-char ,orig-point-symbol)))))
     #+END_SRC
 
-    ",@"跟","一样，原封不动的保留传入进来的参数，且会自动去掉最外层的
-    括号。
+    ",@"跟","一样，但会自动去掉最外层的括号。
 ** 变量
 *** 普通变量
     : defvar

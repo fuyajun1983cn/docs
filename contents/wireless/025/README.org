@@ -1,0 +1,114 @@
+#+TITLE: L2CAP协议学习
+
+* 概述
+  The Bluetooth logical link control and
+  adaptation protocol (L2CAP) supports
+  higher level protocol *multiplexing*,
+  *packet segmentation* and *reassembly*,
+  and the conveying of quality of service
+  information. The protocol state
+  machine, packet format, and
+  composition are described in this
+  document.
+
+* INTRODUCTION
+  L2CAP provides connectionoriented and connectionless data services
+  to upper layer protocols with protocol multiplexing capability and
+  segmentation and reassembly operation.
+
+  Upper layer data packets (L2CAP Service Data Units, SDU) is up to 64
+  kilobytes in length. 
+
+  L2CAP also permits per-channel flow control and retransmission.
+
+  The L2CAP layer provides logical channels, named L2CAP channels, which
+  are multiplexed over one or more logical links.
+
+** L2CAP FEATURES
+   
+   [[./images/001.png]]
+
+*** Protocol/channel multiplexing
+    An L2CAP channel shall operate over one Controller at a
+    time. During channel setup, protocol multiplexing capability is
+    used to route the connection to the correct upper layer protocol. 
+
+    For data transfer, logical channel multiplexing is needed.
+
+*** Segmentation and reassembly
+    This provides the following benefits:
+    - Segmentation will allow the interleaving of application data
+      units in order to satisfy latency requirements.
+    - Memory and buffer management is easier when L2CAP controls the packet size.
+    - Error correction by retransmission can be made more efficient.
+    - The amount of data that is destroyed when an L2CAP PDU is
+      corrupted or lost can be made smaller than the application's
+      data unit.
+    - The application is decoupled from the segmentation required to
+      map the application packets into the lower layer packets.
+
+*** Flow control per L2CAP channel
+    Controllers provide error and flow control for data going over the air and HCI
+    flow control exists for data going over an HCI transport. When several data
+    streams run over the same Controller using separate L2CAP channels, each
+    channel requires individual flow control. A window based flow control
+    scheme is provided.
+
+*** Error control and retransmissions
+    L2CAP provides error checks and retransmissions of L2CAP PDUs.
+
+*** Support for Streaming
+    Streaming applications such as audio set up an L2CAP channel with an
+    agreed-upon data rate。 don't use flow contlor mechanisms in L2CAP
+    layer and below(HCI & Controller). A flush timeout is used to keep data flowing on
+    the transmit side.
+
+*** Fragmentation and Recombination
+    During transmission of an L2CAP PDU, many different levels of
+    fragmentation and recombination may occur in both peer devices.
+
+    However the PDU is fragmented within the stack, the
+    receiving L2CAP entity still recombines the fragments to obtain the original
+    L2CAP PDU.
+
+*** Quality of Service
+    The L2CAP connection establishment process allows the exchange of
+    information regarding the quality of service (QoS) expected between two
+    Bluetooth devices. Each L2CAP implementation monitors the resources
+    used by the protocol and ensures that QoS contracts are honored.
+
+** ASSUMPTIONS
+   The protocol is designed based on the following assumptions:
+   1. Controllers provide orderly delivery of data packets, although
+      there might be individual packet corruption and duplicates.
+   2. Controllers always provide the impression of full-duplex
+      communication channels. This does not imply that all L2CAP
+      communications are bidirectional. Unidirectional traffic does
+      not require duplex channels.
+   3. The L2CAP layer provides a channel with a degree of reliability
+      based on the mechanisms available in Controllers and with
+      additional packet segmentation, error detection, and
+      retransmission that can be enabled in the enhanced L2CAP layer.
+   4. Controllers provide error and flow control for data going over
+      the air and HCI flow control exists for data going over an HCI
+      transport. It has four modes to provide different level of flow
+      control requirements. The Flow and Error Control block provides four modes:
+      - Enhanced Retransmission mode
+        offer segmentation, flow control and L2CAP PDU retransmissions.
+      - Retransmission Mode
+        offer segmentation, flow control and L2CAP PDU retransmissions.
+      - Flow control mode
+        offers just the segmentation and flow control functions.
+      - Streaming mode
+        offers segmentation and receiver side packet flushing.
+
+** SCOPE
+   The following features are outside the scope of L2CAP’s
+   responsibilities:
+   1. L2CAP does not transport synchronous data designated for SCO or
+      eSCO logical transports.
+   2. L2CAP does not support a reliable broadcast channel.
+   
+   
+   
+   
