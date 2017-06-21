@@ -1,0 +1,887 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Hostapd初始化流程分析</h1>
+          <p>Hostapd初始化过程中，代码流程详细分析。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">hostapd初始化流程源码分析</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> <code>hostapd_global_init</code></h2>
+<div class="outline-text-2" id="text-1">
+<p>
+数据结构 <code>struct hapd_interfaces</code> , 这是一个全局的数据结构， 它定义
+了一系列的公共回调函数，保存了当前虚拟接口的数量，以及指向它们的指针。
+</p>
+
+<div class="org-src-container">
+<label class="org-src-name"><code>struct hapd_interfaces</code> 数据结构定义</label>
+<pre class="src src-c">struct hapd_interfaces {
+        int (*reload_config)(struct hostapd_iface *iface);
+        struct hostapd_config * (*config_read_cb)(const char *config_fname);
+        int (*ctrl_iface_init)(struct hostapd_data *hapd);
+        void (*ctrl_iface_deinit)(struct hostapd_data *hapd);
+        int (*for_each_interface)(struct hapd_interfaces *interfaces,
+                                  int (*cb)(struct hostapd_iface *iface,
+                                            void *ctx), void *ctx);
+        int (*driver_init)(struct hostapd_iface *iface);
+
+        size_t count;
+        int global_ctrl_sock;
+        ...
+        struct hostapd_iface **iface;
+        ...
+};
+</pre>
+</div>
+
+<p>
+其中 <code>count</code> 统计了当前创建的 <code>struct hostapd_iface</code> 的实例个数。 通
+过 <code>iface</code> 双重指针，可以引用到任何一个 <code>struct hostapd_iface</code> 的实
+例。所以接下来的初始化流程，一开始就涉及到对该数据结构实例的初始化。
+</p>
+
+<p>
+首先是定义相应的一些回调函数，如下代码所示：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">os_memset(&amp;interfaces, 0, sizeof(interfaces));
+interfaces.reload_config = hostapd_reload_config;
+interfaces.config_read_cb = hostapd_config_read;
+interfaces.for_each_interface = hostapd_for_each_interface;
+interfaces.ctrl_iface_init = hostapd_ctrl_iface_init;
+interfaces.ctrl_iface_deinit = hostapd_ctrl_iface_deinit;
+interfaces.driver_init = hostapd_driver_init;
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1"><span class="section-number-3">1.1</span> <code>hostapd_reload_config</code></h3>
+<div class="outline-text-3" id="text-1-1">
+<p>
+这个函数主要是加载新的配置文件，以更新 <code>struct hostapd_config</code> 的
+内容。 
+</p>
+
+<p>
+如果配置文件名为空，则一般认为配置信息是处于内存中，且假设配置信息
+是被更新过了的， 则直接重载bss相关信息：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">if (iface-&gt;config_fname == NULL) {
+        /* Only in-memory config in use - assume it has been updated */
+        hostapd_clear_old(iface);
+        for (j = 0; j &lt; iface-&gt;num_bss; j++)
+            hostapd_reload_bss(iface-&gt;bss[j]);
+        return 0;
+    }
+</pre>
+</div>
+
+<p>
+在更新之前会冲刷旧的bss相关信息。
+</p>
+
+<p>
+如果配置文件名不为空，则首先会通过 <code>config_read_cb</code> 回调函数解析配
+置文件中的信息，并返回新的 <code>struct hostapd_config</code> 实例。
+</p>
+
+<p>
+接下来会调用 <code>hostapd_clear_old</code> 来清除旧的bss信息。 将并新的
+<code>struct hostapd_config</code> 分别挂到 <code>struct hostapd_iface</code> 和它所包含
+的 bss实例中 (即 <code>struct hostapd_data</code>).  最后调用
+<code>hostapd_reload_bss</code> 来重新设置 bss相关信息。
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c">hostapd_clear_old(iface);
+
+oldconf = hapd-&gt;iconf;
+iface-&gt;conf = newconf;
+
+for (j = 0; j &lt; iface-&gt;num_bss; j++) {
+  hapd = iface-&gt;bss[j];
+  hapd-&gt;iconf = newconf;
+  hapd-&gt;iconf-&gt;channel = oldconf-&gt;channel;
+  hapd-&gt;iconf-&gt;acs = oldconf-&gt;acs;
+  hapd-&gt;iconf-&gt;secondary_channel = oldconf-&gt;secondary_channel;
+  hapd-&gt;iconf-&gt;ieee80211n = oldconf-&gt;ieee80211n;
+  hapd-&gt;iconf-&gt;ieee80211ac = oldconf-&gt;ieee80211ac;
+  hapd-&gt;iconf-&gt;ht_capab = oldconf-&gt;ht_capab;
+  hapd-&gt;iconf-&gt;vht_capab = oldconf-&gt;vht_capab;
+  hapd-&gt;iconf-&gt;vht_oper_chwidth = oldconf-&gt;vht_oper_chwidth;
+  hapd-&gt;iconf-&gt;vht_oper_centr_freq_seg0_idx =
+    oldconf-&gt;vht_oper_centr_freq_seg0_idx;
+  hapd-&gt;iconf-&gt;vht_oper_centr_freq_seg1_idx =
+    oldconf-&gt;vht_oper_centr_freq_seg1_idx;
+  hapd-&gt;conf = newconf-&gt;bss[j];
+  hostapd_reload_bss(hapd);
+ }
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-1-1-1" class="outline-4">
+<h4 id="sec-1-1-1"><span class="section-number-4">1.1.1</span> <code>hostapd_clear_old</code></h4>
+</div>
+
+
+<div id="outline-container-sec-1-1-2" class="outline-4">
+<h4 id="sec-1-1-2"><span class="section-number-4">1.1.2</span> <code>hostapd_reload_bss</code></h4>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2"><span class="section-number-3">1.2</span> <code>hostapd_config_read</code></h3>
+<div class="outline-text-3" id="text-1-2">
+<p>
+这个函数的主要作用就是去解析配置文件 (hostapd.conf)文件，最终返回
+一个 <code>struct hostapd_config</code> 的实例, 它是某个接口范围下的全局配置
+信息。在这个过程中，也同时初始化在该接口上运行的BSS的配置信息， 由
+数据结构 <code>struct hostapd_bss_config</code> 来描述。
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c">struct hostapd_config {
+    struct hostapd_bss_config **bss, *last_bss;
+    size_t num_bss;
+      ...
+</pre>
+</div>
+
+<p>
+<code>struct hostapd_config</code> 实例包含一个或多个bss的配置信息。 该函数首
+先会调用 <code>hostapd_config_defaults</code> 来初始化 <code>struct
+    hostapd_config</code> 以及 <code>struct hostapd_bss_config</code> ， 其中
+</p>
+<pre class="example">
+conf-&gt;bss[0] = bss;
+</pre>
+<p>
+该函数配置了 <code>struct hostapd_config</code> 一些成员变量的默认值，同时也
+调用了 <code>hostapd_config_defaults_bss</code> 函数来设置 <code>struct
+    hostapd_bss_config</code> 一些成员变量的默认值 。 
+</p>
+
+<p>
+设置了一些默认值后，就会根据配置文件中的实际配置项，通过
+<code>hostapd_config_fill</code> 来设置 <code>struct hostapd_config</code> 或 <code>struct
+    hostapd_bss_config</code> 的一些成员变量的值。 
+</p>
+
+<p>
+NOTES: hostapd.config中有些配置项是接口范围的，有些配置项是bss相关
+的。
+</p>
+
+<p>
+接下来调用 <code>hostapd_set_security_params</code> 设置bss的认证与加密算法等
+安全相关的信息。 
+</p>
+
+<p>
+最后通过 <code>hostapd_config_check</code> 来检查配置项中是否有冲突的选项。
+</p>
+</div>
+
+<div id="outline-container-sec-1-2-1" class="outline-4">
+<h4 id="sec-1-2-1"><span class="section-number-4">1.2.1</span> <code>hostapd_config_defaults</code></h4>
+</div>
+
+<div id="outline-container-sec-1-2-2" class="outline-4">
+<h4 id="sec-1-2-2"><span class="section-number-4">1.2.2</span> <code>hostapd_config_fill</code></h4>
+</div>
+
+<div id="outline-container-sec-1-2-3" class="outline-4">
+<h4 id="sec-1-2-3"><span class="section-number-4">1.2.3</span> <code>hostapd_set_security_params</code></h4>
+</div>
+
+<div id="outline-container-sec-1-2-4" class="outline-4">
+<h4 id="sec-1-2-4"><span class="section-number-4">1.2.4</span> <code>hostapd_config_check</code></h4>
+</div>
+</div>
+
+<div id="outline-container-sec-1-3" class="outline-3">
+<h3 id="sec-1-3"><span class="section-number-3">1.3</span> <code>hostapd_for_each_interface</code></h3>
+<div class="outline-text-3" id="text-1-3">
+<p>
+该回调函数是一个工具函数，方便在代码中遍历 <code>struct interfaces</code> 挂
+载的所有 <code>struct hostapd_iface</code> 实例，并在其上面调用相应的回调函数。
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c">int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
+                   int (*cb)(struct hostapd_iface *iface,
+                     void *ctx), void *ctx)
+{
+    size_t i;
+    int ret;
+
+    for (i = 0; i &lt; interfaces-&gt;count; i++) {
+        ret = cb(interfaces-&gt;iface[i], ctx);
+        if (ret)
+            return ret;
+    }
+
+    return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-1-4" class="outline-3">
+<h3 id="sec-1-4"><span class="section-number-3">1.4</span> <code>hostapd_ctrl_iface_init</code></h3>
+<div class="outline-text-3" id="text-1-4">
+<p>
+这个函数主要是初始化domain socket的socket文件路径，即根据
+<code>ctrl_interface</code> 中配置的信息来初始化socket， 以便后续上层与
+hostpad之间的socket通信畅通。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-5" class="outline-3">
+<h3 id="sec-1-5"><span class="section-number-3">1.5</span> <code>hostapd_ctrl_iface_deinit</code></h3>
+<div class="outline-text-3" id="text-1-5">
+<p>
+清除 ctrol socket相关信息。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-6" class="outline-3">
+<h3 id="sec-1-6"><span class="section-number-3">1.6</span> <code>hostapd_driver_init</code></h3>
+<div class="outline-text-3" id="text-1-6">
+<p>
+初始化驱动，根据源码编译时，使能了（注册）哪些驱动，就初始化相应的
+驱动。 
+如下全局变量包含当前被一些配置控制的驱动(<code>struct wpa_driver_ops</code>)实例：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">const struct wpa_driver_ops *const wpa_drivers[] =
+{
+#ifdef CONFIG_DRIVER_NL80211
+    &amp;wpa_driver_nl80211_ops,
+#endif /* CONFIG_DRIVER_NL80211 */
+#ifdef CONFIG_DRIVER_WEXT
+    &amp;wpa_driver_wext_ops,
+#endif /* CONFIG_DRIVER_WEXT */
+#ifdef CONFIG_DRIVER_HOSTAP
+    &amp;wpa_driver_hostap_ops,
+#endif /* CONFIG_DRIVER_HOSTAP */
+#ifdef CONFIG_DRIVER_BSD
+    &amp;wpa_driver_bsd_ops,
+#endif /* CONFIG_DRIVER_BSD */
+#ifdef CONFIG_DRIVER_OPENBSD
+    &amp;wpa_driver_openbsd_ops,
+#endif /* CONFIG_DRIVER_OPENBSD */
+#ifdef CONFIG_DRIVER_NDIS
+    &amp;wpa_driver_ndis_ops,
+#endif /* CONFIG_DRIVER_NDIS */
+#ifdef CONFIG_DRIVER_WIRED
+    &amp;wpa_driver_wired_ops,
+#endif /* CONFIG_DRIVER_WIRED */
+#ifdef CONFIG_DRIVER_MACSEC_QCA
+    &amp;wpa_driver_macsec_qca_ops,
+#endif /* CONFIG_DRIVER_MACSEC_QCA */
+#ifdef CONFIG_DRIVER_ROBOSWITCH
+    &amp;wpa_driver_roboswitch_ops,
+#endif /* CONFIG_DRIVER_ROBOSWITCH */
+#ifdef CONFIG_DRIVER_ATHEROS
+    &amp;wpa_driver_atheros_ops,
+#endif /* CONFIG_DRIVER_ATHEROS */
+#ifdef CONFIG_DRIVER_NONE
+    &amp;wpa_driver_none_ops,
+#endif /* CONFIG_DRIVER_NONE */
+    NULL
+};
+</pre>
+</div>
+
+<p>
+该函数会调用各个驱动回调函数中的  <code>global_init</code> ， 并构造 <code>struct
+    wpa_init_params</code> 实际，传递给驱动回调用函数中的 <code>hapd_init</code> 中。
+并将底层驱动的一些能力信息更新到 <code>struct hostapd_iface</code> 实例中。 
+</p>
+</div>
+
+<div id="outline-container-sec-1-6-1" class="outline-4">
+<h4 id="sec-1-6-1"><span class="section-number-4">1.6.1</span> nl80211</h4>
+<div class="outline-text-4" id="text-1-6-1">
+</div><ol class="org-ol"><li><a id="sec-1-6-1-1" name="sec-1-6-1-1"></a><code>global_init</code><br ></li>
+
+<li><a id="sec-1-6-1-2" name="sec-1-6-1-2"></a><code>hapd_init</code><br ></li></ol>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> <code>hostapd_periodic</code></h2>
+<div class="outline-text-2" id="text-2">
+<p>
+这是一个心跳函数，每 <code>HOSTAPD_CLEANUP_INTERVAL(10s)</code> 执行一次，遍历
+每个接口实例，并对其调用 <code>hostapd_periodic_call</code> . 目前在函数
+<code>hostapd_periodic_call</code> 函数中，主要执行 <code>hostapd_periodic_iface</code> 这
+个函数。 
+</p>
+</div>
+
+<div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1"><span class="section-number-3">2.1</span> <code>hostapd_periodic_iface</code></h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+在这个函数中，主要做了两件事，第一件是调用 <code>ap_list_timer</code> . 第二
+件是调用 <code>hostapd_acl_expire</code> 来更新 ACL cache.
+</p>
+</div>
+
+<div id="outline-container-sec-2-1-1" class="outline-4">
+<h4 id="sec-2-1-1"><span class="section-number-4">2.1.1</span> <code>ap_list_timer</code></h4>
+<div class="outline-text-4" id="text-2-1-1">
+<p>
+当 <code>NEED_AP_MLME</code> 这个配置项是打开的时候， hostapd会自己维护一个周围
+ap的列表， 并定期执行如下一些操作：
+</p>
+<ol class="org-ol">
+<li>动态更新AP列表。
+
+<p>
+每个AP在AP列表中有一个生命周期60s, 如果在60s内未收到某个AP的
+beacon帧，则就认为该AP已经离开，从而将其从AP列表中删除。其中
+<code>ap_table_expiration_time</code> 这个配置项可以修改AP最大的失效期，默
+认是60s.
+</p>
+</li>
+
+<li>检查当前是否需要修改hostapd的mode. 
+
+<p>
+当启用 <code>olbc</code> 或 <code>olbc_ht</code> 检查时， 会根据周围AP的信息来决定是
+否需要更新 HT Mode。 当然前提是hostapd启动时，配置文件中的
+<code>ieee80111n</code> 是打开的。
+</p>
+</li>
+
+<li>根据第二步的结果来决定 是否需要更新当前 hostapd 发出的Beacon帧
+信息。
+</li>
+</ol>
+</div>
+
+<ol class="org-ol"><li><a id="sec-2-1-1-1" name="sec-2-1-1-1"></a>AP List<br ><div class="outline-text-5" id="text-2-1-1-1">
+<p>
+AP list is a double linked list with head-&gt;prev pointing to the
+end of the list and tail-&gt;next = NULL. Entries are moved to the
+head of the list whenever a beacon has been received from the AP
+in question. The tail entry in this link will thus be the least
+recently used entry. 
+</p>
+
+<p>
+数据结构 <code>struct ap_info</code> 主要描述周围的AP信息，并组成一个列表。 
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">struct ap_info {
+    /* Note: next/prev pointers are updated whenever a new beacon is
+     * received because these are used to find the least recently used
+     * entries. */
+    struct ap_info *next; /* next entry in AP list */
+    struct ap_info *prev; /* previous entry in AP list */
+    struct ap_info *hnext; /* next entry in hash table list */
+    u8 addr[6];
+    u8 supported_rates[WLAN_SUPP_RATES_MAX];
+    int erp; /* ERP Info or -1 if ERP info element not present */
+
+    int channel;
+
+    int ht_support;
+
+    struct os_reltime last_beacon;
+};
+</pre>
+</div>
+
+<p>
+成员变量说明：
+</p>
+<ul class="org-ul">
+<li><code>addr</code> 
+       ap的MAC地址信息。
+</li>
+<li><code>supported_rates</code>
+       AP所支持的速率信息。
+</li>
+<li><code>erp</code>
+       该AP是否支持802.11g
+</li>
+<li><code>channel</code>
+       AP所在的信道。
+</li>
+<li><code>ht_support</code>
+       是否支持 HT Operation.
+</li>
+<li><code>last_beacon</code>
+最近一次收到该AP的Beacon帧的时间。 这个值会在函数
+<code>ap_list_process_beacon</code> 中被更新到。
+</li>
+</ul>
+</div>
+
+<ol class="org-ol"><li><a id="sec-2-1-1-1-1" name="sec-2-1-1-1-1"></a>AP List维护<br ><div class="outline-text-6" id="text-2-1-1-1-1">
+<p>
+数据结构 <code>struct hostapd_iface</code> 定义了如下几个相关的成员变量：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">/**
+ * struct hostapd_iface - hostapd per-interface data structure
+ */
+struct hostapd_iface {
+  ...
+    int num_ap; /* number of entries in ap_list */
+    struct ap_info *ap_list; /* AP info list head */
+    struct ap_info *ap_hash[STA_HASH_SIZE];
+  ...
+};
+</pre>
+</div>
+<p>
+其中维护 <code>ap_list</code> 的相关函数是: <code>ap_ap_list_add</code>,
+<code>ap_ap_list_del</code>, 维护 <code>ap_hash</code> 的相关函数是:
+<code>ap_ap_hash_add</code>, <code>ap_ap_hash_del</code>. 同时对这两个列表进行维护的相
+关函数是: <code>ap_ap_add</code> , <code>ap_free_ap</code>, <code>hostapd_free_aps</code>. 
+</p>
+</div>
+</li>
+
+<li><a id="sec-2-1-1-1-2" name="sec-2-1-1-1-2"></a><code>ap_list_process_beacon</code><br ><div class="outline-text-6" id="text-2-1-1-1-2">
+<p>
+该函数主要是处理接收到的周围AP的Beacon帧时，检查是否有必要更新当
+前的Beacon帧相关信息， 由 <code>handle_beacon</code> (src/ap/ieee802<sub>11</sub>.c)
+调用。 
+</p>
+
+<p>
+主要执行如下一些操作：
+</p>
+<ul class="org-ul">
+<li>检查当前收到的Beacon帧所在的AP是否已经存在，如果不存在，则添加
+到ap list中。
+<div class="org-src-container">
+
+<pre class="src src-c">ap = ap_get_ap(iface, mgmt-&gt;bssid);
+    if (!ap) {
+        ap = ap_ap_add(iface, mgmt-&gt;bssid);
+        if (!ap) {
+            wpa_printf(MSG_INFO,
+                   "Failed to allocate AP information entry");
+            return;
+        }
+        new_ap = 1;
+    }
+</pre>
+</div>
+</li>
+<li>接下来是根据Beacon帧中的一些IE信息，更新相应的 <code>struct
+        ap_info</code> 域信息。
+<ol class="org-ol">
+<li>速率集，包含基本速率集与扩展速率集。
+<div class="org-src-container">
+
+<pre class="src src-c">merge_byte_arrays(ap-&gt;supported_rates, WLAN_SUPP_RATES_MAX,
+          elems-&gt;supp_rates, elems-&gt;supp_rates_len,
+          elems-&gt;ext_supp_rates, elems-&gt;ext_supp_rates_len);
+</pre>
+</div>
+</li>
+
+<li>是否支持802.11g
+<div class="org-src-container">
+
+<pre class="src src-c">if (elems-&gt;erp_info) /* 802.11g */
+    ap-&gt;erp = elems-&gt;erp_info[0];
+else
+    ap-&gt;erp = -1;
+</pre>
+</div>
+</li>
+
+<li>当前发送该Beacon帧的AP位于哪个Channel
+<div class="org-src-container">
+
+<pre class="src src-c">if (elems-&gt;ds_params)
+    ap-&gt;channel = elems-&gt;ds_params[0];
+else if (elems-&gt;ht_operation)
+    ap-&gt;channel = elems-&gt;ht_operation[0];
+else if (fi)
+    ap-&gt;channel = fi-&gt;channel; /* assume on the same channel with us ==&gt;Yajun */
+</pre>
+</div>
+</li>
+
+<li>是否支持HT Operation
+<div class="org-src-container">
+
+<pre class="src src-c">if (elems-&gt;ht_capabilities)
+    ap-&gt;ht_support = 1;
+else
+    ap-&gt;ht_support = 0;
+</pre>
+</div>
+</li>
+</ol>
+</li>
+
+<li>更新Beacon接收的时间
+<div class="org-src-container">
+
+<pre class="src src-c">os_get_reltime(&amp;ap-&gt;last_beacon);
+</pre>
+</div>
+</li>
+
+<li>将当前这个AP放入AP列表中的头部
+<div class="org-src-container">
+
+<pre class="src src-c">if (!iface-&gt;olbc &amp;&amp;
+        ap_list_beacon_olbc(iface, ap)) {
+        iface-&gt;olbc = 1;
+        wpa_printf(MSG_DEBUG, "OLBC AP detected: " MACSTR
+               " (channel %d) - enable protection",
+               MAC2STR(ap-&gt;addr), ap-&gt;channel);
+        set_beacon++;
+    }
+</pre>
+</div>
+
+<ol class="org-ol">
+<li>判断是否检测到OLBC AP
+<div class="org-src-container">
+
+<pre class="src src-c">if (!iface-&gt;olbc &amp;&amp;
+        ap_list_beacon_olbc(iface, ap)) {
+        iface-&gt;olbc = 1;
+        wpa_printf(MSG_DEBUG, "OLBC AP detected: " MACSTR
+               " (channel %d) - enable protection",
+               MAC2STR(ap-&gt;addr), ap-&gt;channel);
+        set_beacon++;
+    }
+</pre>
+</div>
+</li>
+</ol>
+</li>
+
+<li>判断是否检测到OLBC HT Ap
+<div class="org-src-container">
+
+<pre class="src src-c">#ifdef CONFIG_IEEE80211N
+    if (!iface-&gt;olbc_ht &amp;&amp; !ap-&gt;ht_support &amp;&amp;
+        (ap-&gt;channel == 0 ||
+         ap-&gt;channel == iface-&gt;conf-&gt;channel ||
+         ap-&gt;channel == iface-&gt;conf-&gt;channel +
+         iface-&gt;conf-&gt;secondary_channel * 4)) {
+        iface-&gt;olbc_ht = 1;
+        hostapd_ht_operation_update(iface);
+        wpa_printf(MSG_DEBUG, "OLBC HT AP detected: " MACSTR
+               " (channel %d) - enable protection",
+               MAC2STR(ap-&gt;addr), ap-&gt;channel);
+        set_beacon++;
+    }
+#endif /* CONFIG_IEEE80211N */
+</pre>
+</div>
+</li>
+
+<li>根据需要判断是否需要更新hostapd的beacon信息
+<div class="org-src-container">
+
+<pre class="src src-c">if (set_beacon)
+    ieee802_11_update_beacons(iface);
+</pre>
+</div>
+</li>
+</ul>
+</div>
+</li>
+
+<li><a id="sec-2-1-1-1-3" name="sec-2-1-1-1-3"></a><code>ap_list_beacon_olbc</code><br ><div class="outline-text-6" id="text-2-1-1-1-3">
+<p>
+该函数主要是检测是否需要触发保护机制。 802.11中规范中提到，针对
+802.11g与802.11legacy/b等设备之间的数据通信要执行一种保护机制，
+具体条件如下：
+</p>
+<ol class="org-ol">
+<li>an HR-DSSS (802.11b) client association will trigger protection.
+</li>
+<li>if an 802.11g AP hears a beacon frame from an 802.11 or
+802.11b access point or ad hoc client, the protection
+mechanism will be triggered.
+</li>
+<li>If an ERP AP hears a management frame (other than a probe
+request) where the supported rate includes only 802.11 or
+802.11b rates, the <code>NonERP_Present</code> bit may be set to 1. 
+</li>
+</ol>
+
+<p>
+有了上述的理论支持，这个函数的实现逻辑就比较清晰了。该函数主要进
+行了如下一些检查步骤：
+</p>
+<ol class="org-ol">
+<li>当前hostapd启动时的mode。 
+
+<p>
+如果未设置或当前hw mode不是 <code>HOSTAPD_MODE_IEEE80211G</code> ，或是
+发送Beacon帧的AP与当前hostapd处于不同的信道，则无需进行后面的
+检测 ：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">if (iface-&gt;current_mode == NULL ||
+        iface-&gt;current_mode-&gt;mode != HOSTAPD_MODE_IEEE80211G ||
+        iface-&gt;conf-&gt;channel != ap-&gt;channel)
+        return 0;
+</pre>
+</div>
+</li>
+
+<li>如果Beacon帧中包含ERP IE信息，且其位
+<code>ERP_INFO_NON_ERP_PRESENT</code> 被置起，则需要进行OLBC保护机制。
+</li>
+
+<li>如果Beacon帧中的速率集中包含有 6Mbps, 9Mbps或大于11Mbps, 则说
+明该AP支持802.11g协议以上的AP，则不需要开启OLBC保护机制。 
+
+<p>
+NOTES: 802.11 legacy data rates: 1,2Mbps. 802.11b HR DSSS
+data rates: 5.5Mbps, 11Mbps.
+</p>
+</li>
+</ol>
+</div>
+</li>
+
+<li><a id="sec-2-1-1-1-4" name="sec-2-1-1-1-4"></a><code>hostapd_ht_operation_update</code><br ><div class="outline-text-6" id="text-2-1-1-1-4">
+<p>
+如果当前发送Beacon帧的AP不支持HT Operation，则需要开启HT
+Operation Protection。 在Beacon帧中，有一个HT Protection的域，它
+有4个可能的值0~3. 保护 模式会动态变化，取决于周围的设备或者关联
+的HT AP。使用的保护机制 主要有：RTS/CTS, CTS-to-Self, Dual-CTS或
+者其他的保护方法 . 
+4种保护模式：
+</p>
+<ul class="org-ul">
+<li>Mode 0—Greenfield (No Protection) Mode 
+
+<p>
+This mode is referred to as Greenfield because only HT radios
+are in use.
+</p>
+</li>
+
+<li>Mode 1—HT Nonmember Protection Mode
+
+<p>
+在该模式下，BSS中所有的STA都必须是HT STA.
+</p>
+</li>
+
+<li>Mode 2—HT 20 MHz Protection Mode
+
+<p>
+the 20/40-capable HT stations must use protection when
+transmitting on a 40 MHz channel in order to prevent the 20
+MHz–only HT stations from transmitting at the same time.
+</p>
+</li>
+
+<li>Mode 3—Non-HT Mixed Mode
+
+<p>
+This protection mode is used when one or more non-HT stations
+are associated to the HT access point. 
+</p>
+
+<p>
+这个函数的目的就是决定当前hostapd应该切换到哪种HT Protection
+ Mode。 
+ 首先是从Mode 0, 1到Mode 2, 3之间的转换判断：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">if (!(iface-&gt;ht_op_mode &amp; HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT)
+    &amp;&amp; iface-&gt;num_sta_ht_no_gf) {
+    iface-&gt;ht_op_mode |= HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT;//from mode 0,1 to mode 2
+    op_mode_changes++;
+} else if ((iface-&gt;ht_op_mode &amp;
+        HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT) &amp;&amp;
+       iface-&gt;num_sta_ht_no_gf == 0) {
+    iface-&gt;ht_op_mode &amp;= ~HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT;//from mode 2,3 to mode 0, 1
+    op_mode_changes++;
+}
+</pre>
+</div>
+
+<p>
+<code>iface-&gt;ht_op_mode</code> 代表当前hostapd当前所处的HT Operation
+Mode。 如果当前hostapd不处于Mode 2， 且
+<code>iface-&gt;num_sta_ht_no_gf</code> 的值不为0， 这说明当前有非GreenFiled
+的HT STA关联到当前的hostapd，此时HT Operation Mode必须切换到
+<code>HT_OPER_OP_MODE_NON_GF_HT_STAS_PRESENT</code> . 反过来，如果当前
+hostapd的HT Operation Mode处于Mode 2， 且当前与hostapd关联的非
+GreenField的HT STA数量为0， 则应该去掉当前的Mode 2. 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c">if (!(iface-&gt;ht_op_mode &amp; HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT) &amp;&amp;
+    (iface-&gt;num_sta_no_ht || iface-&gt;olbc_ht)) {
+    iface-&gt;ht_op_mode |= HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT;//should change to mode 3
+    op_mode_changes++;
+} else if ((iface-&gt;ht_op_mode &amp;
+        HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT) &amp;&amp;
+       (iface-&gt;num_sta_no_ht == 0 &amp;&amp; !iface-&gt;olbc_ht)) {
+    iface-&gt;ht_op_mode &amp;= ~HT_OPER_OP_MODE_OBSS_NON_HT_STAS_PRESENT;//should change from mode 3 
+    op_mode_changes++;
+}
+</pre>
+</div>
+
+<p>
+如果当前HT Operation Mode不包含Mode 3， 且
+<code>iface-&gt;num_sta_no_ht</code> 数量不为0，即有非HT的STA关联到hostapd，
+或是当前侦测到周围有OLBC HT AP， 则需要将当前的HT Operation
+Mode的Mode 3对应的Bit位置起。反过来，如果当前HT Operation Mode
+包含Mode 3（对应的Bit位被置起），但是此时没有非HT的STA关联到
+hostapd，或是没有侦测到周围有OLBC HT AP，则此时可以将对应的
+Mode 3 Bit位清除。
+</p>
+
+<p>
+最后，根据前面分析的结果，来设置相应的HT Operation Mode：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">if (iface-&gt;num_sta_no_ht)
+  new_op_mode = HT_PROT_NON_HT_MIXED;//mode 3
+ else if (iface-&gt;conf-&gt;secondary_channel &amp;&amp; iface-&gt;num_sta_ht_20mhz)
+   new_op_mode = HT_PROT_20MHZ_PROTECTION;//mode 2
+ else if (iface-&gt;olbc_ht)
+   new_op_mode = HT_PROT_NONMEMBER_PROTECTION;//mode 1
+ else
+   new_op_mode = HT_PROT_NO_PROTECTION; //mode 0
+
+cur_op_mode = iface-&gt;ht_op_mode &amp; HT_OPER_OP_MODE_HT_PROT_MASK;
+if (cur_op_mode != new_op_mode) {
+  iface-&gt;ht_op_mode &amp;= ~HT_OPER_OP_MODE_HT_PROT_MASK;
+  iface-&gt;ht_op_mode |= new_op_mode;
+  op_mode_changes++;
+ }
+</pre>
+</div>
+</li>
+</ul>
+</div>
+</li></ol>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-2-1-2" class="outline-4">
+<h4 id="sec-2-1-2"><span class="section-number-4">2.1.2</span> <code>hostapd_acl_expire</code></h4>
+<div class="outline-text-4" id="text-2-1-2">
+<p>
+ACL cache expiration callback
+</p>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> <code>fst_global_init</code></h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> <code>fst_global_add_ctrl</code></h3>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> <code>hostapd_interface_init</code></h2>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> <code>hostapd_interface_init_bss</code></h2>
+</div>
+
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> <code>hostapd_driver_init</code></h2>
+</div>
+
+<div id="outline-container-sec-7" class="outline-2">
+<h2 id="sec-7"><span class="section-number-2">7</span> <code>hostapd_setup_interface</code></h2>
+</div>
+
+<div id="outline-container-sec-8" class="outline-2">
+<h2 id="sec-8"><span class="section-number-2">8</span> <code>hostapd_global_ctrl_iface_init</code></h2>
+</div>
+
+<div id="outline-container-sec-9" class="outline-2">
+<h2 id="sec-9"><span class="section-number-2">9</span> <code>hostapd_global_run</code></h2>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. <code>hostapd_global_init</code></a>
+<ul class="nav">
+<li><a href="#sec-1-1">1.1. <code>hostapd_reload_config</code></a></li>
+<li><a href="#sec-1-2">1.2. <code>hostapd_config_read</code></a></li>
+<li><a href="#sec-1-3">1.3. <code>hostapd_for_each_interface</code></a></li>
+<li><a href="#sec-1-4">1.4. <code>hostapd_ctrl_iface_init</code></a></li>
+<li><a href="#sec-1-5">1.5. <code>hostapd_ctrl_iface_deinit</code></a></li>
+<li><a href="#sec-1-6">1.6. <code>hostapd_driver_init</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-2">2. <code>hostapd_periodic</code></a>
+<ul class="nav">
+<li><a href="#sec-2-1">2.1. <code>hostapd_periodic_iface</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-3">3. <code>fst_global_init</code></a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. <code>fst_global_add_ctrl</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-4">4. <code>hostapd_interface_init</code></a></li>
+<li><a href="#sec-5">5. <code>hostapd_interface_init_bss</code></a></li>
+<li><a href="#sec-6">6. <code>hostapd_driver_init</code></a></li>
+<li><a href="#sec-7">7. <code>hostapd_setup_interface</code></a></li>
+<li><a href="#sec-8">8. <code>hostapd_global_ctrl_iface_init</code></a></li>
+<li><a href="#sec-9">9. <code>hostapd_global_run</code></a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>

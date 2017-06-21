@@ -108,6 +108,106 @@
    1. L2CAP does not transport synchronous data designated for SCO or
       eSCO logical transports.
    2. L2CAP does not support a reliable broadcast channel.
+
+* GENERAL OPERATION
+  L2CAP is based around the concept of ’channels’. Each one of the endpoints of
+  an L2CAP channel is referred to by a /channel identifier (CID)/.
+
+  #+CAPTION: Dynamically allocated CID assignments
+  [[./images/004.png]]
+
+  The AMP-U logical link shares the CID name space with its associated
+  ACL-U logical link.
+
+** CHANNEL IDENTIFIERS
+   A channel identifier (CID) is the local name representing a logical channel
+   endpoint on the device. The null identifier (0x0000) shall never be used as a
+   destination endpoint. Identifiers from 0x0001 to 0x003F are reserved for
+   specific L2CAP functions.At a minimum, the L2CAP Signaling channel (Fixed Channel 0x0001) or the
+   L2CAP LE Signaling channel (Fixed Channel 0x0005) shall be
+   supported. The Information Request / Response mechanism shall be used to determine which fixed channels a remote
+   device supports over the ACL-U logical link.
+
+   The characteristics of each fixed channel are defined on a per channel basis.
+   Fixed channel characteristics include configuration parameters (e.g., reliability,
+   MTU size, QoS), security, and the ability to change parameters using the
+   L2CAP configuration mechanism. Fixed channels shall only run over ACL-U, ASB-U, or
+   LE-U logical links and shall not be moved.
+
+   for the remaining CIDs, two simultaneously active L2CAP channels
+   shall not share the same CID.
+
+** OPERATION BETWEEN DEVICES
+   
+   #+CAPTION: Channels between devices
+   [[./images/002.png]]
+
+   There are also a number of CIDs reserved for special purposes. 
+
+   #+CAPTION: Types of Channel Identifiers
+   | Channel Type        | Local CID (sending)             | Remote CID (receiving)          |
+   |---------------------+---------------------------------+---------------------------------|
+   | Connection-oriented | Dynamically allocated and fixed | Dynamically allocated and fixed |
+   | Connectionless data | 0x0002 (fixed)                  | 0x0002 (fixed)                  |
+   | L2CAP Signaling     | 0x0001 and 0x0005 (fixed)       | 0x0001 and 0x0005 (fixed)       |
+   |---------------------+---------------------------------+---------------------------------|
+   
+   
+** OPERATION BETWEEN LAYERS
+   L2CAP implementations transfer data between upper layer protocols
+   and the lower layer protocol.any L2CAP implementation should:
+   - export a number of services
+   - support a set of signaling commands
+   - accept certain types of events from lower layers and generate
+     events to upper layers. 
+
+     
+   #+CAPTION: L2CAP transaction model
+   [[./images/003.png]]
+
+** MODES OF OPERATION
+   L2CAP channels may operate in one of five different modes as selected for
+   each L2CAP channel.
+   
+   The modes are:
+   - Basic L2CAP Mode (equivalent to L2CAP specification in Bluetooth
+     v1.1)
+     the default mode
+   - Flow Control Mode
+   - Retransmission Mode
+   - Enhanced Retransmission Mode
+     used for all reliable channels created over AMP-U logical links
+     and for ACL-U logical links operation under some conditions.
+   - Streaming Mode
+     used for streaming applications created over AMP-U logical links
+     and ACL-U logical links operating under some conditions.
+   - LE Credit Based Flow Control Mode
+
+** MAPPING CHANNELS TO LOGICAL LINKS
+   L2CAP maps channels to Controller logical links, which in turn run over
+   Controller physical links. All logical links going between a local Controller and
+   remote Controller run over a single physical link.There is one ACL-U logical
+   link per BR/EDR physical link and one LE-U logical link per LE physical link,
+   while there may be multiple AMP-U logical links per AMP physical
+   link.
+
+   All Best Effort and Guaranteed channels going over a BR/EDR physical link
+   between two devices shall be mapped to a single ACL-U logical link. All Best
+   Effort channels going over an AMP physical link between two Controllers shall
+   be mapped to a single AMP-U logical link while each Guaranteed channel
+   going between two Controllers shall be mapped to its own AMP-U logical link
+   with one AMP-U logical link per Guaranteed channel. All channels going over
+   an LE physical link between two devices shall be treated as best effort and
+   mapped to a single LE-U logical link.
+
+     
+   
+   
+
+   
+
+   
+
    
    
    

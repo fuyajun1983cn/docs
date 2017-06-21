@@ -1,0 +1,1701 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Linux无线网络内核框架</h1>
+          <p>Linux WiFi Kernel Stack研究。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">Linux无线网络内核框架</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1">几个主要数据结构之间的关系<sup><a id="fnr.1" name="fnr.1" class="footref" href="#fn.1">1</a></sup></h2>
+<div class="outline-text-2" id="text-1">
+
+<figure>
+<p><img src="http://blog.ifjy.me/images/2016/2016012801.png" class="img-responsive" alt="2016012801.png">
+</p>
+</figure>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2">A high level description of the Linux WiFi kernel stack</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+It's important to understand there are 2 paths in which userspace
+communicates with the kernel when we're talking about WiFi
+</p>
+</div>
+
+<div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1">Data path</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+the data being received is passed from the wireless driver to the
+netdev core (usually using <b>netif<sub>rx</sub>()</b>). From there the net core
+will pass it through the TCP/IP stack code and will queue it on
+the relevant sockets from which the userspace process will read
+it. On the Tx path packets will be sent from the netdev core to
+the wireless driver using the <b>ndo<sub>start</sub><sub>xmit</sub>()</b> callback. The
+driver registers (like other netdevices such as an ethernet
+driver) a set of operations callbacks by using the struct
+<b>net<sub>device</sub><sub>ops</sub></b>.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2">Control path</h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+This path is how userspace controls the WiFi interface/device and
+performs operations like  <b>scan / authentication / association</b>. The
+userspace interface is based on netlink and called nl80211 (see
+include/uapi/linux/nl80211.h). You can send commands and get
+events in response.
+</p>
+
+<p>
+When you send an nl80211 command it gets initially handled by
+cfg80211 kernel module(it's code is under net/wireless and the
+handlers are in net/wireless/nl80211.c). cfg80211 will usually call a
+lower level driver. In case of <b>Full MAC hardware</b> the specific HW
+driver is right below cfg80211. The driver below cfg80211 registers a
+set of ops with cfg80211 by using <b>cfg80211<sub>ops</sub></b> struct. For example
+see brcmfmac driver
+(drivers/net/wireless/brcm80211/brcmfmac/wl<sub>cfg80211</sub>.c)
+</p>
+
+<p>
+For <b>Soft MAC</b> hardware there's mac80211 which is a kernel module
+implementing the 802.11 MAC layer. In this case cfg80211 will talk to
+mac80211 which will in turn use the hardware specific lower level
+driver. An example of this is iwlwifi (For Intel chips).
+</p>
+
+<p>
+mac80211 registers itself with cfg80211 by using the cfg80211<sub>ops</sub>
+(see net/mac80211/cfg.c).The specific HW driver registers itself with
+mac80211 by using the <b>ieee80211<sub>ops</sub></b> struct (for example
+drivers/net/wireless/iwlwifi/mvm/mac80211.c).
+</p>
+
+<p>
+Initialization of a new NIC you've connected occurs from the bottom
+up the stack. The HW specific driver will call mac80211's
+<b>ieee80211<sub>allow</sub><sub>hw</sub>()</b> usually after probing the
+HW. <b>ieee80211<sub>alloc</sub><sub>hw</sub>()</b> gets the size of private data struct used by
+the HW driver. It in turns calls <b>cfg80211 wiphy<sub>new</sub>()</b> which does the
+actual allocation of space sufficient for the <b>wiphy</b> struct, the
+<b>ieee80211<sub>local</sub> struct</b> (which is used by mac80211) and the HW driver
+private data (the layering is seen in <b>ieee80211<sub>alloc</sub><sub>hw</sub></b>
+code). <b>ieee80211<sub>hw</sub></b> is an embedded struct within <b>ieee80211<sub>local</sub></b>
+which is "visible" to the the HW driver. All of these (wiphy,
+ieee80211<sub>local</sub>,ieee80211<sub>hw</sub>) represent a single physical device
+connected.
+</p>
+
+<p>
+On top of a single physical device (also referred to as phy) you can
+set up multiple virtual interfaces. These are essentially what you
+know as wlan0 or wlan1 which you control with ifconfig. Each such
+virtual interface is represented by an <b>ieee80211<sub>vif</sub></b>. This struct
+also contains at the end private structs accessed by the HW
+driver. Multiple interfaces can be used to run something like a
+station on wlan0 and an AP on wlan1 (this is possible depending on
+the HW capabilities).
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3">cfg80211</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1">主要API速览</h3>
+<div class="outline-text-3" id="text-3-1">
+<ul class="org-ul">
+<li><code>cfg80211_register</code> 
+        这个必须在 <code>regsiter_netdevice()</code> 之前调用   
+</li>
+<li><code>cfg80211_connect_result</code>
+        通知上层当前的连接状态。
+</li>
+<li><code>cfg80211_disconnected</code>
+        通知上层底层连接已经断开
+</li>
+<li><code>cfg80211_get_chandef_type</code>
+        主要的类型有：
+<ul class="org-ul">
+<li><code>NL80211_CHAN_NO_HT</code>
+</li>
+<li><code>NL80211_CHAN_HT20</code>
+</li>
+<li><code>NL80211_CHAN_HT40MINUS</code>
+</li>
+<li><code>NL80211_CHAN_HT40PLUS</code>
+</li>
+</ul>
+</li>
+<li><code>cfg80211_chandef_create</code>
+        创建Channel的信息
+</li>
+<li><code>cfg80211_get_bss</code>
+</li>
+<li><code>cfg80211_put_bss</code>
+</li>
+<li><code>cfg80211_inform_bss</code>
+2.6.31后，优先使用此接口
+通知80211，获得了一个scan bss。
+</li>
+<li><code>cfg80211_inform_bss_frame</code>
+</li>
+<li><code>cfg80211_find_ie</code>
+        寻找指定的IE。 如SSID
+</li>
+<li><code>cfg80211_find_vendor_ie</code>
+</li>
+<li><code>cfg80211_tdls_oper_request</code>
+</li>
+<li><code>cfg80211_scan_done</code>
+        通知上层，扫描动作停止。
+</li>
+<li><code>cfg80211_rx_mgmt</code>
+通知上层，接收到未处理的管理帧, 从Kernel上报告管理帧，都是通过些接
+口。
+</li>
+<li><code>cfg80211_rx_action</code>
+        通知上层，接收到未处理的Action帧
+</li>
+<li><code>cfg80211_mgmt_tx_status</code>
+</li>
+<li><code>cfg80211_action_tx_status</code>
+        通知上层，Action帧的发送状态
+</li>
+<li><code>cfg80211_new_sta</code>
+当关联成功后，会调用此接口通知上层添加了新的关联工作站。
+驱动在处理对方的Association Request后，如果成功回应了Association
+Response，会通过该接口通知上层，有新的STA创建。
+</li>
+<li><code>cfg80211_del_sta</code>
+        当Deauth或Diassoc后，会调用些接口。
+</li>
+<li><code>cfg80211_michael_mic_failure</code>
+</li>
+<li><code>cfg80211_roamed</code>
+</li>
+<li><code>cfg80211_report_obss_beacon</code>
+</li>
+<li><code>cfg80211_ibss_joined</code>
+</li>
+<li><code>cfg80211_ready_on_channel</code>
+        repoort remain on channel ready.
+</li>
+<li><code>cfg80211_remain_on_channel_expired</code>
+</li>
+<li><code>cfg80211_classify8021d</code>
+        返回802.1d中的tag优先级
+</li>
+<li><code>wiphy_new</code> 
+会创建 <code>struct cfg80211_registered_device</code> 结构实例，并初始化其
+<code>wdev_list</code> 链表。这个链表是由 <code>struct wireless_dev</code> 类型元素组成。 
+
+<p>
+两个相关函数：
+</p>
+<ol class="org-ol">
+<li><code>wiphy_priv()</code>
+</li>
+
+<li><code>priv_to_wiphy()</code>
+</li>
+</ol>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2">主要数据结构速览</h3>
+<div class="outline-text-3" id="text-3-2">
+<ul class="org-ul">
+<li><code>struct wireless_dev</code> 
+无线设备的状态， 在 <code>struct net_device</code> 的 <code>ieee80211_ptr</code> 域中，会
+指向这个数据结构。
+
+<div class="org-src-container">
+
+<pre class="src src-c">struct wireless_dev {
+        struct wiphy *wiphy;
+        enum nl80211_iftype iftype;
+
+        /* the remainder of this struct should be private to cfg80211 */
+        struct list_head list;
+        struct net_device *netdev;
+
+        u32 identifier;
+
+        struct list_head mgmt_registrations;
+        spinlock_t mgmt_registrations_lock;
+
+        struct mutex mtx;
+
+        bool use_4addr, p2p_started;
+
+        u8 address[ETH_ALEN] __aligned(sizeof(u16));
+
+        /* currently used for IBSS and SME - might be rearranged later */
+        u8 ssid[IEEE80211_MAX_SSID_LEN];
+        u8 ssid_len, mesh_id_len, mesh_id_up_len;
+        struct cfg80211_conn *conn;
+        struct cfg80211_cached_keys *connect_keys;
+
+        struct list_head event_list;
+        spinlock_t event_lock;
+
+        struct cfg80211_internal_bss *current_bss; /* associated / joined */
+        struct cfg80211_chan_def preset_chandef;
+        struct cfg80211_chan_def chandef;
+
+        bool ibss_fixed;
+        bool ibss_dfs_possible;
+
+        bool ps;
+        int ps_timeout;
+
+        int beacon_interval;
+
+        u32 ap_unexpected_nlportid;
+
+        bool cac_started;
+        unsigned long cac_start_time;
+        unsigned int cac_time_ms;
+
+        u32 owner_nlportid;
+
+#ifdef CPTCFG_CFG80211_WEXT
+        /* wext data */
+        struct {
+                struct cfg80211_ibss_params ibss;
+                struct cfg80211_connect_params connect;
+                struct cfg80211_cached_keys *keys;
+                const u8 *ie;
+                size_t ie_len;
+                u8 bssid[ETH_ALEN], prev_bssid[ETH_ALEN];
+                u8 ssid[IEEE80211_MAX_SSID_LEN];
+                s8 default_key, default_mgmt_key;
+                bool prev_bssid_valid;
+        } wext;
+#endif
+};
+</pre>
+</div>
+</li>
+<li><code>struct cfg80211_registered_device</code>
+<div class="org-src-container">
+
+<pre class="src src-c">struct cfg80211_registered_device {
+        const struct cfg80211_ops *ops;
+        struct list_head list;
+        /* we hold this mutex during any call so that
+         * we cannot do multiple calls at once, and also
+         * to avoid the deregister call to proceed while
+         * any call is in progress */
+        struct mutex mtx;
+
+        /* rfkill support */
+        struct rfkill_ops rfkill_ops;
+        struct rfkill *rfkill;
+        struct work_struct rfkill_sync;
+
+        /* ISO / IEC 3166 alpha2 for which this device is receiving
+         * country IEs on, this can help disregard country IEs from APs
+         * on the same alpha2 quickly. The alpha2 may differ from
+         * cfg80211_regdomain's alpha2 when an intersection has occurred.
+         * If the AP is reconfigured this can also be used to tell us if
+         * the country on the country IE changed. */
+        char country_ie_alpha2[2];
+
+        /* If a Country IE has been received this tells us the environment
+         * which its telling us its in. This defaults to ENVIRON_ANY */
+        enum environment_cap env;
+
+        /* wiphy index, internal only */
+        int wiphy_idx;
+
+        /* associated wireless interfaces */
+        struct mutex devlist_mtx;
+        /* protected by devlist_mtx or RCU */
+        struct list_head wdev_list;
+        int devlist_generation, wdev_id;
+        int opencount; /* also protected by devlist_mtx */
+        wait_queue_head_t dev_wait;
+
+        struct list_head beacon_registrations;
+        spinlock_t beacon_registrations_lock;
+
+        /* protected by RTNL only */
+        int num_running_ifaces;
+        int num_running_monitor_ifaces;
+
+        /* BSSes/scanning */
+        spinlock_t bss_lock;
+        struct list_head bss_list;
+        struct rb_root bss_tree;
+        u32 bss_generation;
+        struct cfg80211_scan_request *scan_req; /* protected by RTNL */
+        struct cfg80211_sched_scan_request *sched_scan_req;
+        unsigned long suspend_at;
+        struct work_struct scan_done_wk;
+        struct work_struct sched_scan_results_wk;
+
+        struct mutex sched_scan_mtx;
+
+#ifdef CONFIG_NL80211_TESTMODE
+        struct genl_info *testmode_info;
+#endif
+
+        struct work_struct conn_work;
+        struct work_struct event_work;
+
+        struct cfg80211_wowlan *wowlan;
+
+        struct delayed_work dfs_update_channels_wk;
+
+        /* netlink port which started critical protocol (0 means not started) */
+        u32 crit_proto_nlportid;
+
+        /* must be last because of the way we do wiphy_priv(),
+         * and it should at least be aligned to NETDEV_ALIGN */
+        struct wiphy wiphy __aligned(NETDEV_ALIGN);
+};
+</pre>
+</div>
+</li>
+<li><code>struct cfg80211_chan_def</code>
+        信道定义
+</li>
+<li><code>struct cfg80211_scan_request</code>
+</li>
+<li><code>struct cfg80211_ibss_params</code>
+</li>
+<li><code>struct cfg80211_connect_params</code>
+Connection parameters
+This structure provides information needed to complete IEEE 802.11
+authentication and association. 
+
+<div class="org-src-container">
+
+<pre class="src src-c">struct cfg80211_ops CFG80211_Ops = {
+  ...
+  .connect = mt76xx_cfg80211_connect,
+  ...
+};
+
+static int mt76xx_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
+                                   struct cfg80211_connect_params *sme)
+{
+#ifdef CONFIG_STA_SUPPORT
+        RTMP_ADAPTER *pAd;
+        INT32 Pairwise;
+        INT32 Groupwise;
+        INT32 Keymgmt = 0;
+        int i;
+        CMD_RTPRIV_IOCTL_80211_CONNECT ConnInfo;
+
+        MAC80211_PAD_GET(pAd, wiphy);
+        if (!pAd)
+                return -EFAULT;
+
+        CFG80211DBG(RT_DEBUG_TRACE, ("80211&gt; %s ==&gt;\n", __func__));
+
+        //Group Wise
+        CFG80211DBG(RT_DEBUG_TRACE, ("Groupwise: %x\n", sme-&gt;crypto.cipher_group));
+        Groupwise = sme-&gt;crypto.cipher_group;
+
+        //Pair Wise
+        if (sme-&gt;crypto.n_ciphers_pairwise)
+                Pairwise = sme-&gt;crypto.ciphers_pairwise[0];
+        else
+                Pairwise = 0;
+        CFG80211DBG(RT_DEBUG_TRACE, ("Pairwise %x\n", sme-&gt;crypto.ciphers_pairwise[0]));
+
+        //Key management
+        for (i = 0; i &lt; sme-&gt;crypto.n_akm_suites; ++i)
+                Keymgmt |= sme-&gt;crypto.akm_suites[i];
+
+        memset(&amp;ConnInfo, 0, sizeof(ConnInfo));
+
+        //WPA Version
+
+        if (!sme-&gt;crypto.wpa_versions)
+                ConnInfo.WpaVer = 0;
+        else if (sme-&gt;crypto.wpa_versions &amp; NL80211_WPA_VERSION_2)
+                ConnInfo.WpaVer = 2;
+        else if (sme-&gt;crypto.wpa_versions &amp; NL80211_WPA_VERSION_1)
+                ConnInfo.WpaVer = 1;
+        else {
+                CFG80211DBG(RT_DEBUG_ERROR, ("version %x not supported\n",
+                                             sme-&gt;crypto.wpa_versions));
+                return -ENOTSUPP;
+        }
+        CFG80211DBG(RT_DEBUG_TRACE, ("wpa_versions %x\n", sme-&gt;crypto.wpa_versions));
+
+        /* GeK: [todo] WLAN_AKM_SUITE_PSK and others? */
+        CFG80211DBG(RT_DEBUG_TRACE, ("Keymgmt %x\n", Keymgmt));
+        if (Keymgmt == WLAN_AKM_SUITE_8021X)
+                ConnInfo.FlgIs8021x = TRUE;
+        else
+                ConnInfo.FlgIs8021x = FALSE;
+
+        //Auth type
+        CFG80211DBG(RT_DEBUG_TRACE, ("Auth_type %x\n", sme-&gt;auth_type));
+        if (sme-&gt;auth_type == NL80211_AUTHTYPE_SHARED_KEY)
+                ConnInfo.AuthType = Ndis802_11AuthModeShared;
+        else if (sme-&gt;auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM)
+                ConnInfo.AuthType = Ndis802_11AuthModeOpen;
+        else
+                ConnInfo.AuthType = Ndis802_11AuthModeAutoSwitch;
+
+        switch (Pairwise) {
+        case 0:
+                CFG80211DBG(RT_DEBUG_TRACE, ("NONE...\n"));
+                ConnInfo.PairwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_NONE;
+                break;
+        case WLAN_CIPHER_SUITE_CCMP:
+                CFG80211DBG(RT_DEBUG_TRACE, ("WLAN_CIPHER_SUITE_CCMP...\n"));
+                ConnInfo.PairwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_CCMP;
+                break;
+        case WLAN_CIPHER_SUITE_TKIP:
+                CFG80211DBG(RT_DEBUG_TRACE, ("WLAN_CIPHER_SUITE_TKIP...\n"));
+                ConnInfo.PairwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_TKIP;
+                break;
+        case WLAN_CIPHER_SUITE_WEP40:
+                /* fall through */
+        case WLAN_CIPHER_SUITE_WEP104:
+                CFG80211DBG(RT_DEBUG_TRACE, ("WLAN_CIPHER_SUITE_WEP...\n"));
+                ConnInfo.PairwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_WEP;
+                break;
+        default:
+                CFG80211DBG(RT_DEBUG_ERROR, ("pairwise %x not supported\n", Pairwise));
+                return -ENOTSUPP;
+        }
+
+        if (Groupwise == WLAN_CIPHER_SUITE_CCMP)
+                ConnInfo.GroupwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_CCMP;
+        else if (Groupwise == WLAN_CIPHER_SUITE_TKIP)
+                ConnInfo.GroupwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_TKIP;
+        else
+                ConnInfo.GroupwiseEncrypType |= RT_CMD_80211_CONN_ENCRYPT_NONE;
+
+        CFG80211DBG(RT_DEBUG_TRACE, ("ConnInfo.KeyLen ===&gt; %d\n", sme-&gt;key_len));
+        CFG80211DBG(RT_DEBUG_TRACE, ("ConnInfo.KeyIdx ===&gt; %d\n", sme-&gt;key_idx));
+
+        ConnInfo.pKey = (UINT8 *) (sme-&gt;key);
+        ConnInfo.KeyLen = sme-&gt;key_len;
+        ConnInfo.pSsid = sme-&gt;ssid;
+        ConnInfo.SsidLen = sme-&gt;ssid_len;
+        ConnInfo.KeyIdx = sme-&gt;key_idx;
+        ConnInfo.bWpsConnection = FALSE;
+        /* Check if WPS is triggerred */
+        pAd-&gt;StaCfg.wpa_supplicant_info.WpaSupplicantUP = WPA_SUPPLICANT_ENABLE;
+        if (sme-&gt;ie &amp;&amp; sme-&gt;ie_len &amp;&amp;
+            sme-&gt;auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM &amp;&amp;
+            ConnInfo.PairwiseEncrypType == RT_CMD_80211_CONN_ENCRYPT_NONE) {
+                if (RTMPFindWPSIE(sme-&gt;ie, (UINT32) sme-&gt;ie_len) != NULL) {
+                        ConnInfo.bWpsConnection = TRUE;
+                        pAd-&gt;StaCfg.wpa_supplicant_info.WpaSupplicantUP
+                                |= WPA_SUPPLICANT_ENABLE_WPS;
+                }
+        }
+
+        /* Use SIOCSIWGENIE to make out the WPA/WPS IEs in AssocReq. */
+#ifdef RT_CFG80211_P2P_CONCURRENT_DEVICE
+        if (dev-&gt;ieee80211_ptr-&gt;iftype == NL80211_IFTYPE_P2P_CLIENT) {
+                if (sme-&gt;ie_len &gt; 0)
+                        CFG80211DRV_SetP2pCliAssocIe(pAd, sme-&gt;ie, sme-&gt;ie_len);
+                else
+                        CFG80211DRV_SetP2pCliAssocIe(pAd, NULL, 0);
+        } else
+#endif /* RT_CFG80211_P2P_CONCURRENT_DEVICE */
+        {
+                if (sme-&gt;ie_len &gt; 0)
+                        RtmpIoctl_rt_ioctl_siwgenie(pAd, sme-&gt;ie, sme-&gt;ie_len);
+                else
+                        RtmpIoctl_rt_ioctl_siwgenie(pAd, NULL, 0);
+        }
+
+#ifdef DOT11W_PMF_SUPPORT
+#if (LINUX_VERSION_CODE &gt;= KERNEL_VERSION(3, 10, 0))
+        CFG80211DBG(RT_DEBUG_TRACE, ("80211&gt; PMF Connect %d\n", sme-&gt;mfp));
+        if (sme-&gt;mfp)
+                ConnInfo.mfp = TRUE;
+        else
+                ConnInfo.mfp = FALSE;
+#endif /* LINUX_VERSION_CODE */
+#endif /* DOT11W_PMF_SUPPORT */
+
+        /* %NULL if not specified (auto-select based on scan) */
+        if (sme-&gt;bssid != NULL &amp;&amp; !MAC_ADDR_EQUAL(sme-&gt;bssid, ZERO_MAC_ADDR)) {
+                CFG80211DBG(RT_DEBUG_OFF, ("80211&gt; Connect bssid %02x:%02x:%02x:%02x:%02x:%02x\n",
+                                           PRINT_MAC(sme-&gt;bssid)));
+                ConnInfo.pBssid = sme-&gt;bssid;
+        } else
+                ConnInfo.pBssid = NULL;
+
+        RTMP_DRIVER_80211_CONNECT(pAd, &amp;ConnInfo, dev-&gt;ieee80211_ptr-&gt;iftype);
+#endif /*CONFIG_STA_SUPPORT */
+        return 0;
+}                               /* mt76xx_cfg80211_connect */
+</pre>
+</div>
+</li>
+<li><code>struct cfg80211_pmksa</code>
+</li>
+<li><code>struct cfg80211_gtk_rekey_data</code>
+</li>
+<li><code>struct cfg80211_mgmt_tx_params</code>
+</li>
+<li><code>struct cfg80211_ap_settings</code>
+        起softap时，会通过该数据结构传递下层配置的一些参数下来。
+</li>
+<li><code>struct cfg80211_beacon_data</code>
+</li>
+<li><code>struct cfg80211_bitrate_mask</code>
+</li>
+<li><code>struct cfg80211_ops</code>
+        TODO:  change<sub>station</sub> 何时会调用 
+</li>
+<li><code>struct cfg80211_crypto_settings</code>
+</li>
+<li><code>struct ieee80211_iface_combination</code>
+        接口约束定义
+<div class="org-src-container">
+
+<pre class="src src-c">static const struct ieee80211_iface_limit ra_p2p_sta_go_limits[] = 
+{
+        {
+                .max = 3,
+                .types = BIT(NL80211_IFTYPE_STATION)| BIT(NL80211_IFTYPE_AP),
+        },
+        {
+                .max = 1,
+                .types = BIT(NL80211_IFTYPE_P2P_GO) | BIT(NL80211_IFTYPE_P2P_CLIENT),
+        },
+};
+</pre>
+</div>
+</li>
+<li><code>struct ieee80211_iface_limit</code> 
+<div class="org-src-container">
+
+<pre class="src src-c">static const struct ieee80211_iface_combination 
+ra_iface_combinations_p2p[] = {
+        {
+                .num_different_channels = 1,
+                .max_interfaces = 3,
+                //.beacon_int_infra_match = true,
+                .limits = ra_p2p_sta_go_limits,
+                .n_limits = 1,//ARRAY_SIZE(ra_p2p_sta_go_limits),
+        },
+};
+
+static const struct ieee80211_iface_combination 
+ra_iface_combinations_p2p_GO[] = {
+        {
+                .num_different_channels = 1,
+                .max_interfaces = 3,
+                //.beacon_int_infra_match = true,
+                .limits = ra_p2p_sta_go_limits,
+                .n_limits = ARRAY_SIZE(ra_p2p_sta_go_limits),
+        },
+};
+</pre>
+</div>
+
+<p>
+在调用 <code>wiphy_register</code> 之前，可以将上述信息设置到 <code>struct wiphy</code> 的
+<code>iface_combinations</code> 和 <code>n_iface_combinations</code> 。
+</p>
+</li>
+<li><code>struct ieee80211_mgmt</code>  
+        管理帧，相关API有：
+<ul class="org-ul">
+<li><code>ieee80211_is_mgmt</code>
+</li>
+
+<li><code>ieee80211_is_probe_resp</code>
+</li>
+
+<li><code>ieee80211_is_disassoc</code>
+</li>
+
+<li><code>ieee80211_is_deauth</code>
+</li>
+
+<li><code>ieee80211_is_action</code>
+</li>
+
+<li><code>cfg80211_rx_mgmt</code>
+          向上层报告有未处理的管理帧收到。
+</li>
+</ul>
+</li>
+<li><code>struct cfg80211_bss</code>
+        BSS信息
+</li>
+<li><code>struct station_info</code>
+描述STA相关的信息， 其中 <code>filled</code> 可以告知 <code>nl80211</code> 层，上报上来的
+消息包含哪些IE。 如 <code>STATION_INFO_ASSOC_REQ_IES</code> 表明当前上报上来的
+Association Request会包含相关的IE信息。
+<div class="org-src-container">
+
+<pre class="src src-c">VOID CFG80211OS_NewSta(IN PNET_DEV pNetDev, IN const PUCHAR mac_addr, IN const PUCHAR assoc_frame, IN UINT32 assoc_len)
+{
+        struct station_info sinfo;
+        struct ieee80211_mgmt *mgmt;
+
+        NdisZeroMemory(&amp;sinfo, sizeof(sinfo));
+
+        sinfo.filled = STATION_INFO_ASSOC_REQ_IES;
+
+        mgmt = (struct ieee80211_mgmt *) assoc_frame;
+        sinfo.assoc_req_ies_len = assoc_len - 24 - 4;
+        sinfo.assoc_req_ies = mgmt-&gt;u.assoc_req.variable;
+
+        return cfg80211_new_sta(pNetDev, mac_addr, &amp;sinfo, GFP_KERNEL);
+}
+</pre>
+</div>
+
+<p>
+还有tx rate的相关信息
+</p>
+</li>
+<li><code>struct survey_info</code>
+        site survey information
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3" class="outline-3">
+<h3 id="sec-3-3">主要流程</h3>
+<div class="outline-text-3" id="text-3-3">
+</div><div id="outline-container-sec-3-3-1" class="outline-4">
+<h4 id="sec-3-3-1">数据结构</h4>
+<div class="outline-text-4" id="text-3-3-1">
+<ul class="org-ul">
+<li><code>struct wiphy</code>
+           wireless hardware description
+</li>
+<li><code>wireless_dev</code>
+           wireless device state
+</li>
+<li><code>struct net_device_ops</code>
+在Linux 2.6.31内核版本后，在注册设备时，如下几个回调接口一般需要
+被定义：
+<ol class="org-ol">
+<li><code>ndo_open</code>
+</li>
+<li><code>ndo_stop</code>
+</li>
+<li><code>ndo_start_xmit</code>
+</li>
+<li><code>ndo_do_ioctl</code>
+</li>
+<li><code>ndo_get_stats</code>
+              可选，获取状态信息
+</li>
+<li><code>ethtool_ops</code>
+              获取驱动信息的回调函数
+</li>
+<li><code>ndo_validate_addr</code>
+</li>
+</ol>
+</li>
+<li><code>struct net_device_stats</code>
+</li>
+<li><code>struct ieee80211_rate</code>
+           支持的速率定义
+</li>
+<li><code>struct ieee80211_channel</code>
+信道定义, <code>IEEE80211_CHAN_RADAR</code> 用于判断当前信道是否需要回避雷
+达。
+相关接口：
+<ol class="org-ol">
+<li><code>ieee80211_get_channel</code>
+</li>
+<li><code>ieee80211_channel_to_frequency</code>
+</li>
+</ol>
+</li>
+<li><code>struct ieee80211_supported_band</code>
+           频段定义：2.4G(<code>IEEE80211_BAND_2GHZ</code>), 5G(<code>IEEE80211_BAND_5GHZ</code>)等 
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-3-3-2" class="outline-4">
+<h4 id="sec-3-3-2">频段和速率的定义</h4>
+<div class="outline-text-4" id="text-3-3-2">
+<ol class="org-ol">
+<li>信道定义的定义
+<code>center_freq, hw_value, max_power, max_antenna_gain</code> 这个值的定
+义。需要用到信道与频率之间的映射函数： <code>ieee80211_channel_to_frequency</code>
+</li>
+<li>初始化所支持的速率
+定义 <code>struct ieee80211_rate</code> 数组
+</li>
+<li>频段定义
+包含的信息有：支持的信道数，支持的速率，以及HT Capability相关信
+息。
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-3" class="outline-4">
+<h4 id="sec-3-3-3">设备注册</h4>
+<div class="outline-text-4" id="text-3-3-3">
+<ul class="org-ul">
+<li><code>wiphy_new</code>  
+        Allocate wiphy and hook cfg80211 ops
+</li>
+<li><code>wiphy_register</code>  
+Register the wiphy to cfg80211. Do sanity checking , set up
+regulatory info according to the wiphy info and so on.
+</li>
+<li><code>wiphy_free</code>  
+        Free the allocated wiphy
+</li>
+<li><code>wiphy_unregister</code>  
+        Unregister the wiphy.
+</li>
+</ul>
+
+<p>
+在注册 <code>netdev</code> 之前进行，主要包含硬件的一些能力信息：
+</p>
+<ol class="org-ol">
+<li>bands and channels
+</li>
+<li>bitrates per band
+</li>
+<li>HT capabilites
+</li>
+<li>supported interface modes
+</li>
+</ol>
+<p>
+netdev结构的 <code>ieee80211 ptr</code> 指针指向注册的 <code>struct wireless_dev</code> 对象 。
+</p>
+
+<p>
+注册cfg80211相关函数接口。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">static void wlanCreateWirelessDevice(void)
+{
+        struct wiphy *prWiphy = NULL;
+        struct wireless_dev *prWdev = NULL;
+
+        /* 4 &lt;1.1&gt; Create wireless_dev */
+        prWdev = kzalloc(sizeof(struct wireless_dev), GFP_KERNEL);
+        if (!prWdev) {
+                DBGLOG(INIT, ERROR, "Allocating memory to wireless_dev context failed\n");
+                return;
+        }
+        /* 4 &lt;1.2&gt; Create wiphy */
+        prWiphy = wiphy_new(&amp;mtk_wlan_ops, sizeof(GLUE_INFO_T));
+        if (!prWiphy) {
+                DBGLOG(INIT, ERROR, "Allocating memory to wiphy device failed\n");
+                goto free_wdev;
+        }
+        /* 4 &lt;1.3&gt; configure wireless_dev &amp; wiphy */
+        prWdev-&gt;iftype = NL80211_IFTYPE_STATION;
+        prWiphy-&gt;iface_combinations = p_mtk_iface_combinations_sta;
+        prWiphy-&gt;n_iface_combinations = mtk_iface_combinations_sta_num;
+        prWiphy-&gt;max_scan_ssids = 1;    /* FIXME: for combo scan */
+        prWiphy-&gt;max_scan_ie_len = 512;
+        prWiphy-&gt;interface_modes = BIT(NL80211_IFTYPE_STATION) | BIT(NL80211_IFTYPE_ADHOC);
+        prWiphy-&gt;bands[IEEE80211_BAND_2GHZ] = &amp;mtk_band_2ghz;
+        /* always assign 5Ghz bands here, if the chip is not support 5Ghz,
+         *  bands[IEEE80211_BAND_5GHZ] will be assign to NULL
+         */
+        prWiphy-&gt;bands[IEEE80211_BAND_5GHZ] = &amp;mtk_band_5ghz;
+        prWiphy-&gt;signal_type = CFG80211_SIGNAL_TYPE_MBM;
+        prWiphy-&gt;cipher_suites = (const u32 *)mtk_cipher_suites;
+        prWiphy-&gt;n_cipher_suites = ARRAY_SIZE(mtk_cipher_suites);
+#if LINUX_VERSION_CODE &lt; KERNEL_VERSION(3, 13, 0)
+        prWiphy-&gt;flags = WIPHY_FLAG_CUSTOM_REGULATORY | WIPHY_FLAG_SUPPORTS_FW_ROAM | WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
+#else
+        prWiphy-&gt;flags = WIPHY_FLAG_SUPPORTS_FW_ROAM | WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
+        prWiphy-&gt;regulatory_flags = REGULATORY_CUSTOM_REG;
+#endif
+
+#if (CFG_SUPPORT_TDLS == 1)
+        TDLSEX_WIPHY_FLAGS_INIT(prWiphy-&gt;flags);
+#endif /* CFG_SUPPORT_TDLS */
+        prWiphy-&gt;max_remain_on_channel_duration = 5000;
+        prWiphy-&gt;mgmt_stypes = mtk_cfg80211_ais_default_mgmt_stypes;
+
+#if LINUX_VERSION_CODE &gt;= KERNEL_VERSION(3, 18, 0)
+        prWiphy-&gt;vendor_commands = mtk_wlan_vendor_ops;
+        prWiphy-&gt;n_vendor_commands = sizeof(mtk_wlan_vendor_ops) / sizeof(struct wiphy_vendor_command);
+        prWiphy-&gt;vendor_events = mtk_wlan_vendor_events;
+        prWiphy-&gt;n_vendor_events = ARRAY_SIZE(mtk_wlan_vendor_events);
+#endif
+        /* 4 &lt;1.4&gt; wowlan support */
+#ifdef CONFIG_PM
+#if LINUX_VERSION_CODE &gt;= KERNEL_VERSION(3, 11, 0)
+        prWiphy-&gt;wowlan = &amp;mtk_wlan_wowlan_support;
+#else
+        kalMemCopy(&amp;prWiphy-&gt;wowlan, &amp;mtk_wlan_wowlan_support, sizeof(struct wiphy_wowlan_support));
+#endif
+#endif
+
+#ifdef CONFIG_CFG80211_WEXT
+        /* 4 &lt;1.5&gt; Use wireless extension to replace IOCTL */
+        prWiphy-&gt;wext = &amp;wext_handler_def;
+#endif
+        if (wiphy_register(prWiphy) &lt; 0) {
+                DBGLOG(INIT, ERROR, "wiphy_register error\n");
+                goto free_wiphy;
+        }
+        prWdev-&gt;wiphy = prWiphy;
+        gprWdev = prWdev;
+        DBGLOG(INIT, INFO, "create wireless device success\n");
+        return;
+
+free_wiphy:
+        wiphy_free(prWiphy);
+free_wdev:
+        kfree(prWdev);
+}
+</pre>
+</div>
+
+<p>
+定义基本的网络设备的基本操作函数
+</p>
+<p>
+#+TITLE：注册网络设备相关函数
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">struct net_device *device = alloc_etherdev(privDataSize);
+
+struct net_device_ops *pNetDevOps = NULL;
+
+device-&gt;netdev_ops = pNetDevOps;
+
+//分配一个接口名
+dev_get_by_name(...)
+
+//cfg80211 register
+
+//注册
+if (rtnl_locked)
+  ret = register_netdevice(pNetDev);
+else
+  ret = register_netdev(pNetDev);
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-4" class="outline-4">
+<h4 id="sec-3-3-4">定义管制规则regulatory enforcement<sup><a id="fnr.2" name="fnr.2" class="footref" href="#fn.2">2</a></sup></h4>
+<div class="outline-text-4" id="text-3-3-4">
+<p>
+Channel使用信息, 管制
+<code>regulatory_init</code>
+</p>
+
+<ol class="org-ol">
+<li>声明 <code>struct ieee80211_regdomain</code>
+<div class="org-src-container">
+
+<pre class="src src-c">const struct ieee80211_regdomain regdom_cn = {
+        .n_reg_rules = 5,
+        .reg_rules = {
+        /* channels 1..11 */
+        REG_RULE_LIGHT(2412-10, 2462+10, 40, 0),
+        /* channels 12,13 */
+        REG_RULE_LIGHT(2467-10, 2472+10, 40, 0),
+        /* channels 36..48 */
+        REG_RULE_LIGHT(5180-10, 5240+10, 80, 0),
+        /* channels 52..64 */
+        REG_RULE_LIGHT(5260-10, 5320+10, 80, NL80211_RRF_DFS),
+        /* channels 149..165 */
+        REG_RULE_LIGHT(5745-10, 5825+10, 80, 0) }
+};
+</pre>
+</div>
+</li>
+<li>声明 <code>struct mtk_regdomain</code>
+<div class="org-src-container">
+
+<pre class="src src-c">#if (CFG_SUPPORT_SINGLE_SKU_LOCAL_DB == 1)
+struct mtk_regdomain {
+        char country_code[4];
+        const struct ieee80211_regdomain *prRegdRules;
+};
+#endif
+
+const struct mtk_regdomain my_regdom_cn = {
+        .country_code = "CN",
+        .prRegdRules = &amp;regdom_cn
+};
+</pre>
+</div>
+</li>
+<li>注册到表格中
+<div class="org-src-container">
+
+<pre class="src src-c">const struct mtk_regdomain *g_prRegRuleTable[] = {
+  ...
+  &amp;my_regdom_cn,
+  ...
+  NULL /* this NULL SHOULD be at the end of the array */
+};
+</pre>
+</div>
+
+<p>
+通过这个表格可以查询各个国家或地区的信道管制要求。\
+</p>
+</li>
+<li>更新到内核
+<div class="org-src-container">
+
+<pre class="src src-c">/* update to kernel */
+wiphy_apply_custom_regulatory(pWiphy, pRegdom);
+</pre>
+</div>
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-5" class="outline-4">
+<h4 id="sec-3-3-5">station management</h4>
+<div class="outline-text-4" id="text-3-3-5">
+<p>
+添加，移除和修改STA。
+Dump STA列表
+主要的回调接口：
+</p>
+<ul class="org-ul">
+<li><code>.add_ station</code>
+</li>
+<li><code>.del_station</code>
+</li>
+<li><code>.change_station</code>
+</li>
+<li><code>.get_station</code>
+</li>
+<li><code>.dump_station</code>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-6" class="outline-4">
+<h4 id="sec-3-3-6">mesh management</h4>
+<div class="outline-text-4" id="text-3-3-6">
+<p>
+mesh路径处理
+读取或设置mesh参数 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-3-7" class="outline-4">
+<h4 id="sec-3-3-7">virtual interface management</h4>
+<div class="outline-text-4" id="text-3-3-7">
+<ul class="org-ul">
+<li>创建虚拟接口和移除虚拟接口
+</li>
+<li>改变虚拟接口的类型
+</li>
+<li>改变 <code>monitor</code> 标记
+</li>
+<li>跟踪与无线设备关联的接口
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4">mac80211</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1">主要API速览</h3>
+<div class="outline-text-3" id="text-4-1">
+</div><div id="outline-container-sec-4-1-1" class="outline-4">
+<h4 id="sec-4-1-1"><code>ieee80211_alloc_hw_nw(..)</code></h4>
+</div>
+<div id="outline-container-sec-4-1-2" class="outline-4">
+<h4 id="sec-4-1-2"><code>ieee80211_register_hw(...)</code></h4>
+</div>
+<div id="outline-container-sec-4-1-3" class="outline-4">
+<h4 id="sec-4-1-3"><code>ieee80211_check_tim()</code></h4>
+<div class="outline-text-4" id="text-4-1-3">
+<p>
+checks a specific information element (TIM)
+The TIM is an array of 2008 entries. Because the TIM size is 251
+bytes (2008 bits) 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-4" class="outline-4">
+<h4 id="sec-4-1-4"><code>ieee80211_get_buffered_bc()</code></h4>
+<div class="outline-text-4" id="text-4-1-4">
+<p>
+retrieve packets from the multicast/broadcast buffer
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-5" class="outline-4">
+<h4 id="sec-4-1-5"><code>sta_info_insert</code></h4>
+<div class="outline-text-4" id="text-4-1-5">
+<p>
+Adds a station
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-6" class="outline-4">
+<h4 id="sec-4-1-6"><code>sta_info_destroy_addr</code></h4>
+<div class="outline-text-4" id="text-4-1-6">
+<p>
+Removes a station
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-7" class="outline-4">
+<h4 id="sec-4-1-7"><code>sta_info_get</code></h4>
+<div class="outline-text-4" id="text-4-1-7">
+<p>
+Fetches a station; the address of the station (it’s bssid) is
+passed as a parameter. 
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-1-8" class="outline-4">
+<h4 id="sec-4-1-8"><code>ieee80211_rate_control_register</code></h4>
+<div class="outline-text-4" id="text-4-1-8">
+<p>
+注册速率控制算法
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2">MLME</h3>
+<div class="outline-text-3" id="text-4-2">
+</div><div id="outline-container-sec-4-2-1" class="outline-4">
+<h4 id="sec-4-2-1">扫描</h4>
+<div class="outline-text-4" id="text-4-2-1">
+<p>
+<code>ieee80211_send_probe_req()</code>
+<code>=&gt;
+    =the ieee80211_request_scan()</code>
+</p>
+
+<p>
+Change Channel:
+<code>ieee80211_hw_config()</code>
+</p>
+
+<p>
+Channel to Frequence Transition: 
+<code>ieee80211_channel_to_frequency()</code>
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-2" class="outline-4">
+<h4 id="sec-4-2-2">认证</h4>
+<div class="outline-text-4" id="text-4-2-2">
+<p>
+the <code>ieee80211_send_auth()</code>
+</p>
+
+<p>
+有两种类型的认证方式：
+</p>
+<ol class="org-ol">
+<li><code>WLAN_AUTH_OPEN</code>
+</li>
+<li><code>WLAN_AUTH_SHARED_KEY</code>
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-3" class="outline-4">
+<h4 id="sec-4-2-3">关联</h4>
+<div class="outline-text-4" id="text-4-2-3">
+<p>
+<code>ieee80211_send_assoc()</code>
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2-4" class="outline-4">
+<h4 id="sec-4-2-4">重新关联</h4>
+<div class="outline-text-4" id="text-4-2-4">
+<p>
+<code>ieee80211_send_assoc()</code>
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3" class="outline-3">
+<h3 id="sec-4-3">mac80211实现</h3>
+<div class="outline-text-3" id="text-4-3">
+</div><div id="outline-container-sec-4-3-1" class="outline-4">
+<h4 id="sec-4-3-1">数据结构</h4>
+<div class="outline-text-4" id="text-4-3-1">
+<ol class="org-ol">
+<li><code>ieee80211_hw</code>
+       代表硬件信息
+</li>
+<li><code>ieee80211_ops</code>
+实例传递给 <code>ieee80211_alloc_hw()</code> 方法，这个实际定义了一些回调
+函数 ：
+<ul class="org-ul">
+<li><code>tx()</code>
+The transmit handler called for each transmitted packet. It
+usually returns <code>NETDEV_TX_OK</code> (except for under certain
+limited conditions). 
+</li>
+<li><code>start()</code>
+         开户数据帧的接收
+</li>
+<li><code>stop()</code>
+         停止数据帧的接收，关闭硬件
+</li>
+<li><code>add_interface()</code>
+Called when a network device attached to the hardware is
+enabled. 
+</li>
+<li><code>remove_interface()</code>
+         Informs a driver that the interface is going down. 
+</li>
+<li><code>config()</code>
+Handles configuration requests, such as hardware channel
+configuration. 
+</li>
+<li><code>configure_filter()</code>
+         Configures the device’s Rx filter.
+</li>
+</ul>
+</li>
+<li><code>struct ieee80211_tx_info</code>
+<pre class="example">
+struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+</pre>
+</li>
+<li><code>struct ieee80211_sta</code>
+       station table entry: represents a station we are possibly communicating with.
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3-2" class="outline-4">
+<h4 id="sec-4-3-2">Rx Path</h4>
+<div class="outline-text-4" id="text-4-3-2">
+<p>
+主要的接收函数 <code>ieee80211_rx()</code>
+对接收到的数据，会进行一些检查，可能会丢弃一些数据包：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">ieee80211_rx_h_mgmt_check(struct ieee80211_rx_data *rx)
+{
+  struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *) rx-&gt;skb-&gt;data;
+  struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx-&gt;skb);
+  . . .
+    if (rx-&gt;skb-&gt;len &lt; 24)
+      return RX_DROP_MONITOR;
+    if (!ieee80211_is_mgmt(mgmt-&gt;frame_control))
+      return RX_DROP_MONITOR;
+    . . .
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3-3" class="outline-4">
+<h4 id="sec-4-3-3">Tx Path</h4>
+<div class="outline-text-4" id="text-4-3-3">
+<p>
+主要的发送函数 <code>ieee80211_tx()</code>
+基于mac80211框架的驱动需要提供一个  <code>struct ieee80211_ops</code> 结构实
+例，这些回调函数是mac80211框架与驱动及底层硬件进行交互的通道。
+</p>
+</div>
+
+<ul class="org-ul"><li><a id="sec-4-3-3-1" name="sec-4-3-3-1"></a>data path<br ><div class="outline-text-5" id="text-4-3-3-1">
+<p>
+<code>ieee80211_if_add</code>
+-&gt; <code>alloc_netdev_mqs</code>
+-&gt; <code>ieee80211_if_setup</code>
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c">static void ieee80211_if_setup(struct net_device *dev)
+{
+        ether_setup(dev);
+        dev-&gt;priv_flags &amp;= ~IFF_TX_SKB_SHARING;
+        dev-&gt;netdev_ops = &amp;ieee80211_dataif_ops;
+        dev-&gt;destructor = ieee80211_if_free;
+}
+
+static const struct net_device_ops ieee80211_dataif_ops = {
+        .ndo_open               = ieee80211_open,
+        .ndo_stop               = ieee80211_stop,
+        .ndo_uninit             = ieee80211_uninit,
+        .ndo_start_xmit         = ieee80211_subif_start_xmit,
+        .ndo_set_rx_mode        = ieee80211_set_multicast_list,
+        .ndo_change_mtu         = ieee80211_change_mtu,
+        .ndo_set_mac_address    = ieee80211_change_mac,
+        .ndo_select_queue       = ieee80211_netdev_select_queue,
+        .ndo_get_stats64        = ieee80211_get_stats64,
+};
+</pre>
+</div>
+
+<p>
+最终通过 <code>ieee80211_xmit</code> 一路调用下去。
+</p>
+</div>
+</li>
+
+<li><a id="sec-4-3-3-2" name="sec-4-3-3-2"></a>configuration path<br ><div class="outline-text-5" id="text-4-3-3-2">
+<pre class="example">
+wiphy_new_nm(&amp;mac80211_config_ops, priv_size, requested_name);
+</pre>
+<div class="org-src-container">
+
+<pre class="src src-c">const struct cfg80211_ops mac80211_config_ops = {
+        .add_virtual_intf = ieee80211_add_iface,
+        .del_virtual_intf = ieee80211_del_iface,
+        .change_virtual_intf = ieee80211_change_iface,
+        .start_p2p_device = ieee80211_start_p2p_device,
+        .stop_p2p_device = ieee80211_stop_p2p_device,
+        .add_key = ieee80211_add_key,
+        .del_key = ieee80211_del_key,
+        .get_key = ieee80211_get_key,
+        .set_default_key = ieee80211_config_default_key,
+        .set_default_mgmt_key = ieee80211_config_default_mgmt_key,
+        .start_ap = ieee80211_start_ap,
+        .change_beacon = ieee80211_change_beacon,
+        .stop_ap = ieee80211_stop_ap,
+        .add_station = ieee80211_add_station,
+        .del_station = ieee80211_del_station,
+        .change_station = ieee80211_change_station,
+        .get_station = ieee80211_get_station,
+        .dump_station = ieee80211_dump_station,
+        .dump_survey = ieee80211_dump_survey,
+#ifdef CPTCFG_MAC80211_MESH
+        .add_mpath = ieee80211_add_mpath,
+        .del_mpath = ieee80211_del_mpath,
+        .change_mpath = ieee80211_change_mpath,
+        .get_mpath = ieee80211_get_mpath,
+        .dump_mpath = ieee80211_dump_mpath,
+        .get_mpp = ieee80211_get_mpp,
+        .dump_mpp = ieee80211_dump_mpp,
+        .update_mesh_config = ieee80211_update_mesh_config,
+        .get_mesh_config = ieee80211_get_mesh_config,
+        .join_mesh = ieee80211_join_mesh,
+        .leave_mesh = ieee80211_leave_mesh,
+#endif
+        .join_ocb = ieee80211_join_ocb,
+        .leave_ocb = ieee80211_leave_ocb,
+        .change_bss = ieee80211_change_bss,
+        .set_txq_params = ieee80211_set_txq_params,
+        .set_monitor_channel = ieee80211_set_monitor_channel,
+        .suspend = ieee80211_suspend,
+        .resume = ieee80211_resume,
+        .scan = ieee80211_scan,
+        .sched_scan_start = ieee80211_sched_scan_start,
+        .sched_scan_stop = ieee80211_sched_scan_stop,
+        .auth = ieee80211_auth,
+        .assoc = ieee80211_assoc,
+        .deauth = ieee80211_deauth,
+        .disassoc = ieee80211_disassoc,
+        .join_ibss = ieee80211_join_ibss,
+        .leave_ibss = ieee80211_leave_ibss,
+        .set_mcast_rate = ieee80211_set_mcast_rate,
+        .set_wiphy_params = ieee80211_set_wiphy_params,
+        .set_tx_power = ieee80211_set_tx_power,
+        .get_tx_power = ieee80211_get_tx_power,
+        .set_wds_peer = ieee80211_set_wds_peer,
+        .rfkill_poll = ieee80211_rfkill_poll,
+        CFG80211_TESTMODE_CMD(ieee80211_testmode_cmd)
+        CFG80211_TESTMODE_DUMP(ieee80211_testmode_dump)
+        .set_power_mgmt = ieee80211_set_power_mgmt,
+        .set_bitrate_mask = ieee80211_set_bitrate_mask,
+        .remain_on_channel = ieee80211_remain_on_channel,
+        .cancel_remain_on_channel = ieee80211_cancel_remain_on_channel,
+        .mgmt_tx = ieee80211_mgmt_tx,
+        .mgmt_tx_cancel_wait = ieee80211_mgmt_tx_cancel_wait,
+        .set_cqm_rssi_config = ieee80211_set_cqm_rssi_config,
+        .mgmt_frame_register = ieee80211_mgmt_frame_register,
+        .set_antenna = ieee80211_set_antenna,
+        .get_antenna = ieee80211_get_antenna,
+        .set_rekey_data = ieee80211_set_rekey_data,
+        .tdls_oper = ieee80211_tdls_oper,
+        .tdls_mgmt = ieee80211_tdls_mgmt,
+        .tdls_channel_switch = ieee80211_tdls_channel_switch,
+        .tdls_cancel_channel_switch = ieee80211_tdls_cancel_channel_switch,
+        .probe_client = ieee80211_probe_client,
+        .set_noack_map = ieee80211_set_noack_map,
+#ifdef CONFIG_PM
+        .set_wakeup = ieee80211_set_wakeup,
+#endif
+        .get_channel = ieee80211_cfg_get_channel,
+        .start_radar_detection = ieee80211_start_radar_detection,
+        .channel_switch = ieee80211_channel_switch,
+        .set_qos_map = ieee80211_set_qos_map,
+        .set_ap_chanwidth = ieee80211_set_ap_chanwidth,
+        .add_tx_ts = ieee80211_add_tx_ts,
+        .del_tx_ts = ieee80211_del_tx_ts,
+};
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+
+<div id="outline-container-sec-4-3-4" class="outline-4">
+<h4 id="sec-4-3-4">Rate Control Algorithm</h4>
+<div class="outline-text-4" id="text-4-3-4">
+</div><ul class="org-ul"><li><a id="sec-4-3-4-1" name="sec-4-3-4-1"></a>minstrel<br ><div class="outline-text-5" id="text-4-3-4-1">
+<p>
+minstrel is a mac80211 rate control algorithm ported over from
+MadWifi which supports multiple rate retries and claimed to be
+one of the best, if not the best, rate control algorithm.
+</p>
+
+<p>
+The implementation of minstrel provides a rate table for each of
+the remote nodes being communicated with. This rate table is
+found in the debugfs directory, and shows some interesting
+things. Sometimes, the 11mbit rate is more likely to succeed, or
+has a higher throughput, than the the 2mbit rate.
+</p>
+
+<p>
+<b>操作理论</b>
+</p>
+</div>
+</li></ul>
+</div>
+
+
+
+<div id="outline-container-sec-4-3-5" class="outline-4">
+<h4 id="sec-4-3-5">Packet Aggregation</h4>
+<div class="outline-text-4" id="text-4-3-5">
+<ol class="org-ol">
+<li><code>ieee80211_start_tx_ba_session()</code>
+The originator starts the block acknowledgement session
+ADDBA Request
+</li>
+<li><code>ieee80211_send_addba_resp()</code>
+       ADDBA response
+</li>
+<li><code>ieee80211_send_bar()</code>
+       sends a Block Ack Request (BAR) packet
+</li>
+<li><code>ieee80211_send_delba()</code>
+       DELBA request
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3-6" class="outline-4">
+<h4 id="sec-4-3-6">设备注册</h4>
+<div class="outline-text-4" id="text-4-3-6">
+<ol class="org-ol">
+<li><code>struct ieee80211_hw</code>
+新建 <code>struct ieee80211</code> 数据结构，注册 <code>struct ieee80211_ops</code>
+回调函数 
+函数  <code>ieee80211_alloc_hw</code> 调用了 <code>wiphy_new</code> ，向cfg80211注册
+了回调函数。
+<div class="org-src-container">
+
+<pre class="src src-c">/* This function both allocates and initializes hw and priv. */
+struct ieee80211_hw *iwl_alloc_all(void)
+{
+        struct iwl_priv *priv;
+        struct iwl_op_mode *op_mode;
+        /* mac80211 allocates memory for this device instance, including
+         *   space for this driver's private structure */
+        struct ieee80211_hw *hw;
+
+        hw = ieee80211_alloc_hw(sizeof(struct iwl_priv) +
+                                sizeof(struct iwl_op_mode), &amp;iwlagn_hw_ops);
+        if (!hw)
+                goto out;
+
+        op_mode = hw-&gt;priv;
+        priv = IWL_OP_MODE_GET_DVM(op_mode);
+        priv-&gt;hw = hw;
+
+out:
+        return hw;
+}
+
+
+const struct ieee80211_ops iwlagn_hw_ops = {
+        .tx = iwlagn_mac_tx,
+        .start = iwlagn_mac_start,
+        .stop = iwlagn_mac_stop,
+#ifdef CONFIG_PM_SLEEP
+        .suspend = iwlagn_mac_suspend,
+        .resume = iwlagn_mac_resume,
+        .set_wakeup = iwlagn_mac_set_wakeup,
+#endif
+        .add_interface = iwlagn_mac_add_interface,
+        .remove_interface = iwlagn_mac_remove_interface,
+        .change_interface = iwlagn_mac_change_interface,
+        .config = iwlagn_mac_config,
+        .configure_filter = iwlagn_configure_filter,
+        .set_key = iwlagn_mac_set_key,
+        .update_tkip_key = iwlagn_mac_update_tkip_key,
+        .set_rekey_data = iwlagn_mac_set_rekey_data,
+        .conf_tx = iwlagn_mac_conf_tx,
+        .bss_info_changed = iwlagn_bss_info_changed,
+        .ampdu_action = iwlagn_mac_ampdu_action,
+        .hw_scan = iwlagn_mac_hw_scan,
+        .sta_notify = iwlagn_mac_sta_notify,
+        .sta_state = iwlagn_mac_sta_state,
+        .channel_switch = iwlagn_mac_channel_switch,
+        .flush = iwlagn_mac_flush,
+        .tx_last_beacon = iwlagn_mac_tx_last_beacon,
+        .rssi_callback = iwlagn_mac_rssi_callback,
+        .set_tim = iwlagn_mac_set_tim,
+};
+</pre>
+</div>
+
+<p>
+设置 hw-&gt;wiphy 相关信息：
+设置hw相关的属性，如flags
+</p>
+</li>
+
+<li><code>set_wiphy_dev</code>
+<div class="org-src-container">
+
+<pre class="src src-c">SET_IEEE80211_DEV(priv-&gt;hw, priv-&gt;trans-&gt;dev);
+</pre>
+</div>
+</li>
+
+<li>注册 <code>struct ieee80211_hw</code>
+       调用了 <code>wiphy_register</code>
+</li>
+</ol>
+<p>
+会添加一个默认的接口。 
+</p>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5">nl80211</h2>
+<div class="outline-text-2" id="text-5">
+<p>
+<a href="https://patchwork.kernel.org/patch/8663901/">https://patchwork.kernel.org/patch/8663901/</a>
+</p>
+</div>
+
+<div id="outline-container-sec-5-0-1" class="outline-4">
+<h4 id="sec-5-0-1"><code>NL80211_CMD_NEW_INTERFACE</code></h4>
+<div class="outline-text-4" id="text-5-0-1">
+<p>
+添加一个新的网络接口， 由 <code>nl80211_create_iface</code> (
+<code>wpa_supplicant</code> )触发。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-5-0-2" class="outline-4">
+<h4 id="sec-5-0-2"><code>NL80211_CMD_REGISTER_BEACONS</code></h4>
+<div class="outline-text-4" id="text-5-0-2">
+<p>
+向内核注册beacon帧, 以便能在用户空间接收到beacon帧。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-5-0-3" class="outline-4">
+<h4 id="sec-5-0-3"><code>NL80211_CMD_REGISTER_ACTION</code></h4>
+<div class="outline-text-4" id="text-5-0-3">
+<p>
+注册Action帧，这样driver就会将一些Action帧上报到用户空间。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-5-0-4" class="outline-4">
+<h4 id="sec-5-0-4"><code>NL80211_CMD_START_SCHED_SCAN</code></h4>
+<div class="outline-text-4" id="text-5-0-4">
+<p>
+Request the driver to initiate scheduled scan. This operation
+should be used for scheduled scan offload to the
+hardware. Every time scan results are available, the driver
+report the scan results event to upper layer. 
+</p>
+
+<p>
+这是一个可选的功能，有些驱动可能并不支持。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-5-0-5" class="outline-4">
+<h4 id="sec-5-0-5"><code>NL80211_CMD_GET_REG</code></h4>
+<div class="outline-text-4" id="text-5-0-5">
+<p>
+获取驱动的 regulatory information
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-5-0-6" class="outline-4">
+<h4 id="sec-5-0-6"><code>NL80211_CMD_VENDOR</code></h4>
+<div class="outline-text-4" id="text-5-0-6">
+<p>
+NL80211扩展命令，由驱动注册第三方专有命令。
+</p>
+</div>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" name="fn.1" class="footnum" href="#fnr.1">1</a></sup> <p class="footpara">
+<a href="http://linuxwireless.org/en/users/Documentation/">http://linuxwireless.org/en/users/Documentation/</a>
+</p></div>
+
+<div class="footdef"><sup><a id="fn.2" name="fn.2" class="footnum" href="#fnr.2">2</a></sup> <p class="footpara">
+<a href="https://wireless.wiki.kernel.org/en/developers/Regulatory">https://wireless.wiki.kernel.org/en/developers/Regulatory</a>
+</p></div>
+
+
+</div>
+</div></div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">几个主要数据结构之间的关系</a></li>
+<li><a href="#sec-2">A high level description of the Linux WiFi kernel stack</a>
+<ul class="nav">
+<li><a href="#sec-2-1">Data path</a></li>
+<li><a href="#sec-2-2">Control path</a></li>
+</ul>
+</li>
+<li><a href="#sec-3">cfg80211</a>
+<ul class="nav">
+<li><a href="#sec-3-1">主要API速览</a></li>
+<li><a href="#sec-3-2">主要数据结构速览</a></li>
+<li><a href="#sec-3-3">主要流程</a>
+<ul class="nav">
+<li><a href="#sec-3-3-1">数据结构</a></li>
+<li><a href="#sec-3-3-2">频段和速率的定义</a></li>
+<li><a href="#sec-3-3-3">设备注册</a></li>
+<li><a href="#sec-3-3-4">定义管制规则regulatory enforcement</a></li>
+<li><a href="#sec-3-3-5">station management</a></li>
+<li><a href="#sec-3-3-6">mesh management</a></li>
+<li><a href="#sec-3-3-7">virtual interface management</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-4">mac80211</a>
+<ul class="nav">
+<li><a href="#sec-4-1">主要API速览</a>
+<ul class="nav">
+<li><a href="#sec-4-1-1"><code>ieee80211_alloc_hw_nw(..)</code></a></li>
+<li><a href="#sec-4-1-2"><code>ieee80211_register_hw(...)</code></a></li>
+<li><a href="#sec-4-1-3"><code>ieee80211_check_tim()</code></a></li>
+<li><a href="#sec-4-1-4"><code>ieee80211_get_buffered_bc()</code></a></li>
+<li><a href="#sec-4-1-5"><code>sta_info_insert</code></a></li>
+<li><a href="#sec-4-1-6"><code>sta_info_destroy_addr</code></a></li>
+<li><a href="#sec-4-1-7"><code>sta_info_get</code></a></li>
+<li><a href="#sec-4-1-8"><code>ieee80211_rate_control_register</code></a></li>
+</ul>
+</li>
+<li><a href="#sec-4-2">MLME</a>
+<ul class="nav">
+<li><a href="#sec-4-2-1">扫描</a></li>
+<li><a href="#sec-4-2-2">认证</a></li>
+<li><a href="#sec-4-2-3">关联</a></li>
+<li><a href="#sec-4-2-4">重新关联</a></li>
+</ul>
+</li>
+<li><a href="#sec-4-3">mac80211实现</a>
+<ul class="nav">
+<li><a href="#sec-4-3-1">数据结构</a></li>
+<li><a href="#sec-4-3-2">Rx Path</a></li>
+<li><a href="#sec-4-3-3">Tx Path</a></li>
+<li><a href="#sec-4-3-4">Rate Control Algorithm</a></li>
+<li><a href="#sec-4-3-5">Packet Aggregation</a></li>
+<li><a href="#sec-4-3-6">设备注册</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-5">nl80211</a>
+<ul class="nav">
+<li>
+<ul class="nav">
+<li><a href="#sec-5-0-1"><code>NL80211_CMD_NEW_INTERFACE</code></a></li>
+<li><a href="#sec-5-0-2"><code>NL80211_CMD_REGISTER_BEACONS</code></a></li>
+<li><a href="#sec-5-0-3"><code>NL80211_CMD_REGISTER_ACTION</code></a></li>
+<li><a href="#sec-5-0-4"><code>NL80211_CMD_START_SCHED_SCAN</code></a></li>
+<li><a href="#sec-5-0-5"><code>NL80211_CMD_GET_REG</code></a></li>
+<li><a href="#sec-5-0-6"><code>NL80211_CMD_VENDOR</code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>
