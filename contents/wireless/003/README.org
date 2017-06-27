@@ -4,7 +4,7 @@
 
 ** 概述
     
-*** Bluetooth: terminology
+*** Bluetooth Specification History
     | Term                  | Introduced | Means                                 |
     |-----------------------+------------+---------------------------------------|
     | BR                    |  1.1(2002) | Basic Rates(1 Mbits/s)                |
@@ -14,8 +14,10 @@
     | Bluetooth Smart       |        4.0 | Single mode, LE-only radio            |
     | Bluetooth Smart Ready |        4.0 | Dual mode, BR/EDR and LE dual radio   |
     |-----------------------+------------+---------------------------------------|
+
+    till now, the latest bluetooth core specification version is 5.0.
     
-*** Bluetooth: configurations
+*** Bluetooth: Overview
     [[./images/001.png]]
 
     - Bluetooth is target at short-range communication with 2.4GHz Frequency
@@ -31,6 +33,12 @@
       spread spectrum, which chops up the data being sent and
       transmits chunks of it on up to =79 bands= (1 MHz each; centered
       from 2402 to 2480 MHz)
+
+    - An actively communicating Bluetooth device changes channels
+      every 625 μs (1600 times per second). two Bluetooth devices that
+      are communicating with each other must hop channels together so
+      that they’re always transmitting and receiving on the same
+      frequencies 
 
     - Bluetooth is a *packet-based* protocol with a *master-slave* structure.
 
@@ -101,13 +109,103 @@
           devices that have it’s address
         - connectable
 
+** transprot protocols
+   the transport protocols mainly include RFCOMM, L2CAP, ACL and
+   SCO. Here is the general descriptions of them:
+   - RFCOMM is often the best choice, and sometimes the only choice.
+   - L2CAP is also a widely used transport protocol that is used when
+     the streaming nature of RFCOMM isn’t needed.
+   - ACL is used to carry only L2CAP and RFCOMM-related traffic, and
+     you probably will never end up using it directly.
+   - SCO is a highly specialized transport protocol designed
+     specifically for voice-quality audio. 
+
+*** RFCOMM
+    The key points we should know:
+    - The Radio Frequency Communications (RFCOMM) protocol is a
+      reliable streams-based protocol
+    - general-purpose transport protocol that happens to work well for
+      emulating serial ports.
+    - Like TCP, a reliable protocol
+    - RFCOMM allows only 30 port number.
+
+*** L2CAP
+    The Logical Link Control and Adaption Protocol (L2CAP) is a
+    packet-based protocol that can be configured with varying levels
+    of reliability .
+    
+    利用协议复用能力和数据分块与重组，L2CAP为上层协议提供了面向连接和
+    无连接的数据服务。L2CAP允许上层协议和应用发送和接收上层数据包长度
+    达到64K。L2CAP也支持每信道上的数据流控制和重传。 
+
+    L2CAP层提供了逻辑信道，称为L2CAP信道，这些信道在一个或多个逻辑链路
+    （ACL）上被复用。 
+
+    Like UDP, is a best-effort packet-based protocol, enforces
+    delivery order. can be configured for varying levels of
+    reliability. serves as the transport protocol for RFCOMM. every
+    RFCOMM connection is actually encapsulated within an L2CAP
+    connection. 
+
+    L2CAP功能结构图所下：
+
+    [[./images/017.png]]
+
+    L2CAP的操作模式:
+
+    1. Basic L2CAP Mode （default）
+    2. Flow Control Mode
+    3. Retransmission Mode
+    4. Enhanced Retransmission Mode (for reliable channels)
+    5. Streaming Mode (for streaming application)
+
+*** ACL
+    The key points we should know:
+    - ACL is the short name for The Asynchronous Connection-oriented Logical (ACL)
+      transport protocol.
+    - All L2CAP connections are encapsulated within ACL connections.
+    - Two Bluetooth devices can have at most a single ACL connection
+      between them, which is used to transport all L2CAP and RFCOMM
+      traffic.
+    - ACL is similar to IP in that it is a fundamental protocol that
+      is rarely used to directly transport data.
+    - Instead, it is almost always used to encapsulate higher level
+      protocol packets.
+
+*** SCO
+    The key points we should know:
+    - SCO is the short name for the Synchronous Connection-Oriented
+      (SCO) logical transport.
+    - a best-effort packet based protocol that is exclusively used to
+      transmit voice-quality audio – not just any audio, but
+      voice-quality audio, at exactly 64 kb/s.
+    - SCO packets are not reliable and never retransmitted, but there
+      is a separate quality of service guarantee.
+    - no Bluetooth device is allowed to have more than three active
+      SCO connections.
+    - two Bluetooth devices can have at most one SCO connection
+      between them. 
+
+
 ** Profile
     Bluetooth programming defines transport protocols and methods of
     communicating, but it also goes one step further to specify
     methods of using Bluetooth to accomplish higher level tasks. These
     methods and specifications are collectively called the *Bluetooth
     Profiles* 
-
+    
+    It defines standardized ways to perform tasks such as transferring
+    files, playing music, using nearby printers, and so on。 Some of
+    the more well-known and widely used Bluetooth Profiles include： 
+    - OBEX Object Push：“Here, take this file,”
+    - File Transfer：“Let me look at all of your files and do stuff
+    - Dial-Up Networking
+    - Hands-Free Audio
+    - Advanced Audio Distribution：L2CAP connections
+    - Personal Area Network
+    - Human Interface Device
+    - Serial Port Profile：RFCOMM
+      
     基于蓝牙的应用程序都是通过Profile来提供或获得彼此的服务，从而实现
     设备间的互操作性。 
 
@@ -217,27 +315,6 @@
 
      [[./images/007.png]]
 
-*** L2CAP(Logical Link Control and Adaptation Layer Protocol)
-    利用协议复用能力和数据分块与重组，L2CAP为上层协议提供了面向连接和
-    无连接的数据服务。L2CAP允许上层协议和应用发送和接收上层数据包长度
-    达到64K。L2CAP也支持每信道上的数据流控制和重传。 
-
-    L2CAP层提供了逻辑信道，称为L2CAP信道，这些信道在一个或多个逻辑链路
-    （ACL）上被复用。 
-
-    L2CAP功能结构图所下：
-
-    [[./images/017.png]]
-
-    L2CAP的操作模式:
-
-    1. Basic L2CAP Mode （default）
-    2. Flow Control Mode
-    3. Retransmission Mode
-    4. Enhanced Retransmission Mode (for reliable channels)
-    5. Streaming Mode (for streaming application)
-    
-      
 *** GATT
     GATT设计为可供应用程序或其他Profile使用，使得客户端与服务器端能进行通信。
 
@@ -390,29 +467,41 @@
      
      [[./images/012.png]]
 
+*** HFP Profile
+    This profiles defines how two devices supporting the Hands-Free
+    Profile shall interact  with each other on a point-to-point basis.  
+
+**** Profile Dependencies
+     
+     [[./images/019.png]]
+
+**** Protocol Stack
+
+     [[./images/020.png]]
+
+**** Typical Use Case
+
+     [[./images/021.png]]
+
+**** Roles
+
+     - Audio Gateway (AG) 
+       This is the device that is the gateway of the audio, both for
+       input and output.
+     - Hands-Free unit (HF) 
+       This is the device acting as the Audio Gateway’s remote audio
+       input and output mechanism. It also provides some remote
+       control means.  
+
 ** 蓝牙设备认证基本流程
 
     [[./images/018.png]]
     
-* Bluedroid架构简介
+* Bluedroid源码分析
   Bluedroid总框架图如下所示：
-  #+BEGIN_EXAMPLE
-                            Java                                                                                   
-    +--------------------------------+                                                                              
-      +-----------------+     C++/C                                                                                 
-      |       BTIF      |                                                                                           
-      +-----------------+                                                                                           
-      |       BTA       |                                                                                           
-      +-----------------+                                                                                           
-      | Bluedroid Stack |                                                                                           
-      +-----------------+  user space                                                                               
-    +---------------------------------+                                                                             
-                          kernel space         
 
-  #+END_EXAMPLE
-
-  下面对各个部分进行简介。
-
+  [[./images/023.png]]
+ 
 ** Java Application/JNI
     
     Bluetooth app运行于Java层，并通过JNI和协议栈的接口（stack’s
@@ -420,6 +509,10 @@
     
     NOTES: JNI层的作用是将Java调用转化为C函数的调用，同时为应用和协议
     栈提供了调用/回调的交互能力。
+
+    AdapterService类对应的JNI层会往BTIF注册一些回调函数，这样协议栈层
+    的一些蓝牙相关的事件或状态变化就可以通知到上层，最终为蓝牙应用程序
+    所侦测到。
 
     
 ** BTIF (Bluetooth Profile Interface)
@@ -432,44 +525,8 @@
 
 ** BTA
 
-    这一层实现了各种Profile状态机。用户通过驱动状态机来操作Profile。
-    Profile状态机包含以下几个主要组成部分：
-
-    - =BTA_profilexx_act.c=  
-      包含对应Profile的“Action”函数，一般来说由Profile状态机调用
-    - =BTA_profilexx_api.c=
-      对应Profile的API的具体实现。通常它们是提供给用户使用，完成
-      usecase的函数和回调
-    - =BTA_profilexx_ci.c=
-      对应Profile的“call-in”函数的实现（供Profile以外的模块调用）
-    - =BTA_profilexx_co.c=
-      对应Profile的“call-out”函数的实现（调用Profile以外的模块）
-    - =BTA_profilexx_main.c=
-      对应Profile的状态机和处理协议栈上传消息的handler的具体实现。主要
-      负责维护Profile状态的变化及其引起的“Action” 
-
-
-    例如，调用 =BTA_profilexx_act.c=中的API函数时，各部分的执行流程图
-    如下所示：
-
-    #+BEGIN_EXAMPLE
-                                                       seq2 +---------------------+   seq3   +-----------------------+
-                                                       +----> BTA_Profilexx_API.c <----------> BTA's SYS Msg Posting |
-                                                       |    +----------^----------+          +-----------^-----------+
-                                                       |               |                                 |            
-                                                       |               |seq7                             | seq4       
-                                                       |               |                                 |            
-      +--------------+  seq1   +------------------+    |    +----------v-----------+   seq5  +-----------v-------+    
-      | User Command <---------> BTIF_Exposed_API +----+----> BTA_Profilexx_Main.c <---------> OS Message Posted |    
-      +--------------+  seq9   +------------------+    seq8 +----------^-----------+         +-------------------+    
-                                                                       |                                              
-                                                                       |seq6                                          
-                                                                       |                                              
-                                                            +----------v---------+                                    
-                                                            | BTA_Profilexx.Ci.c |                                    
-                                                            +--------------------+                   
-    #+END_EXAMPLE
-
+   This layer called Bluetooth Application Layer, it actually supports
+   Java Layer's Bluetooth function, and maintain the profile state machines.
     
 ** Core Stack
 
@@ -496,6 +553,7 @@
       +------------------------------------------+    
     #+END_EXAMPLE
 
+   This player provides fundamental implementation of all kinds of profiles.
     
 ** HCI and HAL Layers
 
@@ -504,23 +562,295 @@
     是各厂商的解决方案的特定实现。HAL层实现了各厂商对OPCODE的处理逻辑，
     这些OPCODE声明在HCI层的 =bt_vendor_lib.h= 中。 
 
-** TASK管理
+    #+BEGIN_SRC c
+      static const hci_hal_callbacks_t hal_callbacks = {
+        hal_says_data_ready
+      };
+
+      static const packet_fragmenter_callbacks_t packet_fragmenter_callbacks = {
+        transmit_fragment,
+        dispatch_reassembled,
+        fragmenter_transmit_finished
+      };
+          
+    #+END_SRC
+
+    上述代码定义了HCI发送数据与接收数据的回调函数。
+
+** 线程管理
 
     Bluedroid中，协议栈，蓝牙规范和蓝牙应用都运行在一个用户进程
-    "com.android.bluetooth"之中。 
+    "com.android.bluetooth"之中。   
 
-    蓝牙代码在以下四种task代表的上下文（context）中运行： 
+    Bluedroid定义许多工作线程以及队列，队列需要注册到相应的线程上去处
+    理，不同的线程之间通过Message来交换信息。
 
-    - =BTIF_TASK=
-    - =BTU_TASK=
-    - =A2DP_MEDIA_TASK=
-    - =GKI_TIMER_TASK=
+    通过 =thread_new= 来新建一个线程，通过 =thread_post= 将要处理的消息
+    加入线程对应的队列中。
 
-    task之间通过消息（message）来交换信息。
+** 代码流程分析
 
-    调用JNI层的API函数会通过消息转发机制，在 =BTIF_TASK= 中执行。
-    JNI，HAL回调在 =BTIF_TASK= 中执行。
-    有需要时， =BTIF_TASK= 中的调用可切换到 =BTU_TASK= 中执行。
-    蓝牙规范（Profiles）和协议的实现代码在 =BTU_TASK= 中执行。
-    蓝牙传输驱动程序中有一条rx线程（ =bt_hc_worker_thread= ）负责从UART/SMD中
-    读取数据。 
+*** 全局变量
+
+    1. =bt_hal_cbacks=
+       JNI层传递下来的回调函数，供协议栈层回调Java层的函数，一般用于通
+       知Java层状态机蓝牙状态的一些变化。
+    2. important threads
+       - =bt_workqueue_thread=
+       - =bt_jni_workqueue_thread=
+    3. important queues
+       - =btu_bta_msg_queue=
+       - =btu_hci_msg_queue=
+       - =btu_general_alarm_queue=
+       - =btif_media_cmd_msg_queue=
+
+*** 蓝牙初始化流程
+    #+BEGIN_SRC plantuml :exports results :file ./images/022.png :cmdline -charset UTF-8
+      @startuml
+      ==initialization==
+      bluetooth.c -> stack_manager.c : init()
+      activate stack_manager.c #FFBBBB
+      stack_manager.c -> stack_manager.c : event_init_stack()
+      activate stack_manager.c #Orange
+      stack_manager.c -> module.c : module_management_start()
+      stack_manager.c -> module.c : module_init(...)
+      note right: init module OSI_MODULE, BT_UTILS_MODULE, BTIF_CONFIG_MODULE
+      deactivate stack_manager.c
+      stack_manager.c -> btif_core.c: btif_init_bluetooth()
+      activate btif_core.c
+      btif_core.c -> bte_main.c: bte_main_boot_entry()
+      activate bte_main.c
+      bte_main.c -> module.c: module_init(...)
+      note right: init module INTEROP_MODULE, STACK_CONFIG_MODULE
+      bte_main.c -> hci_layer.c: hci_layer_get_interface()
+      note right: hci layer initialization.
+      deactivate bte_main.c
+      btif_core.c -> btif_core.c: btif_fetch_local_bdaddr()
+      btif_core.c -> btif_core.c: thread_new(BT_JNI_WORKQUEUE_NAME)
+      note right: bt_jni_workqueue thread will process JNI-related callbacks.\n So need to attach it to JVM thread.
+      deactivate btif_core.c
+      deactivate stack_manager.c
+      ==enable bluetooth==
+      bluetooth.c -> stack_manager.c: enable()
+      activate stack_manager.c #FFBBBB
+      stack_manager.c -> stack_manager.c : start_up_stack_async()
+      stack_manager.c -> stack_manager.c : event_start_up_stack()
+      activate stack_manager.c #Orange
+      stack_manager.c -> vnd_log.c: init_vnd_Logger()
+      stack_manager.c -> module.c: startup BTIF_CONFIG_MODULE
+      stack_manager.c -> bte_main.c: bte_main_enable()
+      activate bte_main.c
+      bte_main.c -> module.c: startup BTSNOOP_MODULE, HCI_MODULE
+      bte_main.c ->btu_init.c: BTU_StartUp()
+      note right
+                  In this function, bt_workqueue thread is up,
+                  handler function is btu_task_start_up
+                  a lot of important initialization happen here.
+                  1. btu_init_core()
+                  2. BTE_InitStack()
+                  3. bta_sys_init()
+
+                  register btu_bta_msg_queue to bt_workqueue_thread,
+                  handler is btu_bta_msg_ready()
+                  register btu_hci_msg_queue to bt_workqueue_thread,
+                  handler is btu_hci_msg_ready()
+      end note
+      deactivate bte_main.c
+      deactivate stack_manager.c
+      stack_manager.c -> stack_manager.c: event_signal_stack_up()
+      note right: tell upper layer that bluetooth state is on now.
+      deactivate stack_manager.c
+      @enduml
+    #+END_SRC
+
+    #+RESULTS:
+    [[file:./images/022.png]]
+
+*** A2DP
+    In this section, we'll track the call path of BluetoothA2dp's
+    connect() function.
+    
+    Through binder IPC mechanism, this call will be served by
+    A2dpService's connect function.
+
+    In A2dpService's connect function, it will pass the upper layer's
+    connect call as a CONNECT message to the A2dpStateMachine. 
+
+    At this moment, the A2dpStateMachine is in Disconnected state, it
+    will process the CONNNECT message in the corresponding message
+    handler, actually it call connectA2dpNative(), which will pass the
+    call to the lower layer through JNI layer.
+
+    In the =com_android_bluetooth_a2dp.cpp= , the JNI method will call
+    through by =btav_interface_t= 's connect method:
+    #+BEGIN_SRC c
+      if ((status = sBluetoothA2dpInterface->connect((bt_bdaddr_t *)addr)) != BT_STATUS_SUCCESS) {
+        ALOGE("Failed HF connection, status: %d", status);
+       }    
+    #+END_SRC
+
+    The instance sBluetoothA2dpInterface is returned by calling
+    =bt_interface_t= 's =get_profile_interface= method with
+    =BT_PROFILE_ADVANCED_AUDIO_ID= as the parameter. The real
+    declaration of sBluetoothA2dpInterface is shown as below:
+    #+BEGIN_SRC cpp
+      static const btav_interface_t bt_av_src_interface = {
+          sizeof(btav_interface_t),
+          init_src,
+          src_connect_sink,
+          disconnect,
+          cleanup_src,
+          NULL,
+          NULL,
+          allow_connection,
+      };    
+    #+END_SRC
+
+    we'll go inside the =src_connect_sink= function. In this function,
+    it just call btif_queue_connect() with service UUID
+    =UUID_SERVCLASS_AUDIO_SOURCE= to queue the connet request to the
+    =cmd_queue=. which will finally call the callback =connect_int=. 
+
+    #+BEGIN_SRC c
+      /*******************************************************************************
+      ,**
+      ,** Function         connect
+      ,**
+      ,** Description      Establishes the AV signalling channel with the remote headset
+      ,**
+      ,** Returns          bt_status_t
+      ,**
+      ,*******************************************************************************/
+
+      static bt_status_t connect_int(bt_bdaddr_t *bd_addr, uint16_t uuid)
+      {
+          btif_av_connect_req_t connect_req;
+          int i;
+          connect_req.target_bda = bd_addr;
+          connect_req.uuid = uuid;
+          BTIF_TRACE_EVENT("%s", __FUNCTION__);
+
+          for (i = 0; i < btif_max_av_clients;)
+          {
+              if(btif_av_get_valid_idx(i))
+              {
+                  if (bdcmp(bd_addr->address, btif_av_cb[i].peer_bda.address) == 0)
+                  {
+                      BTIF_TRACE_ERROR("Attempting connection for non idle device.. back off ");
+                      btif_queue_advance();
+                      return BT_STATUS_SUCCESS;
+                  }
+                  i++;
+              }
+              else
+                  break;
+          }
+          if (i == btif_max_av_clients)
+          {
+              UINT8 rc_handle;
+
+              BTIF_TRACE_ERROR("%s: All indexes are full", __FUNCTION__);
+
+              /* Multicast: Check if AV slot is available for connection
+               ,* If not available, AV got connected to different devices.
+               ,* Disconnect this RC connection without AV connection.
+               ,*/
+              rc_handle = btif_rc_get_connected_peer_handle(bd_addr->address);
+              if (rc_handle != BTIF_RC_HANDLE_NONE)
+              {
+                  BTA_AvCloseRc(rc_handle);
+              }
+              btif_queue_advance();
+              return BT_STATUS_FAIL;
+          }
+
+          btif_sm_dispatch(btif_av_cb[i].sm_handle, BTIF_AV_CONNECT_REQ_EVT, (char*)&connect_req);
+
+
+          return BT_STATUS_SUCCESS;
+      }    
+    #+END_SRC
+    
+    in this function, it'll iterate all the possible client devices,
+    and check if the devce we'll connect is busy or idle, If the
+    device is busy, we'll just skip and go to the next scheduled
+    connection, else we'll find an unused index for our new client
+    device.
+
+    If our client list is full, we'll need to close an AV connection
+    and go to the next scheduled connection.
+
+    Currently, only one AV connection is supported according to the
+    code.
+
+    lastly, the code will call btif_sm_dispatch() to dispatch the
+    =BTIF_AV_CONNECT_REQ_EVT= event to the state machine.
+
+    if the btif av state machine, we'll assume it is in IDLE state, so
+    it will process the =BTIF_AV_CONNECT_REQ_EVT= in the
+    =btif_av_state_idle_handler= handler function:
+    
+    #+BEGIN_SRC c
+      static BOOLEAN btif_av_state_idle_handler(btif_sm_event_t event, void *p_data, int index)
+      {
+          char a2dp_role[255] = "false";
+
+          BTIF_TRACE_IMP("%s event:%s flags %x on Index = %d", __FUNCTION__,
+                           dump_av_sm_event_name(event), btif_av_cb[index].flags, index);
+
+          ...
+
+                    case BTIF_AV_CONNECT_REQ_EVT:
+                  /* For outgoing connect stack and app are in sync.
+                  ,*/
+                  memcpy(&btif_av_cb[index].peer_bda, ((btif_av_connect_req_t*)p_data)->target_bda,
+                                                                              sizeof(bt_bdaddr_t));
+                  BTA_AvOpen(btif_av_cb[index].peer_bda.address, btif_av_cb[index].bta_handle,
+                              TRUE, BTA_SEC_AUTHENTICATE, ((btif_av_connect_req_t*)p_data)->uuid);
+                  btif_sm_change_state(btif_av_cb[index].sm_handle, BTIF_AV_STATE_OPENING);
+                  break;
+
+                  ...
+
+      }
+    #+END_SRC
+
+    It will call =BTA_AvOpen=, and change the state machine's state to =BTIF_AV_STATE_OPENING=.
+    The =BTA_AvOpen= will compose a =tBTA_AV_API_OPEN= message and
+    call =bta_sys_sendmsg= to queue the message to
+    =btu_bta_msg_queue=, and then process it in the
+    =btu_bta_msg_ready=. 
+
+    In the =btu_bta_msg_ready= function, it'll actually call the event
+    handler registered throught =bta_sys_register= during
+    initialization process. 
+
+    #+CAPTION: bta_av_api.c 
+    #+BEGIN_SRC c
+      static const tBTA_SYS_REG bta_av_reg =
+      {
+          bta_av_hdl_event,
+          BTA_AvDisable
+      };    
+    #+END_SRC
+
+    In =bta_av_hdl_event=, it'll process =BTA_AV_API_OPEN_EVT=, or
+    it's alias =BTA_AV_FIRST_SSM_EVT=. according to the logic of this
+    function, the =BTA_AV_API_OPEN_EVT= message will be processed in
+    the AV stream state machine by calling the following code:
+    #+BEGIN_SRC c
+      /* stream state machine events */
+      bta_av_ssm_execute( bta_av_hndl_to_scb(p_msg->layer_specific),
+                          p_msg->event, (tBTA_AV_DATA *) p_msg);    
+    #+END_SRC
+
+    this function will set av state machine's state to
+    =BTA_AV_OPENING_SST= and  call ssm's action callbacks. The ssm's action
+    table is defined in =bta_av_aact.c=, named =bta_av_a2d_action=. In
+    this case, it'll call =bta_av_connect_req= to open an AVDTP connection.
+    we'll skip the AVDTP connection detail here.
+
+    btif_dispatch_sm_event
+    
+    上层App通过binder调用A2dpService的start方法,在该方法中，创建了
+    A2dpStateMachine以及Avrcp状态机实例。

@@ -1,0 +1,165 @@
+#+TITLE: LINK MANAGER PROTOCOL SPECIFICATION
+
+
+* Overview
+  本规范主要描述LMP，它用于链路的建立与控制。信号由接收方的Link
+  Manager负责解释与过滤，不会传到更上层。
+
+* INTRODUCTION
+  The Link Manager Protocol (LMP) is used to control and negotiate all
+   aspects of operations between two devices includeing the
+  set-up and control of logical transports and logical links, and for
+  control of physical links. 
+
+  LMP work on Link Managers between two devices. all LMP messages
+  should be sent or received on the physical links and associated logical
+  links and logical transports. 
+
+  The LMP messages should be transfered over ACL-C and ASB-C logical
+  links and should only be interpreted and acted upon by LM.
+
+  #+CAPTION: Link Manager Protocol signaling layer
+  [[./images/01.png]]
+
+* GENERAL RULES
+
+** MESSAGE TRANSPORT
+   LMP messages should be carried over default ACL-C logical transport
+   or ASB-C logical link that carried on ASB logical transport. ACL-C
+   and ASB-C logical links are distiguished by LLID(Logical links
+   Identifier).
+
+   LMP messages have higher priority than other traffic.
+
+   LMP messages do not contain any additional error detection
+   information. It depends on ACL baseband error detection and error
+   correction capabilities.
+
+** SYNCHRONIZATION
+   LMP messages are carried on ACL-C and ASB-C logical links, but
+   do not guarantee the timer to deliver and ack packages. 
+
+   The following diagram shows that LMP messages may be lost in an
+   interence conditions:
+
+   #+CAPTION: Transmission of a message from master to slave
+   [[./images/02.png]]
+
+   图中显示，Master每隔 T_poll slots给Slave发一次Message， 总共发送时
+   间是 T_deliver ，并在 T_ack 时间内监听Slave发送过来的确认包，但是无
+   法知道 T_deliver 以及 T_ack 的时间应该需要多长。 为了保证通信的成功
+   率，降低 T_poll 的值可能是一种改善的途径。
+
+** PACKET FORMAT
+   
+   #+CAPTION: Payload body when LMP PDUs are sent
+   [[./images/03.png]]
+
+   每个LMP PDU通过操作码来唯一标识自己，操作码的长度一般是7或15比特，
+   即要么占一个字节，要么占两个字节。
+
+   1. The first 7 bits of the opcode and a transaction ID are located in
+      the first byte of the payload body.
+   2. If the initial 7 bits of the opcode have one of the special
+      escape values 124-127 then an additional byte of opcode is
+      located in the second byte of the payload and the combination
+      uniquely identifies the PDU. 
+
+   LMP messages shall be transmitted using DM1 packets, however if an HV1
+   SCO link is in use and the length of the payload is less than 9 bytes then DV
+   packets may be used.
+
+** TRANSACTIONS
+   The LMP operates in terms of transactions. 每个transactions包含多个
+   LMP Message的交互，这些LMP PDU的Transaction ID都是一样的。
+
+   由Master发起的Transaction中PDU的TID为0, 由Slave发起的Transaction中
+   的PDU的TID为1. 
+
+*** LMP Response Timeout
+    The time between receiving a baseband packet carrying an LMP PDU and
+    sending a baseband packet carrying a valid response PDU shall be
+    less than the LMP Response Timeout. The timeout is 30s. 
+
+    LMP messages sent on the ASB-C logical link have special rules and
+    are not subject to the LMP Response Timeout.
+
+** ERROR HANDLING
+   当接收的LMP PDU发生错误时，应该返回 =LMP_not_accepted= 或
+   =LMP_not_accepted= 并返回如下错误码：
+   1. Unknown LMP PDU (0x19)
+      当收到一个无法识别操作码的LMP PDU时，
+   2. Invalid LMP PDu (0x1E)
+      当收到的PDU中的参数非法时.
+   3. Not Allowed (0x24)
+      当收到一个未允许的PDU时。
+
+   LM会监控某个频道上发生的错误数，如果连续发生错误的次数达到一定的阀
+   值，就会断开连接。
+
+*** Transaction Collision Resolution
+    当Master和Slave同时发起相同的流程或不同的流程时，导致双方都不能完
+    成时，Master会拒绝由Slave发起的过程，并返回如下错误码：
+    1. 0x23
+       LMP Error Transaction Collision / LL Procedure
+       Collision. Master和Slave同时发起相同的过程。
+    2. 0x2A
+       Different Transaction Collision。 Master和Slave同时发起不同的过
+       程。
+
+** GENERAL RESPONSE MESSAGES
+   The PDUs =LMP_accepted=, =LMP_accepted_ext=, =LMP_not_accepted= and
+   =LMP_not_accepted_ext= are used as response messages to other PDUs in a
+   number of different procedures. 
+
+   带 =_ext= 后缀的用于opcode为15比特的情型。
+
+** LMP MESSAGE CONSTRAINTS
+   1. No LMP message shall exceed the maximum payload length of a single
+      DM1 packet i.e. 17 bytes in length
+   2. All LM messages are of fixed length.
+   3. The LMP version number shall not be used to indicate the presence or
+      absence of functionality.
+
+* DEVICE FEATURES
+  
+** GENERAL DESCRIPTION
+   All features added after the 1.1 specification have associated LMP
+   feature bits. 
+
+   The LM does not need to be able to transmit a PDU which is
+   optional.An LM shall not send or be sent any PDU which is
+   incompatible with the features signaled in its or its peer's
+   features mask,
+
+   The set of features supported by the LM shall not change while the Controller
+   has a connection to another device. A peer device may cache the device's
+   feature mask or extended feature mask, or the LM may cache a peer's feature
+   mask or extended feature mask, during a connection
+
+   
+** FEATURE DEFINITIONS
+   skipped, refer to Core Specification.
+
+** FEATURE MASK DEFINITION
+   The features are represented as a bit mask when they are transferred in LMP
+   messages. For each feature a single bit is specified which shall be set to 1 if
+   the feature is supported and set to 0 otherwise. The single exception is the flow
+   control lag which is coded as a 3 bit field with the least significant bit in byte 2
+   bit 4 and the most significant bit in byte 2 bit 6. All removed, unknown, or
+   unassigned feature bits are reserved for future use.
+
+** LINK MANAGER INTEROPERABILITY POLICY
+   Link managers of any version shall interpret using the lowest common subset
+   of functionality by reading the LMP features mask.
+
+   An optional LMP PDU shall only be sent to a device if the corresponding
+   feature bit is set in its feature mask. The exception to this are certain PDUs
+   which can be sent before the features mask is requested.
+
+* PROCEDURE RULES
+
+** CONNECTION CONTROL
+
+*** Connection Establishment
+    
