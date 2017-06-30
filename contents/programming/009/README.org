@@ -90,4 +90,70 @@
     E::selection.
 *** 通用兄弟元素选择器
     : 子元素-兄弟元素{}
-    
+** 使用选择器插入内容
+*** 插入文字
+    #+BEGIN_SRC html
+      h2:before {
+      content: 'COLUM';
+      }    
+    #+END_SRC
+
+    指定个别元素不进行插入：
+
+    #+BEGIN_SRC html
+      h2.sample.before {
+       content: none
+      }
+
+      <h2 class="sample">标题2</h2>
+    #+END_SRC
+
+    none也可以改为 normal，但是none只能用于 before , after两种选择器，
+    而normal可用于其他用来插入内容的选择中。
+*** 播放图像文件
+    #+BEGIN_SRC html
+      h2:before {
+      content: url(mark.png);
+      }
+
+      <h2>你好</h2>
+    #+END_SRC
+*** 使用content属性播放项目编号
+    #+BEGIN_SRC html
+      h1:before {
+      content: counter(mycounter);
+      }
+      h1 {
+      counter-increment: mycounter;
+      }    
+    #+END_SRC
+* 文字与字体
+** 文字阴影
+   text-shadow的使用方法如下：
+   : textshadow length length length color
+   前面三个length分别指阴影离开文字的横方向距离、阴影离开文字的纵方向
+   距离和阴影的模糊半径,color指阴影的颜色。
+** 文本自动换行
+   使用 word-break 属性来自己决定自动换行的处理方法。
+** 使用服务器端字体
+   @font-face属性的使用方法如下：
+   #+BEGIN_SRC html
+     @font-face {
+     font-family: WebFont;
+     src: url('fonts/maotizi.ttf') format("truetype");
+     font-weight: normal;
+     }   
+   #+END_SRC
+
+   本地端字体：
+   #+BEGIN_SRC html
+     @font-face {
+     font-family: Arial;
+     src: local('Arial');
+     }   
+   #+END_SRC
+** 保持字体大小不变
+   使用 font-size-ajust 属性可以在字体发生变化的情况下，保持字体大小不
+   变。
+* 盒相关样式
+  
