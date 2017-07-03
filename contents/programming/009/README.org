@@ -156,4 +156,146 @@
    使用 font-size-ajust 属性可以在字体发生变化的情况下，保持字体大小不
    变。
 * 盒相关样式
-  
+** 盒的类型
+*** 盒的基本类型
+    CSS中的盒分为block类型和inline类型.div与p元素属于block类型,而span
+    和a元素属于inline类型.
+*** inline-block类型
+    属于block类型盒中的一种,但是在显示时具有inline类型盒的特点.
+    可用于在一行中并列显示多个block类型的元素.
+
+    #+CAPTION: 使用inline-block类型来显示水平菜单
+    #+BEGIN_SRC html
+      <!DOCTYPE html>
+      <html>
+
+      <head>
+          <meta charset="utf-8"/>
+          <style type="text/css">
+              ul {
+                  margin: 0;
+                  padding: 0;
+              }
+              li {
+                  display: inline-block;
+                  width: 100px;
+                  padding: 10px 0;
+                  background-color: #00ccff;
+                  border: solid 1px #666666;
+                  text-align: center;
+              }
+              a {
+                  color: #000000;
+                  text-decoration: none;
+              }
+          </style>
+      </head>
+      <body>
+          <ul>
+              <li><a href="#">菜单1</a></li>
+              <li><a href="#">菜单2</a></li>
+              <li><a href="#">菜单3</a></li>
+              <li><a href="#">菜单4</a></li>
+          </ul>
+      </body>
+      </html>    
+    #+END_SRC
+*** inline-table类型
+    table默认是block类型,table与前后的文字不会显示在同一行,可以将table
+    的显示类型改为inline-table,就可以与前后的文字显示在同一行了.
+
+    #+BEGIN_SRC html
+      <!DOCTYPE html>
+      <html>
+
+      <head>
+          <meta charset="utf-8" />
+          <style type="text/css">
+              table {
+                  display: inline-table;
+                  border: solid 3px #00aaff;
+                  vertical-align: bottom;
+              }
+          </style>
+      </head>
+
+      <body>
+          你好.
+          <table>
+              <tr>
+                  <td>A</td>
+                  <td>B</td>
+                  <td>C</td>
+                  <td>D</td>
+                  <td>E</td>
+              </tr>
+              <tr>
+                  <td>F</td>
+                  <td>G</td>
+                  <td>H</td>
+                  <td>I</td>
+                  <td>J</td>
+              </tr>
+              <tr>
+                  <td>K</td>
+                  <td>L</td>
+                  <td>M</td>
+                  <td>N</td>
+                  <td>O</td>
+              </tr>
+          </table>
+          你好
+      </body>
+      </html>    
+    #+END_SRC
+*** list-item类型
+    如果在display属性中将元素的类型设置为list-item类型,则可以将多个元
+    素作为列表来显示,同时在元素的开头加上列表的标记.
+
+    #+BEGIN_SRC html
+      <!DOCTYPE html>
+      <html>
+
+      <head>
+          <meta charset="utf-8" />
+          <style type="text/css">
+              div {
+                  display: list-item;
+                  list-style-type: circle;
+                  margin-left: 30px;
+              }
+          </style>
+      </head>
+
+      <body>
+          <div>示例1</div>
+          <div>示例2</div>
+          <div>示例3</div>
+          <div>示例4</div>
+      </body>
+      </html>    
+    #+END_SRC
+*** run-in类型和compat类型
+    将元素指定为run-in类型或compact类型的时候,如果元素后面还有block元
+    素,则run-in元素将被包含在block类型的元素内部,而compact类型的元素将
+    被放置在block类型的元素左边.
+** 对于盒中容纳不下的内容的显示
+*** overflow属性
+    指定对于盒中容纳不下的内容的显示方法.
+*** overflow-x和overflow-y属性
+    可以单独指定水平和垂直方向的显示方法:hidden, scroll, auto,
+    visible.
+*** text-overflow属性
+    当通过把overflow属性的属性值设定为"hidden"方法,将盒中容纳不下的内
+    容隐藏起来时,如果使用text-overflow属性,可以在盒的末尾显示一个代表
+    省略的符号"...".但是只在当盒子的内容在水平方向上超出盒的容纳范围时
+    有效.
+** 对盒使用阴影
+*** box-shadow属性的使用方法
+    : box-shadow: length length length color
+    前三个length分别指阴影离开文字的横向距离,纵向距离和阴影的模糊半
+    径,color指阴影的颜色。
+** 指定针对元素的宽度与高度的计算方法
+*** box-sizing属性
+    值可以设置为 content-box(默认值)和border-box.border-box不包含内部
+    补白区域,以及边框的宽度与高度.
