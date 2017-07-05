@@ -1,0 +1,308 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>802.11i学习笔记</h1>
+          <p>802.11i协议细节分析。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">802.11i学习笔记</h1>
+
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> 参考书籍 <sup><a id="fnr.1" name="fnr.1" class="footref" href="#fn.1">1</a></sup></h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1"><span class="section-number-3">1.1</span> 主要知识点</h3>
+<div class="outline-text-3" id="text-1-1">
+</div><div id="outline-container-sec-1-1-1" class="outline-4">
+<h4 id="sec-1-1-1"><span class="section-number-4">1.1.1</span> 802.11i协议学习</h4>
+<div class="outline-text-4" id="text-1-1-1">
+</div><ol class="org-ol"><li><a id="sec-1-1-1-1" name="sec-1-1-1-1"></a>常见缩略语<br ><div class="outline-text-5" id="text-1-1-1-1">
+<ul class="org-ul">
+<li>EAPOL-Key confirmation key (KCK)
+A key used to integrity-check an EAPOL-Key frame, 用于完整性检
+测。
+</li>
+<li>EAPOL-Key encryption key (KEK)
+A key used to encrypt the Key Data field in an EAPOL-Key
+frame.
+</li>
+<li>4-Way Handshake
+A pairwise key management protocol defined by this
+amendment. It confirms mutual possession of a pairwise master
+key (PMK) by two parties and distributes a group temporal key
+(GTK).
+</li>
+<li>Group Key Handshake
+A group key management protocol defined by this amendment. It
+is used only to issue a new group temporal key (GTK) to peers
+with whom the local station (STA) has already formed security associations.
+</li>
+<li>group master key (GMK)
+An auxiliary key that may be used to derive a group temporal key (GTK).
+</li>
+<li>group temporal key (GTK)
+A random value, assigned by the broadcast/multicast source,
+which is used to protect broadcast/multicast medium access
+control (MAC) protocol data units (MPDUs) from that source. The
+GTK may be derived from a group master key (GMK).
+</li>
+<li>group temporal key security association (GTKSA)
+The context resulting from a successful group temporal key
+(GTK) distribution exchange via either a Group Key Handshake or
+a 4-Way Handshake.
+</li>
+<li>pairwise master key (PMK)
+The highest order key used within this amendment. The PMK may
+be derived from an Extensible Authentication Protocol (EAP)
+method or may be obtained directly from a preshared key (PSK).
+</li>
+<li>pairwise master key security association (PMKSA)
+The context resulting from a successful IEEE 802.1X
+authentication exchange between the peer and Authentication
+Server (AS) or from a preshared key(PSK).
+</li>
+<li>pairwise transient key (PTK)
+A value that is derived from the pairwise master key (PMK),
+Authenticator address (AA), Supplicant address (SPA),
+Anthenticator nonce (ANonce), and Supplicant nonce (SNonce)
+using the pseudo-random function (PRF) and that is split up
+into as many as five keys, i.e., temporal encryption key, two
+temporal message integrity code (MIC) keys, EAPOL-Key
+encryption key (KEK), EAPOL-Key confirmation key (KCK).
+</li>
+<li>pairwise transient key security association (PTKSA)
+The context resulting from a successful 4-Way Handshake
+exchange between the peer and Authenticator. 
+</li>
+</ul>
+</div>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-1-1-2" class="outline-4">
+<h4 id="sec-1-1-2"><span class="section-number-4">1.1.2</span> 主要的安全问题</h4>
+<div class="outline-text-4" id="text-1-1-2">
+<ul class="org-ul">
+<li>数据加密
+</li>
+<li>防范攻击
+</li>
+<li>需要设计合适的安全协议
+</li>
+<li>安全思维的6大原则：
+</li>
+<li>Don't talk to anyone you don't know.
+需要确认对方身份。
+</li>
+<li>Accept nothing without a guarantee.
+确认消息没有被篡改。
+</li>
+<li>Treat everyone as an enemy until proved otherwise.
+</li>
+<li>Don't trust your friends for long.
+</li>
+<li>Use well-tried solutions.
+</li>
+<li>Watch the ground(the pile of assumptions) you are standing on for cracks.
+<ul class="org-ul">
+<li>术语
+</li>
+</ul>
+</li>
+<li>key entropy： 负熵（指选定的特殊符号所产生的信息的数值量度）
+</li>
+<li>Authentication: 包含用户认证（确认对方的身份）和数据认证（确认接收的数据没有被篡改）。
+</li>
+<li>Authorization: 允许对方访问（在Authentication后）
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> WAPI</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1"><span class="section-number-3">2.1</span> 概述</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+WAPI （Wireless LAN Authentication and Privacy Infrastructure）无
+线局域网鉴别和保密基础结构，是一种安全协议，同时也是中国无线局域网
+安全强制性标准。
+</p>
+
+<p>
+WAPI 像红外线、蓝牙、GPRS、CDMA1X等协议一样，是无线传输协议的一种，
+只不过跟它们不同的是它是无线局域网（WLAN）中的一种传输协议而已，它
+与802.11传输协议是同一领域的技术。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2"><span class="section-number-3">2.2</span> 主要术语</h3>
+<div class="outline-text-3" id="text-2-2">
+<ul class="org-ul">
+<li>WAI 
+WLAN Authentication Infrastructure
+WAI鉴别及密钥管理
+在STA与AP进行关联或者重新关联时，相互的身份认证必须执行。
+</li>
+<li>WPI 
+WLAN Privacy Infrastructure
+WPI数据传输保护
+
+<p>
+无线局域网保密基础结构（WPI）对MAC子层的MPDU进行加、解密处理，分
+别用于WLAN设备的数字证书、密钥协商和传输数据的加解密，从而实现设
+备的身份鉴别、链路验证、访问控制和用户信息在无线传输状态下的加密
+保护。
+</p>
+</li>
+<li>Authenticator Entity(AE)
+it is the entity that provides the Authentication Supplicant with
+the authentications operation before access service. This entity
+resides in AP.
+</li>
+<li>Authentication Supplicant Entity(ASUE) 
+it is the entity that needs to be authenticated by authentication
+service unit. This entity resides in STA.
+</li>
+<li>Authentication Service Entity(ASE)
+it is the entity that provides reciprocal(双向) authentication
+for the authenticator and authentication supplicant.
+
+<p>
+它是一个权威的第三方机构，确保公钥的合法性，负责发布公钥数字证书，
+提供公钥合法性的证据。签名算法采用ECC加密系统。
+</p>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-2-3" class="outline-3">
+<h3 id="sec-2-3"><span class="section-number-3">2.3</span> WAI的主要过程</h3>
+<div class="outline-text-3" id="text-2-3">
+
+<figure>
+<p><img src="http://blog.ifjy.me/images/2016/2016041801.png" class="img-responsive" alt="2016041801.png">
+</p>
+</figure>
+</div>
+
+<div id="outline-container-sec-2-3-1" class="outline-4">
+<h4 id="sec-2-3-1"><span class="section-number-4">2.3.1</span> Certificate Authentication</h4>
+<div class="outline-text-4" id="text-2-3-1">
+</div><ol class="org-ol"><li><a id="sec-2-3-1-1" name="sec-2-3-1-1"></a>Authentication enable<br ></li>
+
+<li><a id="sec-2-3-1-2" name="sec-2-3-1-2"></a>Access authentication request<br ></li>
+
+<li><a id="sec-2-3-1-3" name="sec-2-3-1-3"></a>Certificate authentication request<br ></li>
+
+<li><a id="sec-2-3-1-4" name="sec-2-3-1-4"></a>Certificate authentication response<br ></li>
+
+<li><a id="sec-2-3-1-5" name="sec-2-3-1-5"></a>Access authentication response<br ></li></ol>
+</div>
+
+<div id="outline-container-sec-2-3-2" class="outline-4">
+<h4 id="sec-2-3-2"><span class="section-number-4">2.3.2</span> Key negotiation</h4>
+<div class="outline-text-4" id="text-2-3-2">
+</div><ol class="org-ol"><li><a id="sec-2-3-2-1" name="sec-2-3-2-1"></a>Key negotiation request<br ></li>
+
+<li><a id="sec-2-3-2-2" name="sec-2-3-2-2"></a>Key negotiation response<br ></li></ol>
+</div>
+</div>
+
+<div id="outline-container-sec-2-4" class="outline-3">
+<h3 id="sec-2-4"><span class="section-number-3">2.4</span> 802.11i versus WAPI</h3>
+<div class="outline-text-3" id="text-2-4">
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">&#xa0;</th>
+<th scope="col" class="text-left">802.11i</th>
+<th scope="col" class="text-left">WAPI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">cryptography</td>
+<td class="text-left">Support TKIP or AES</td>
+<td class="text-left">SMS4, defined by China</td>
+</tr>
+
+<tr>
+<td class="text-left">Certification in AP</td>
+<td class="text-left">No</td>
+<td class="text-left">Yes</td>
+</tr>
+
+<tr>
+<td class="text-left">Certificate mechanism</td>
+<td class="text-left">EAP(MD5/TLS/TTLS/PEAP)  Port 1812</td>
+<td class="text-left">ECC UDP Port 9000</td>
+</tr>
+
+<tr>
+<td class="text-left">Ethernet Type</td>
+<td class="text-left">0x888E</td>
+<td class="text-left">0x88B4</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" name="fn.1" class="footnum" href="#fnr.1">1</a></sup> DEFINITION NOT FOUND.</div>
+
+
+</div>
+</div></div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. 参考书籍 </a>
+<ul class="nav">
+<li><a href="#sec-1-1">1.1. 主要知识点</a></li>
+</ul>
+</li>
+<li><a href="#sec-2">2. WAPI</a>
+<ul class="nav">
+<li><a href="#sec-2-1">2.1. 概述</a></li>
+<li><a href="#sec-2-2">2.2. 主要术语</a></li>
+<li><a href="#sec-2-3">2.3. WAI的主要过程</a></li>
+<li><a href="#sec-2-4">2.4. 802.11i versus WAPI</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>

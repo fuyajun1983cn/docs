@@ -52,7 +52,8 @@
     #+END_SRC
 
     其中 macroexpand 用于调试，可以查看一个宏展开后的样子。','表示
-    backquote, 被backquote的元素在执行宏定义的代码时，不会被解析。
+    backquote, 被backquote的元素在执行宏定义的代码时，会被解析出实际的
+    值。
 
     #+BEGIN_SRC emacs-lisp
       (defmacro limited-save-excursion (&rest subexprs)
@@ -64,8 +65,7 @@
                (goto-char ,orig-point-symbol)))))
     #+END_SRC
 
-    ",@"跟","一样，原封不动的保留传入进来的参数，且会自动去掉最外层的
-    括号。
+    ",@"跟","一样，但会自动去掉最外层的括号。
 ** 变量
 *** 普通变量
     : defvar
@@ -91,7 +91,55 @@
                 (const :tag "None" nil)))
           
     #+END_SRC
-    type的类型有:  choice, boolean, alist, plist,  "set greedy: t"
+    type的类型有:  choice, boolean, alist, plist, string,  "set
+    greedy: t"
+**** 字符串
+     #+BEGIN_SRC emacs-lisp
+       (defcustom dumb-jump-grep-prefix
+         "LANG=C"
+         "Prefix to grep command.  Seemingly makes it faster for pure text."
+         :group 'dumb-jump
+         :type 'string)     
+     #+END_SRC
+**** boolean
+     #+BEGIN_SRC emacs-lisp
+       (defcustom dumb-jump-use-visible-window
+         t
+         "When true will jump in a visible window if that window already has the file open."
+         :group 'dumb-jump
+         :type 'boolean)     
+     #+END_SRC
+**** plist
+     #+BEGIN_SRC emacs-lisp
+       (defcustom dumb-jump-language-file-exts
+         '((:language "elisp" :ext "el" :agtype "elisp" :rgtype "elisp")
+           (:language "elisp" :ext "el.gz" :agtype "elisp" :rgtype "elisp"))
+         "Mapping of programming language(s) to file extensions."
+         :group 'dump-jump
+         :type
+         '(repeat
+           (plist
+            :options ((:language (string :tag "Language"))
+                      (:ext (string :tag "Extension"))
+                      (:agtype (string :tag "Ag type"))
+                      (:rgtype (string :tag "Ripgrep type"))))))
+     #+END_SRC
+**** alist
+     #+BEGIN_SRC emacs-lisp 
+       (defcustom dumb-jump-project-denoters
+         '(".dumbjump" ".projectile" ".git" ".hg" ".fslckout" ".bzr" "_darcs" ".svn" "Makefile" "PkgInfo" "-pkg.el")
+         "Files and directories that signify a directory is a project root."
+         :group 'dumb-jump
+         :type '(repeat (string :tag "Name")))     
+     #+END_SRC
+**** hook
+     #+BEGIN_SRC emacs-lisp
+       (defcustom dumb-jump-after-jump-hook nil
+         "Hooks called after jumping."
+         :type 'hook
+         :group 'dumb-jump
+         :type 'hook)     
+     #+END_SRC
 *** 变量赋值let
     create a name for a local variable
     =let*= : set each variable in its varlist in sequence
@@ -440,6 +488,22 @@
             (setq minor-mode-alist
                   (cons '(refill-mode " Refill")
                         minor-mode-alist)) )
+      #+END_SRC
+   5. 添加keymap
+      #+BEGIN_SRC emacs-lisp
+        ;;;###autoload
+        (defvar dumb-jump-mode-map
+          (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "C-M-g") 'dumb-jump-go)
+            (define-key map (kbd "C-M-p") 'dumb-jump-back)
+            (define-key map (kbd "C-M-q") 'dumb-jump-quick-look)
+            map))
+
+        ;;;###autoload
+        (define-minor-mode dumb-jump-mode
+          "Minor mode for jumping to variable and function definitions"
+          :global t
+          :keymap dumb-jump-mode-map)      
       #+END_SRC
 
 

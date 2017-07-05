@@ -1,0 +1,289 @@
+#+TITLE: Hands Free Profile要点记录
+
+* Feature & Procedure
+
+** Connection management
+   
+*** Service Level Connection establishment
+    either the AG or HF may initiate a Service Level Connection
+    establishment procedure. 
+
+    before that, a RFCOMM data link channel between the HF and the AG
+    should exist between them. 
+
+    either the AG or HF may initiate a RFCOMM connection
+    establishment.
+
+    after a RFCOMM connection establishment performed, the Service
+    Level Connection Initialization Procedure should begin as follows:
+    1. Supported features exchange
+       HF send AT+BRSF=<HF supported features> command to AG to both notify
+       the AG of the supported features in the HF and retrieve the
+       supported features in the AG using the +BRSF result code.
+    2. Codec Negotiation
+       if the HF supports the Codec Negotiation feature, it shall
+       check if the AT+BRSF command response from the AG has indicated
+       that it supports the Codec Negotiation feature. 
+
+       if both support Codec Negotiation feature, the HF shall send
+       the AT+BAC=<HF available codecs> command to the AG to notify
+       the AG of the available codecs in the HF.
+    3. AG Indicators
+       The HF uses the AT+CIND=? Test command to retrieve information
+       about the supported indicators and their ordering. 
+       
+       Once the HF has the necessary supported indicator and ordering
+       information, it shall retrieve the current status of the
+       indicators in the AG using the AT+CIND? Read command. 
+
+       After having retrieved the status of the indicators in the AG,
+       the HF shall then enable the "Indicators status update"
+       function in the AG by issuing the AT+CMER command, to which the
+       AG shall respond with OK. 
+
+       As a result, the AG shall send the +CIEV unsolicited result
+       code with the corresponding indicator value whenever a change
+       in service, call, or call setup status occurs. 
+
+       When an update is required for both the call and call setup
+       indicators, the AG shall send the +CIEV unsolicited result code
+       for the call indicator before sending the +CIEV unsolicited
+       result code for the call setup indicator. The HF shall use the
+       information provided by the +CIEV code to update its own
+       internal and/or external indications. 
+
+       Once the "Indicators status update" function has been enabled,
+       the AG shall keep the function enabled until either the AT+CMER
+       command is issued to disable it, or the current Service Level
+       Connection between the AG and the HF is dropped for any
+       reason. 
+
+       After the HF has enabled the “Indicators status update”
+       function in the AG, and if the “Call waiting and 3-way calling”
+       bit was set in the supported features bitmap by both the HF and
+       the AG, the HF shall issue the AT+CHLD=? test command to
+       retrieve the information about how the call hold and multiparty
+       services are supported in the AG. The HF shall not issue the
+       AT+CHLD=? test command in case either the HF or the AG does not
+       support the "Three-way calling" feature.
+    4. HF Indicators
+       If the HF supports the HF indicator feature, it shall check the
+       +BRSF response to see if the AG also supports the HF Indicator
+       feature.
+
+       If both the HF and AG support the HF Indicator feature, then
+       the HF shall send the AT+BIND=<HF supported HF indicators>
+       command to the AG to notify the AG of the supported indicators’
+       assigned numbers in the HF. The AG shall respond with OK. 
+
+       After having provided the AG with the HF indicators it
+       supports, the HF shall send the AT+BIND=? to request HF
+       indicators supported by the AG. The AG shall reply with the
+       +BIND response listing all HF indicators that it supports
+       followed by an OK. 
+
+       Once the HF receives the supported HF indicators list from the
+       AG, the HF shall send the AT+BIND? command to determine which
+       HF indicators are enabled. The AG shall respond with one or
+       more +BIND responses. The AG shall terminate the list with OK. 
+
+       From this point onwards, the HF may send the AT+BIEV command
+       with the corresponding HF indicator value whenever a change in
+       value occurs of an enabled HF indicator. 
+
+       The AG may enable or disable the notification of any HF
+       indicator at any time by using the +BIND unsolicited response.
+    5. End of Service Level Connection
+       The HF shall consider the Service Level Connection fully
+       initialized, and thereby established, in either of the
+       following cases: 
+       - After the HF has successfully retrieved information about HF
+         indicators currently enabled by the AG using the AT+BIND?
+         command, if and only if the “HF indicators” bit was set in
+         the HF supported features bitmap and the AG supported
+         features bitmap as exchanged via +BRSF command.
+
+       - After the HF has successfully retrieved information about how
+         call hold and multiparty services are supported in the AG
+         using the AT+CHLD command, if and only if the “Call waiting
+         and 3-way calling” bit was set in the SupportedFeatures
+         attribute of the SDP records for both HF and AG. For this
+         case to apply, the “HF Indicators” bit must not be set in the
+         supported features bitmap for either the HF or the AG as
+         exchanged via +BRSF command.
+
+       - After the HF has successfully enabled the “Indicator status
+         update” using the AT+CMER command. For this case to apply,
+         the “Call waiting and 3-way calling” bit must not be set in
+         the SupportedFeatures attribute of the SDP records for either
+         the HF or the AG. Additionally, the “HF Indicators” bit must
+         not be set in the supported features bitmap for either the HF
+         or the AG as exchanged via +BRSF command.
+
+       The AG shall consider the Service Level Connection to be fully
+       initialized, and thereby established, in either of the following
+       cases: 
+       - After the AG has successfully responded with information
+         about which HF indicators are enabled on the AG using +BIND
+         as well as responded OK, if and only if the “HF Indicators”
+         bit was set in the HF supported features bitmap and the AG
+         supported features bitmap as exchanged via +BRSF command.
+       - After that the AG has successfully responded with information
+         about how call hold and multiparty services are supported in
+         the AG using +CHLD as well as responded OK, if and only if
+         the “Call waiting and 3-way calling” bit was set in the
+         SupportedFeatures of the SDP attribute for both HF and
+         AG. For this case to apply, the “HF Indicators” bit must not
+         be set in the supported features bitmap for either the HF or
+         the AG as exchanged via +BRSF command.
+       - After the AG has successfully responded with OK to the
+         AT+CMER command (to enable the “Indicator status update”
+         function.) For this case to apply, the “Call waiting and
+         3-way calling” bit must not be set in the supported features
+         bitmap for either the HF or the AG. Additionally, the “HF
+         Indicators” bit must not be set in the supported features
+         bitmap for either the HF or the AG as exchanged via +BRSF
+         command.
+
+    6. Service Level Connection Diagram
+
+       #+CAPTION: Service Level Connection establishment
+       [[./images/01.png]]
+    
+*** Service Level Connection release
+
+** Phone status information
+   
+*** Transfer of Registration Status
+
+*** Transfer of Signal Strength Indication
+
+*** Transfer of Roaming Status Indication
+
+*** Transfer of Battery Level Indication
+
+*** Query of Operator Selection
+
+*** Extended Audio Gateway Error Codes
+
+*** Transfer of Call, Call Setup and Call Held Status
+
+** Audio Connection handling
+
+*** Audio Connection set up
+
+*** Audio Connection release
+
+*** Codec Connection set up
+
+** Accept an incoming voice call
+
+*** Answer an incoming call
+
+** Reject an incoming voice call
+
+*** Reject an incoming call
+
+** Terminate a call
+
+*** Terminate a call process
+
+** Audio Connection transfer during an ongoing call
+
+*** Audio Connection transfer towards the HF
+
+*** Audio Connection transfer towards the AG
+
+** Place a call with the phone number supplied by the HF
+
+*** Place a call with the phone number supplied by the HF
+
+** Place a call using memory dialing
+
+*** Memory dialing from the HF
+
+** Place a call to the last number dialed
+
+*** Last number re-dial from the HF
+
+** Call waiting notification
+
+*** Call waiting notification activation
+
+** Three-way calling
+
+*** Three-way call handling
+
+** Calling Line Identification (CLI)
+
+*** Calling Line Identification (CLI) notification
+
+** Echo canceling (EC) and noise reduction (NR)
+
+*** HF requests turning off the AG’s EC and NR
+
+** Voice recognition activation
+
+*** Voice recognition activation
+
+** Attach a phone number to a voice tag
+
+*** Attach a voice tag to a phone number
+
+** Ability to transmit DTMF codes
+
+*** Transmit DTMF code
+
+** Remote audio volume control
+
+*** Remote audio volume control
+
+*** Volume level synchronization
+
+** Response and Hold
+
+*** Query response and hold status
+
+*** Put an incoming call on hold from HF
+
+*** Put an incoming call on hold from AG
+
+*** Accept a held incoming call from HF
+
+*** Accept a held incoming call from AG
+
+*** Reject a held incoming call from HF
+
+*** Reject a held incoming call from AG
+
+*** Held incoming call terminated by caller
+
+** Subscriber Number Information
+   
+*** Subscriber Number Information
+
+** Enhanced Call Status
+
+*** Query Call List
+
+** Enhanced Call Control
+
+*** Release Specified Call
+
+*** Private Consult Mode
+
+** Individual Indicator Activation
+
+*** Indicators Activation and Deactivation
+
+** Wide Band Speech
+
+*** Wide Band Speech
+
+** Codec Negotiation
+
+*** Codec Negotiation
+
+** HF Indicators
+
+*** HF Indicators

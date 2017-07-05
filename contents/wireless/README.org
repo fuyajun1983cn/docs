@@ -71,3 +71,12 @@
 
 * 024
   LINK MANAGER PROTOCOL SPECIFICATION
+
+* 025
+  L2CAP学习笔记
+
+* 026
+  HFP Profile
+
+* 027
+  A2DP Profile

@@ -162,4 +162,137 @@
 ** CONNECTION CONTROL
 
 *** Connection Establishment
+    [[./images/04.png]]
+
+    当对方设备收到 =LMP_host_connection_req= 请求时，此时如果想变换角
+    色（自己作Master，一般先发起连接请求的设备做Master），则需要发送
+    =LMP_slot_offset= 和 =LMP_switch_req= PDU。 
+
+*** Detach
+    The connection between two Bluetooth devices may be detached anytime by
+    the master or the slave. An error code parameter is included in the message to
+    inform the other party of why the connection is detached.
+
+    *Initiating Side* 
+
+    The initiating LM then queues the =LMP_detach= for
+    transmission and it shall start a timer for 6*T_poll slots where T_poll is the poll
+    interval for the connection.
+
+    If the initiating LM receives the baseband
+    acknowledgment before the timer expires it starts a timer for 3*T_poll slots. When
+    this timer expires, and if the initiating LM is the master, the =LT_ADDR(s)= may
+    be re-used immediately.
+
+    If the initial timer expires then the initiating LM drops
+    the link and starts a timer for T_linksupervisiontimeout slots after which the
+    =LT_ADDR(s)= may be re-used if the initiating LM is the master.
+
+    *Receiving Side*
+
+    When the receiving LM receives the =LMP_detach=, it shall start a timer for
+    6*T_poll slots if it is the master and 3*T_poll if it is the
+    slave.
+
+    On timer expiration,
+    the link shall be detached and, if the receiving LM is the master, the
+    =LT_ADDR(s)= may be re-used immediately. If the receiver never receives the
+    =LMP_detach= then a link supervision timeout will occur, the link will be
+    detached, and the =LT_ADDR= may be re-used immediately.
+
+    If at any time during this or any other LMP sequence the Link supervision
+    timeout expires then the link shall be terminated immediately and the
+    *LT_ADDR(S)* may be re-used immediately.
+
+    When the connection is in hold mode or sniff mode, the initiating
+    LM should wait for hold mode or sniff mode end(30 seconds timeout) before the above
+    Procedure.
+
     
+*** Adaptive Frequency Hopping
+    AFH is used to improve the performance of physical links in the presence of
+    interference as well as reducing the interference caused by physical links on
+    other devices in the ISM band. AFH shall only be used during the connection
+    state.
+
+    The =LMP_set_AFH= PDU contains three parameters: =AFH_Instant=, =AFH_Mode=,
+    and =AFH_Channel_Map=.
+
+    1. =AFH_Instant=
+       specifies the instant at which the hopset switch shall become
+       effective. It's the Bluetooth Clock value of master's
+       clock. It's chosen by the master device and shall be an even
+       value at least 6*T_poll or 96 (whichever is greater) slots in
+       the future.
+    2. =AFH_Mode=
+       enabled or disabled.
+    3. =AFH_Channel_Map=
+       specifies the set of channels that shall be used if AFH is
+       enabled.
+
+*** Link Supervision
+    Each physical link has a timer that is used for link supervision. This timer is
+    used to detect physical link loss caused by devices moving out of range, or
+    being blocked by interference, a device’s power-down, or other similar failure
+    cases.
+
+    
+*** Channel Quality Driven Data Rate Change (CQDDR)
+    The data throughput for a given packet type depends on the quality of the RF
+    channel. Quality measurements in the receiver of one device can be used to
+    dynamically control the packet type transmitted from the remote device for
+    optimization of the data throughput. Device A sends the =LMP_auto_rate= PDU
+    once to notify device B to enable this feature. Once enabled, device B may
+    request packet type(s) that A should transmit by sending the
+    =LMP_preferred_rate= PDU.
+
+*** Quality of Service (QoS)
+    The LM provides QoS capabilities. A poll interval, T_poll, that is defined as the
+    maximum time between transmissions from the master to a particular slave on
+    the ACL logical transport, is used to support bandwidth allocation and latency
+    control.
+
+** SECURITY
+
+*** Secure Simple Pairing
+    There are four stages defined in the Secure Simple Pairing LM
+    process:
+    - IO capabilities exchange
+      The devices shall first exchange the IO capabilities to
+      determine the proper algorithm to be used. Three algorithms have
+      been specified: Numeric comparison, Passkey entry, Out of band.
+    - Public key exchange
+      Once the IO capabilities are exchanged, public keys shall be
+      exchanged between the two devices.
+    - Authentication stage 1
+    - Authentication stage 2
+
+** Information Request
+   
+*** Clock Offset
+
+*** LMP Version
+
+*** Supported Features
+
+** Role Switch
+   
+*** Slot Offset
+    The =LMP_slot_offset= PDU may be sent anytime after the baseband
+    paging procedure has completed. This PDU carries the parameters
+    slot offset and =BD_ADDR=. The slot offset shall be the time in
+    microseconds from the start of a master transmission in the
+    current piconet to the start of the next following master
+    transmission in the piconet where the =BD_ADDR= device (normally the
+    slave) is master at the time that the request is interpreted by
+    the =BD_ADDR= device.
+
+    #+CAPTION: Slot offset for role switch
+    [[./images/05.png]]
+
+*** Role Switch
+
+** MODES OF OPERATION
+
+** ACL logical transport
+   
