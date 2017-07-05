@@ -3,6 +3,7 @@
 import os
 import inspect
 import time
+import subprocess
 from optparse import OptionParser
 
 cur_dir = os.path.dirname(inspect.getfile(inspect.currentframe()))
@@ -10,6 +11,23 @@ cur_dir = os.path.dirname(inspect.getfile(inspect.currentframe()))
 branch_name = "gh-pages"
 remote_name = "origin"
 
+'''
+utils for private usage.
+'''
+
+def _has_csdn_branch():
+    '''
+    define if exist a csdn branch in this repository.
+    '''
+    p = subprocess.call('git branch', shell=True, stderr=subprocess.PIPE)
+    out = p.readlines()
+    if out.find('csdn') != -1:
+        return True;
+    return False
+
+'''
+public API for external usage.
+'''
 
 def git_clone(url, dest_dir):
     '''
@@ -46,7 +64,8 @@ def git_push():
     git push command
     '''
     os.system("git push {0} {1}".format(remote_name, branch_name))
-    os.system("git push csdn gh-pages")
+    if _has_csdn_branch():
+        os.system("git push csdn gh-pages")
 
 def git_pull():
     '''
