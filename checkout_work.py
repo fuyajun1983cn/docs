@@ -20,7 +20,6 @@ def _has_csdn_branch():
     define if exist a csdn branch in this repository.
     '''
     p = subprocess.run(['git', 'branch'], stdout=subprocess.PIPE)
-    print('Result: ' + p)
     out = str(p.stdout)
     if out.find('csdn') != -1:
         return True;
