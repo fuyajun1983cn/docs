@@ -21,7 +21,6 @@ def _has_csdn_branch():
     '''
     p = subprocess.run(['git', 'branch'], stderr=open('/dev/null', 'w'), stdout=subprocess.PIPE)
     out = str(p.stdout)
-    print("out: " + out)
     if out.find('csdn') != -1:
         return True;
     return False
