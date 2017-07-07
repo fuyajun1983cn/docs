@@ -1,0 +1,1200 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Javascript学习笔记</h1>
+          <p>JavaScript基础语法研究,Node API研究等等.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">Javascript学习笔记</h1>
+
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1">基础语法</h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1">基本语法要素</h3>
+<div class="outline-text-3" id="text-1-1">
+<p>
+变量名和关键字区分大小写。
+支持Unicode转义，如
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">"café" === "caf\u00e9"
+  // =&gt; true
+</pre>
+</div>
+
+<p>
+javascript的变量名必须以字母，下划线或$字符为开头。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2">基本数据类型</h3>
+<div class="outline-text-3" id="text-1-2">
+</div><div id="outline-container-sec-1-2-1" class="outline-4">
+<h4 id="sec-1-2-1">原始类型</h4>
+<div class="outline-text-4" id="text-1-2-1">
+<p>
+<code>null</code> 和 <code>undefined</code> 是两个特殊的原始类型值，它们不是数字，字符串
+或布尔型。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2-2" class="outline-4">
+<h4 id="sec-1-2-2">对象类型</h4>
+<div class="outline-text-4" id="text-1-2-2">
+<p>
+对象拥有一系列属性，这些属性都有一个名字和对应的值，这些值可以
+是原始类型，也可以是对象类型。 
+</p>
+
+<p>
+一个普通的JavaScript对象是一个有名值对的无序集合， array，作为一种
+特殊的对象，代表一组被标记数字的值的有序集合。
+</p>
+
+<p>
+函数是另一种特殊的对象，它一般关联了可执行的代码。
+</p>
+
+<p>
+类可认为是对象类型的一个子类型。
+</p>
+
+<p>
+另外， JavaScript还定义了另外三个有用的类:
+</p>
+<ol class="org-ol">
+<li>Date
+定义代表日期的对象。
+</li>
+<li>RegExp
+定义代表正则表达式的类。
+</li>
+<li>Error
+定义对象语法或运行时错误的对象。
+</li>
+</ol>
+
+
+<p>
+JavaScript有垃圾回收器自动回收不被使用的对象所占的内存。
+</p>
+
+<p>
+对象和数组是可修改的类型。 数字，布尔，null, 以及undefined是不
+可修改类型， 字符串也是不可修改的类型。
+</p>
+
+<p>
+JavaScript的变量是无类型的，你可以给一个变量赋任何类型的值。
+</p>
+
+<p>
+使用var声明一个变量， JavaScript使用lexical scoping。
+</p>
+
+<p>
+JavaScript不区分整型和浮点型，所有数值都被表示为浮点型。
+</p>
+
+<p>
+复杂的数值运行可以通过Math对象提供的方法。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2-3" class="outline-4">
+<h4 id="sec-1-2-3">数值比较</h4>
+<div class="outline-text-4" id="text-1-2-3">
+<ul class="org-ul">
+<li>== 
+判断是否相等
+</li>
+<li>!==
+判断是否不相等。(值是否为true或false)
+</li>
+<li><code>=</code>
+         严格相等 （可以区分null和undefined)
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2-4" class="outline-4">
+<h4 id="sec-1-2-4">全局对象</h4>
+<div class="outline-text-4" id="text-1-2-4">
+<p>
+当一个JavaScript解释器启动时，它会创建一个新的全局对象并给它一
+些属性赋予初始值：
+</p>
+<ul class="org-ul">
+<li>全局属性如undefined, Infinity和NaN
+</li>
+<li>全局函数如isNaN(), parseInt()和eval()
+</li>
+<li>构造函数如Date(), RegExp(), String(), Object(), Array()
+</li>
+<li>全局对象如Math和JSON
+</li>
+</ul>
+
+
+<p>
+全局变量的初始属性虽然不是保留字，但是最好将它们当作保留字看待。
+在JavaScript的最顶层代码，可以使用关键字this来引用全局对象： 
+</p>
+<pre class="example">
+var global = this; //Define a global variable to  refer to the global object
+</pre>
+
+<p>
+在客户端JavaScript的代码中，Window对象作为运行在浏览器中的所有
+JavaScript代码的一个全局变量而存在。
+</p>
+
+<p>
+对象比较是by reference，而变量比较是by value， 两个对象相同当
+且仅当它们指向相同的对象， 所以对象之间的比较一般使用===和!==。
+</p>
+
+<p>
+转换一个对象为字符串：
+</p>
+<ol class="org-ol">
+<li>先查看该对象有没有toString()方法，且其返回值是一个原型类型。
+</li>
+<li>如果不存在，再看有没有valueOf()方法，且其返回值是一个原型类型。
+</li>
+<li>如果也不存在，对会抛出TypeError异常。
+</li>
+</ol>
+
+
+<p>
+转换一个对象为数字：
+</p>
+<ol class="org-ol">
+<li>先看有没有valueOf()方法，且其返回值是一个原型类型。
+</li>
+<li>再查看该对象有没有toString()方法，且其返回值是一个原型类型。
+</li>
+<li>如果也不存在，对会抛出TypeError异常。
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2-5" class="outline-4">
+<h4 id="sec-1-2-5">语法要点</h4>
+<div class="outline-text-4" id="text-1-2-5">
+</div><ul class="org-ul"><li><a id="sec-1-2-5-1" name="sec-1-2-5-1"></a>声明变量<br ><div class="outline-text-5" id="text-1-2-5-1">
+<p>
+声明一个全局变量可以省略var关键字，但是声明一个局部变量则不能
+省略。
+</p>
+</div>
+</li>
+
+<li><a id="sec-1-2-5-2" name="sec-1-2-5-2"></a>代码作用域<br ><div class="outline-text-5" id="text-1-2-5-2">
+<p>
+在一些编程语言中， 位于{ }里面的代码块拥有自己的域，代码块内
+的变量对代码块外的程序不可见。 JavaScript则不存在这种行为，
+它只有函数域。
+</p>
+</div>
+</li>
+
+<li><a id="sec-1-2-5-3" name="sec-1-2-5-3"></a>eval()<br ><div class="outline-text-5" id="text-1-2-5-3">
+<p>
+当使用别名调用eval()时，会相当于在最项层执行一个独立的代码，
+而当直接调用eval()时，则相当于在本地域执行一 段代码。 但是，
+当使用use strict指令后，不允许通过别名调用eval(), 并且eval()
+只能查询或设置一个局部变量，不 能定义新的变量或函数。 
+</p>
+</div>
+</li>
+
+<li><a id="sec-1-2-5-4" name="sec-1-2-5-4"></a>strict mode<br ><div class="outline-text-5" id="text-1-2-5-4">
+<ul class="org-ul">
+<li>In strict mode, assignments to nonwritable properties and
+attempts to create new properties on nonextensible
+objects throw a TypeError. (In non-strict mode, these
+attempts fail silently.) 
+</li>
+<li>In strict mode, code passed to eval() cannot declare
+variables or define functions in the caller’s scope as
+it can in non-strict mode. Instead, variable and function
+definitions live in a new scope created for the eval()
+. This scope is discarded when the eval() returns. 
+</li>
+<li>In strict mode, a SyntaxError is thrown if the delete
+operator is followed by an unqualified identifier such as
+a variable, function, or function parameter. (In non-
+strict mode, such a delete expression does nothing and
+evaluates to false .) In strict mode, an attempt to
+delete a nonconfigurable property throws a TypeError. (In
+non-strict mode, the attempt fails and the delete
+expression evaluates to false .) 
+</li>
+<li>In strict mode, it is a syntax error for an object
+literal to define two or more prop- erties by the same
+name. (In non-strict mode, no error occurs.) 
+</li>
+<li>In strict mode, it is a syntax error for a function
+declaration to have two or more parameters with the same
+name. (In non-strict mode, no error occurs.) 
+</li>
+<li>In strict mode, octal integer literals (beginning with a
+0 that is not followed by an x) are not allowed. (In
+non-strict mode, some implementations allow octal
+literals.) 
+</li>
+<li>In strict mode, the identifiers eval and arguments are
+treated like keywords, and you are not allowed to change
+their value. You cannot assign a value to these iden-
+tifiers, declare them as variables, use them as function
+names, use them as function parameter names, or use them
+as the identifier of a catch block. 
+</li>
+<li>In strict mode, the ability to examine the call stack is
+restricted. arg ments.caller and arguments.callee both
+throw a TypeError within a strict mode function. Strict
+mode functions also have caller and arguments properties
+that throw TypeError when read. (Some implementations
+define these nonstandard properties on non-strict
+functions.)
+</li>
+</ul>
+</div>
+</li></ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-3" class="outline-3">
+<h3 id="sec-1-3">对象</h3>
+<div class="outline-text-3" id="text-1-3">
+<ul class="org-ul">
+<li>对象一般由属性以及属性值构成, 属性有三种类型：
+<ul class="org-ul">
+<li>可写的。
+</li>
+<li>可迭代的(属性是否可以通过for/in循环返回。
+</li>
+<li>可配置的(属性是否可以被删除或更改)。
+</li>
+</ul>
+</li>
+<li>每个对象有三个关联的对象属性
+<ul class="org-ul">
+<li>prototype, 对另一个被继承的对象的引用
+</li>
+<li>class , 属性的类别
+</li>
+<li>extensible, 标识新属性是否可以加到对象中。
+</li>
+</ul>
+</li>
+<li>每个对象都有一个与之关联的第二个对象，第二个对象称为prototype,
+许多对象的属性都有继承自该prototype对象。
+Object.prototype是一个特殊的对象，它没有与之关联的prototype对象。
+</li>
+<li>Object.create()
+这是一个静态方法，
+<div class="org-src-container">
+
+<pre class="src src-javascript">var o1 = Object.create({x:1, y:2});
+// o1 inherits properties x and y.
+var o2 = Object.create(null);
+//o2 inherits no props or methods.
+var o3 = Object.create(Object.prototype);
+// o3 is like {} or new Object()
+</pre>
+</div>
+</li>
+<li>属性赋值
+属性赋值的时候，会检测prototype链，以决定当前的赋值操作是否被允
+许。如果当前对象继承了一个只读的属性，则对该属性的赋值是被禁止
+的。反之，如果当前的赋值是被允许的，则会在当前的对象中创建或设
+置一个属性，不会改变prototype链，事实上，继承仅发生于查询属性的
+时候，而不是设置属性的时候，这是JavaScript的一个核心特征，它允
+许我们有选择性地修改继承过来的属性。针对这个规则的一个例外是，
+当该属性被当成setter方法的一个访问者属性时，setter方法将会被调
+用，而不会为当前对象创建一个新的属性。但是，setter方法也是在当
+前对象上进行调用，而不是定义该属性的prototype对象。
+</li>
+<li>删除属性
+删除属性仅删除对象本身的属性，并不会删除继承的属性。当对象的
+configurable属性为false时，delete无法删除该属性。
+</li>
+<li>属性测试
+<div class="org-src-container">
+
+<pre class="src src-javascript">var o = { x: 1 }
+"x" in o;  // true: o has an own property "x"
+"y" in o;// false: o doesn't have a property "y"
+"toString" in o // true: o inherits a toString property
+
+var o = { x: 1 }
+o.hasOwnProperty("x"); // true: o has an own property x
+o.hasOwnProperty("y"); // false: o doesn't have a property y
+o.hasOwnProperty("toString"); // false: toString is an inherited property
+
+var o = inherit({ y: 2 });
+o.x = 1;
+o.propertyIsEnumerable("x"); // true: o has an own enumerable property x
+o.propertyIsEnumerable("y"); // false: y is inherited, not own
+Object.prototype.propertyIsEnumerable("toString"); // false: not enumerable
+
+var o = { x: 1 }
+o.x !== undefined; // true: o has a property x
+o.y !== undefined; // false: o doesn't have a property y
+o.toString !== undefined; // true: o inherits a toString property
+</pre>
+</div>
+</li>
+<li>Getters和Setters属性
+示例：
+<div class="org-src-container">
+
+<pre class="src src-javascript">var o = {
+    // An ordinary data property
+    data_prop: value,
+
+    // An accessor property defined as a pair of functions
+    get accessor_prop() { /* function body here */ },
+    set accessor_prop(value) { /* function body here */ }
+};
+</pre>
+</div>
+</li>
+<li>以$开关的属性名，表明它是一个私有属性。
+</li>
+<li>属性描述符
+数据类型属性的属性描述符对象有如下名称的属性： value, writable,
+enumerable, configurable. 而访问类型属性的属性描述符对象有如下
+名称的属性：set,get, enumerable, configurable.
+</li>
+<li>定义一个属性
+Object.defineProperty()
+<div class="org-src-container">
+
+<pre class="src src-javascript">var o = {}; // Start with no properties at all
+// Add a nonenumerable data property x with value 1.
+Object.defineProperty(o, "x", { value : 1,
+                    writable: true,
+                    enumerable: false,
+                    configurable: true});
+</pre>
+</div>
+
+<p>
+同时定义多个属性
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">var p = Object.defineProperties({}, {
+    x: { value: 1, writable: true, enumerable:true, configurable:true },
+    y: { value: 1, writable: true, enumerable:true, configurable:true },
+    r: {
+    get: function() { return Math.sqrt(this.x*this.x + this.y*this.y) },
+    enumerable:true,
+    configurable:true
+    }
+});
+</pre>
+</div>
+</li>
+<li>属性改变规则
+<ul class="org-ul">
+<li>If an object is not extensible, you can edit its existing own properties, but you cannot add new properties to it.
+</li>
+
+<li>If a property is not configurable, you cannot change its configurable or enumerable attributes.
+</li>
+
+<li>If an accessor property is not configurable, you cannot
+change its getter or setter method, and you cannot  change it to a data property.
+</li>
+
+<li>If a data property is not configurable, you cannot change it to an accessor property.
+</li>
+
+<li>If a data property is not configurable, you cannot change its
+writable attribute from false to true , but you can  change
+it from true to false .
+</li>
+
+<li>If a data property is not configurable and not writable, you
+cannot change its value. You can change the value of  a
+property that is configurable but nonwritable, how- ever
+(because that would be the same as making it  writable, then
+changing the value, then converting it back to nonwritable).
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-4" class="outline-3">
+<h3 id="sec-1-4">数组</h3>
+<div class="outline-text-3" id="text-1-4">
+<ul class="org-ul">
+<li>创建数组
+<div class="org-src-container">
+
+<pre class="src src-javascript">var arr = [2,3,4]
+var a = new Array(4)
+var a = new Array(5, 4, 3, 2, 1, "test string")
+
+var a1 = [,,] //this array is [undefined, undefined, undefined]
+var a2 = new Array(2) //this array has no values at all
+</pre>
+</div>
+</li>
+
+<li>数组长度 
+<div class="org-src-container">
+
+<pre class="src src-javascript">a = [1, 2, 3]
+a.length
+Object.defineProperty(a, "length", {writable:false}); //make the length property read only.
+</pre>
+</div>
+</li>
+
+<li>添加和删除元素
+<div class="org-src-container">
+
+<pre class="src src-javascript">a = [] a.push("zero") a.push("one", "two")
+
+a = [1, 2, 3] delete a[1] //delete element in index 1
+
+spice() unshift() shift() pop()
+
+forEach() var data = [1, 2, 3, 4]
+var sumOfSquares = 0;
+data.forEach(function(x) { sumOfSquares += x * x; });
+</pre>
+</div>
+</li>
+
+<li>常见的数组方法
+<div class="org-src-container">
+
+<pre class="src src-javascript">join() //将数据所有的元素转换为字符串并连接起来。
+reverse() //反转一个数组的元素顺序
+sort() //数组元素排序， 默认是按字母顺序排序，也可以传递一个比较函数来指定排序的依据
+concat() //返回一个新的数组包含原数组和传递进来的参数
+var a = [1, 2, 3]; a.concat([4,5], [6, 7]) //Returns [1, 2, 3, 4, 5, 6, 7]
+a.concat(4, [5, [6, 7]]) //Returns [1, 2, 3, 4, 5, [6, 7]]
+
+slice() //切分数组
+var a = [1, 2, 3, 4, 5] a.slice(0, 3) // returns [1, 2, 3]
+a.slice(3) // return [4, 5]
+a.slice(1, -1) //returns [2, 3, 4]
+a.slice(-3, -2) //returns [3]
+
+splice() //通用的数组元素插入和删除函数 对数组本身进行了修改。 前两个参数指定要删除的元素，之后的参数指定要插入的元素。
+var a = [1,2,3,4,5]; a.splice(2,0,'a','b'); // Returns []; a is [1,2,'a','b',3,4,5]
+a.splice(2,2,[1,2],3); // Returns ['a','b']; a is [1,2,[1,2],3,3,4,5]
+
+push()和pop(): 让数组可以像栈一样工作。
+
+unshift()和shift(): 跟push()和pop()函数类似，只不过操作元素的位置是数组的开始处。
+
+toString()和toLocaleString()
+</pre>
+</div>
+</li>
+
+<li>ECMAScript 5数组方法 forEach()
+<div class="org-src-container">
+
+<pre class="src src-javascript">data.forEach(function(v, i, a) { a[i] = v + 1; });
+map() a = [1, 2, 3];
+b = a.map(function(x) { return x * x; }); // b is [1, 4, 9]
+</pre>
+</div>
+<p>
+传递进来的函数必须有返回值
+</p>
+
+<p>
+filter() 传递进来的函数必须返回true或false
+</p>
+<pre class="example">
+a = [5, 4, 3, 2, 1]; smallvalues = a.filter(function(x) { return x &lt; 3 });
+</pre>
+
+<p>
+every() 和 some() 传递进来的函数必须返回true或false
+</p>
+<pre class="example">
+a = [1, 2, 3, 4, 5]; a.every(function(x) { return x &lt; 10; }) // true, all values &lt; 10
+a.some(function(x) { return x % 2 === 0; }); // true, a has some even numbers.
+</pre>
+
+<p>
+reduce(), reduceRight() 
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">a = [1,2,3,4,5]
+sum = a.reduce(function(x,y) { return x+y }, 0); //sum of values
+product = a.reduce(function(x,y) { return x*y }, 1); // Product of values
+max = a.reduce(function(x,y) { return (x&gt;y)?x:y; }); // Largest value
+</pre>
+</div>
+
+<p>
+indexOf(), lastIndexOf()
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">Array.isArray()
+var isArray = Function.isArray || function(o) { return typeof o === "object" &amp;&amp; Object.prototype.toString.call(o) === "[object Array]"; };
+</pre>
+</div>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-5" class="outline-3">
+<h3 id="sec-1-5">闭包</h3>
+<div class="outline-text-3" id="text-1-5">
+<ul class="org-ul">
+<li>闭包不能访问外部函数的this, 除非通过变量事先保存。
+<pre class="example">
+var self = this; // Save this value in a variable for use by nested funcs.
+</pre>
+</li>
+<li>闭包也不能访问外部函数的arguments,除非通过变量事先保存。
+<pre class="example">
+var outerArguments = arguments;// Save for use by nested functions
+</pre>
+</li>
+<li>It is important to remember that the scope chain associated with
+a closure is “live.” Nested functions do not make private
+copies of the scope or make static snapshots of the variable
+bindings.
+<div class="org-src-container">
+
+<pre class="src src-javascript">// Return an array of functions that return the values 0-9
+function constfuncs() {
+   var funcs = [];
+   for(var i = 0; i &lt; 10; i++)
+   funcs[i] = function() { return i; };
+   return funcs;
+}
+var funcs = constfuncs();
+funcs[5]() // What does this return? 10
+</pre>
+</div>
+</li>
+<li>lexical scoping
+functions are executed using the variable scope that was in
+effect when they were defined, not the variable scope that is in
+effect when they are invoked.
+<div class="org-src-container">
+
+<pre class="src src-javascript">// This function returns a function that always returns v
+function constfunc(v) { return function() { return v; }; }
+// Create an array of constant functions:
+var funcs = [];
+for(var i = 0; i &lt; 10; i++) funcs[i] = constfunc(i);
+// The function at array element 5 returns the value 5.
+funcs[5]()   // =&gt; 5
+</pre>
+</div>
+</li>
+<li>scope chain is a list or chain of objects that defines the
+variables that are “in scope” for that code.
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1-6" class="outline-3">
+<h3 id="sec-1-6">类</h3>
+<div class="outline-text-3" id="text-1-6">
+</div><div id="outline-container-sec-1-6-1" class="outline-4">
+<h4 id="sec-1-6-1">类的创建</h4>
+<div class="outline-text-4" id="text-1-6-1">
+<div class="org-src-container">
+
+<pre class="src src-javascript">#!/usr/bin/env nodejs
+
+//java script代码
+// inherit() returns a newly created object that inherits properties from the
+// prototype object p. It uses the ECMAScript 5 function Object.create() if
+// it is defined, and otherwise falls back to an older technique.
+function inherit(p) {
+    if (p == null) throw TypeError(); // p must be a non-null object
+    if (Object.create)// If Object.create() is defined...
+        return Object.create(p); //then just use it.
+    var t = typeof p; // Otherwise do some more type checking
+    if (t !== "object" &amp;&amp; t !== "function") throw TypeError();
+    function f() {};  // Define a dummy constructor function.
+    f.prototype = p;// Set its prototype property to p.
+    return new f(); // Use f() to create an "heir" of p.
+}
+
+//this is a factory function that return a new range object
+function range(from, to) {
+    var r = inherit(range.methods);
+    r.from = from;
+    r.to = to;
+
+    return r;
+}
+
+// This prototype object defines methods inherited by all range objects.
+range.methods = {
+    includes: function(x) { return this.from &lt;= x &amp;&amp; x &lt;= this.to; },
+    foreach: function(f) {
+        for(var x = Math.ceil(this.from); x &lt;= this.to; x++) f(x);
+    },
+    toString: function() { return "(" + this.from + "..." + this.to + ")"; }
+}
+
+//test code
+var r = range(1, 3);
+r.includes(2);
+r.foreach(console.log);
+console.log(r);
+
+console.log("=================");
+
+function Range(from, to) {
+    this.from = from;
+    this.to = to;
+}
+
+Range.prototype = {
+    includes: function(x) { return this.from &lt;= x &amp;&amp; x &lt;= this.to; },
+    foreach: function(f) {
+        for(var x = Math.ceil(this.from); x &lt;= this.to; x++) f(x);
+    },
+    toString: function() { return "(" + this.from + "..." + this.to + ")"; }   
+};
+
+var r2 = new Range(1, 3);
+r2.includes(2);
+r2.foreach(console.log);
+console.log(r2);
+
+var F = function() {}; 
+var p = F.prototype;  
+var c = p.constructor;
+c === F;  //true
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-1-6-2" class="outline-4">
+<h4 id="sec-1-6-2">创建类的步骤</h4>
+<div class="outline-text-4" id="text-1-6-2">
+</div><ul class="org-ul"><li><a id="sec-1-6-2-1" name="sec-1-6-2-1"></a>步骤<br ><div class="outline-text-5" id="text-1-6-2-1">
+<ol class="org-ol">
+<li>write a constructor function that sets instance properties on new objects.
+</li>
+<li>define <code>instance</code> methods on the prototype object of the constructor.
+</li>
+<li>define class fields and class properties on the
+constructor itself.
+</li>
+</ol>
+</div>
+</li>
+
+<li><a id="sec-1-6-2-2" name="sec-1-6-2-2"></a>代码示例<br ><div class="outline-text-5" id="text-1-6-2-2">
+<div class="org-src-container">
+
+<pre class="src src-javascript">function defineClass(constructor, // A function that sets instance properties
+                     methods, //Instance methods: copied to prototype
+                     statics) //class properties: copied to constructor
+{
+    if (methods) extend(constructor.prototype, methods);
+    if (statics) extend(constructor, statics);
+    return constructor;
+}
+
+// This is a simple variant of our Range class
+var SimpleRange =
+defineClass(function(f,t) { this.f = f; this.t = t; },
+            {
+                includes: function(x) { return this.f &lt;= x &amp;&amp; x &lt;= this.t;},
+                toString: function() { return this.f + "..." + this.t; }
+            },
+            { upto: function(t) { return new SimpleRange(0, t); } });
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2">Node</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1">程序参数</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+process.argv<sup><a id="fnr.1" name="fnr.1" class="footref" href="#fn.1">1</a></sup> = '/usr/bin/nodejs'
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2">Core APIs</h3>
+<div class="outline-text-3" id="text-2-2">
+</div><div id="outline-container-sec-2-2-1" class="outline-4">
+<h4 id="sec-2-2-1">Events</h4>
+<div class="outline-text-4" id="text-2-2-1">
+</div><ul class="org-ul"><li><a id="sec-2-2-1-1" name="sec-2-2-1-1"></a>EventEmitter<br ><div class="outline-text-5" id="text-2-2-1-1">
+<p>
+EventEmitter class to provide some basic event
+functionality. 
+</p>
+
+<p>
+它是一个接口类，供其他类扩展。
+</p>
+
+<p>
+EventEmitter拥有许多方法，其中比较常见的是 <i>on</i> 和 <i>emit</i> 。
+这些方法提供给其他类使用。 
+</p>
+
+<p>
+<i>on</i> 方法创建一个事件监听者，如下代码所示：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">server.on('event', function(a, b, c) {
+  //do things
+});
+</pre>
+</div>
+
+<p>
+由于 EventEmitter是一个接口伪类， 需要实例化从EventEmitter继
+承而来的类。 实例化一个EventEmitter派生类的代码如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">var utils = require('utils'),
+    EventEmitter = require('events').EventEmitter;
+
+var Server = function() {
+  console.log('init');
+};
+
+utils.inherits(Server, EventEmitter);
+
+var s = new Server();
+
+s.on('abc', function() {
+  console.log('abc');
+});
+
+//Fire an event
+s.emit('abc');
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+
+<div id="outline-container-sec-2-2-2" class="outline-4">
+<h4 id="sec-2-2-2">HTTP</h4>
+<div class="outline-text-4" id="text-2-2-2">
+</div><ul class="org-ul"><li><a id="sec-2-2-2-1" name="sec-2-2-2-1"></a>HTTP Servers<br ><div class="outline-text-5" id="text-2-2-2-1">
+<div class="org-src-container">
+
+<pre class="src src-javascript">var http = require('http');
+var server = http.createServer();
+var handleReq = function(req,res){
+  res.writeHead(200, {});
+  res.end('hello world');
+};
+server.on('request', handleReq);
+server.listen(8125);
+</pre>
+</div>
+</div>
+</li>
+
+<li><a id="sec-2-2-2-2" name="sec-2-2-2-2"></a>HTTP Clients<br ><div class="outline-text-5" id="text-2-2-2-2">
+<div class="org-src-container">
+
+<pre class="src src-javascript">var http = require('http');
+
+var opts = {
+  host: 'www.google.com'
+  port: 80,
+  path: '/',
+  method: 'GET'
+};
+
+var req = http.request(opts, function(res) {
+  console.log(res);
+  res.setEncoding('utf-8');
+  res.on('data', function(data) {
+    console.log(data);
+  });
+});
+
+req.end();
+</pre>
+</div>
+</div>
+</li></ul>
+</div>
+
+<div id="outline-container-sec-2-2-3" class="outline-4">
+<h4 id="sec-2-2-3">I/O</h4>
+<div class="outline-text-4" id="text-2-2-3">
+</div><ul class="org-ul"><li><a id="sec-2-2-3-1" name="sec-2-2-3-1"></a>Streams<br ><div class="outline-text-5" id="text-2-2-3-1">
+<p>
+Streams can be readable, writable, or both. All  streams are
+EventEmitter instances, allowing them to emit events. 
+</p>
+</div>
+</li>
+
+<li><a id="sec-2-2-3-2" name="sec-2-2-3-2"></a>Readable streams<br ><div class="outline-text-5" id="text-2-2-3-2">
+<div class="org-src-container">
+
+<pre class="src src-javascript">var fs = require('fs');
+var filehandle = fs.readFile('data.txt', function(err, data) {
+  console.log(data)
+});
+</pre>
+</div>
+
+<p>
+Using the spooling pattern to read a complete stream
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">//abstract stream
+var spool = "";
+stream.on('data', function(data) {
+  spool += data;
+});
+stream.on('end', function() {
+  console.log(spool);
+});
+</pre>
+</div>
+</div>
+</li>
+
+<li><a id="sec-2-2-3-3" name="sec-2-2-3-3"></a>Filesystem<br ><div class="outline-text-5" id="text-2-2-3-3">
+<p>
+filesystem模块实现了POSIX风格的文件I/O接口。 它提供的方法分
+为异步模式和同步模式，一般建议使用异步模式下的接口。
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">var fs = require('fs');
+
+fs.readFile('warandpeace.txt', function(e, data) {
+  console.log('War and Peace: ' + data);
+  fs.unlink('warandpeace.txt');
+});
+</pre>
+</div>
+</div>
+</li>
+
+<li><a id="sec-2-2-3-4" name="sec-2-2-3-4"></a>Buffers<br ><div class="outline-text-5" id="text-2-2-3-4">
+<p>
+Buffer代表一块内存区域，它是固定大小的， 如果想添加更多的数
+据，必须拷贝当前的Buffer到一个更大的Buffer中。
+</p>
+
+<p>
+Buffers can be created using three possible parameters: the
+length of the Buffer in bytes, an array of bytes to copy
+into the Buffer, or a string to copy into the Buffer.
+</p>
+</div>
+</li></ul>
+</div>
+
+<div id="outline-container-sec-2-2-4" class="outline-4">
+<h4 id="sec-2-2-4">Using Multiple Processors</h4>
+<div class="outline-text-4" id="text-2-2-4">
+<p>
+Node是单线程的，通过cluster 可以将一些工作交给子进程（其他核心）
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">var cluster = require('cluster');
+var http = require('http');
+var numCPUs = require('os').cpus().length;
+
+if (cluster.isMaster) {
+  // Fork workers.
+  for (var i = 0; i &lt; numCPUs; i++) {
+    cluster.fork();
+  }
+
+  cluster.on('death', function(worker) {
+    console.log('worker ' + worker.pid + ' died');
+  });
+} else {
+  // Worker processes have a http server.
+  http.Server(function(req, res) {
+    res.writeHead(200);
+    res.end("hello world\n");
+  }).listen(8000);
+}
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3">HTML5</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1">HTML5特性检查 &#x2013; MODERNIZR</h3>
+<div class="outline-text-3" id="text-3-1">
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;meta charset="utf-8"&gt;
+&lt;title&gt;Dive Into HTML5&lt;/title&gt;
+&lt;script src="modernizr.min.js"&gt;&lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  ...
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+
+<p>
+使用实例
+</p>
+<div class="org-src-container">
+
+<pre class="src src-javascript">if (Modernizr.canvas) {
+// let's draw some shapes!
+} else {
+// no native canvas support available :(
+}
+
+//html5 video format
+if (Modernizr.video) {
+  // let's play some video! but what kind?
+  if (Modernizr.video.webm) {
+    // try WebM
+  } else if (Modernizr.video.ogg) {
+    // try Ogg Theora + Vorbis in an Ogg container
+  } else if (Modernizr.video.h264){
+    // try H.264 video + AAC audio in an MP4 container
+  }
+}
+
+//local storage
+if (Modernizr.localstorage) {
+// window.localStorage is available!
+} else {
+// no native support for local storage :(
+// maybe try Gears or another third-party solution
+}
+
+
+
+//Web worker
+if (Modernizr.webworkers) {
+// window.Worker is available!
+} else {
+// no native support for web workers :(
+// maybe try Gears or another third-party solution
+}
+
+
+//offline support
+if (Modernizr.applicationcache) {
+// window.applicationCache is available!
+} else {
+// no native support for offline :(
+// maybe try Gears or another third-party solution
+}
+
+
+//geolocation support
+if (Modernizr.geolocation) {
+// let's find out where you are!
+} else {
+// no native geolocation support available :(
+// maybe try Gears or another third-party solution
+}
+
+//input type
+if (!Modernizr.inputtypes.date) {
+// no native support for &lt;input type="date"&gt; :(
+// maybe build one yourself with Dojo or jQueryUI
+}
+
+//placeholder text
+if (Modernizr.input.placeholder) {
+// your placeholder text should already be visible!
+} else {
+// no placeholder support :(
+// fall back to a scripted solution
+}
+
+//auto focus
+if (Modernizr.input.autofocus) {
+// autofocus works!
+} else {
+// no autofocus support :(
+// fall back to a scripted solution
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2">Canvas</h3>
+<div class="outline-text-3" id="text-3-2">
+</div><div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1">检查浏览器是否支持Canvas标签</h4>
+<div class="outline-text-4" id="text-3-2-1">
+<div class="org-src-container">
+
+<pre class="src src-javascript">function supports_canvas() {
+  return !!document.createElement('canvas').getContext;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2">使用Modernizr库检测</h4>
+<div class="outline-text-4" id="text-3-2-2">
+<div class="org-src-container">
+
+<pre class="src src-javascript">if (Modernizr.canvas) {
+// let's draw some shapes!
+} else {
+// no native canvas support available :(
+}
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4">参考</h2>
+<div class="outline-text-2" id="text-4">
+<ol class="org-ol">
+<li><a href="http://chimera.labs.oreilly.com/books/1234000000262/index.html">http://chimera.labs.oreilly.com/books/1234000000262/index.html</a>
+</li>
+<li><a href="http://chimera.labs.oreilly.com/books/1234000001808/index.html">http://chimera.labs.oreilly.com/books/1234000001808/index.html</a>
+</li>
+<li><a href="https://github.com/pd4d10/js-stack-from-scratch">https://github.com/pd4d10/js-stack-from-scratch</a>
+</li>
+<li><a href="https://developers.google.com/web/fundamentals/">https://developers.google.com/web/fundamentals/</a>
+</li>
+</ol>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" name="fn.1" class="footnum" href="#fnr.1">1</a></sup> DEFINITION NOT FOUND.</div>
+
+
+</div>
+</div></div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">基础语法</a>
+<ul class="nav">
+<li><a href="#sec-1-1">基本语法要素</a></li>
+<li><a href="#sec-1-2">基本数据类型</a>
+<ul class="nav">
+<li><a href="#sec-1-2-1">原始类型</a></li>
+<li><a href="#sec-1-2-2">对象类型</a></li>
+<li><a href="#sec-1-2-3">数值比较</a></li>
+<li><a href="#sec-1-2-4">全局对象</a></li>
+<li><a href="#sec-1-2-5">语法要点</a></li>
+</ul>
+</li>
+<li><a href="#sec-1-3">对象</a></li>
+<li><a href="#sec-1-4">数组</a></li>
+<li><a href="#sec-1-5">闭包</a></li>
+<li><a href="#sec-1-6">类</a>
+<ul class="nav">
+<li><a href="#sec-1-6-1">类的创建</a></li>
+<li><a href="#sec-1-6-2">创建类的步骤</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-2">Node</a>
+<ul class="nav">
+<li><a href="#sec-2-1">程序参数</a></li>
+<li><a href="#sec-2-2">Core APIs</a>
+<ul class="nav">
+<li><a href="#sec-2-2-1">Events</a></li>
+<li><a href="#sec-2-2-2">HTTP</a></li>
+<li><a href="#sec-2-2-3">I/O</a></li>
+<li><a href="#sec-2-2-4">Using Multiple Processors</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-3">HTML5</a>
+<ul class="nav">
+<li><a href="#sec-3-1">HTML5特性检查 &#x2013; MODERNIZR</a></li>
+<li><a href="#sec-3-2">Canvas</a>
+<ul class="nav">
+<li><a href="#sec-3-2-1">检查浏览器是否支持Canvas标签</a></li>
+<li><a href="#sec-3-2-2">使用Modernizr库检测</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-4">参考</a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>
