@@ -299,3 +299,203 @@
 *** box-sizing属性
     值可以设置为 content-box(默认值)和border-box.border-box不包含内部
     补白区域,以及边框的宽度与高度.
+* 与背景和边框相关样式
+** 与背景相关属性
+*** background-clip
+    指定背景的显示范围,当设定为border-box时,则背景范围包括边框区域,如果设
+    定为padding-box,则不包括边框区域.
+*** background-origin
+    指定绘制背景图像的绘制起点,默认是从内部补白区域的左上角开始,可以利
+    用该属性指定绘制时从边框的左上角开始或从内容的左上角开始,可取如下
+    三个值:
+    - border
+    - padding
+    - content
+*** background-size
+    指定背景图像的尺寸.
+** 与边框相关属性
+*** border-radius属性
+    指定圆角的半径.绘制4个不同半径的图角边框时,分别指定如下4个属性:
+    - border-top-left-radius
+    - border-top-right-radius
+    - border-bottom-left-radius
+    - border-bottom-right-radius
+*** border-image
+    让处于随时变化状态的元素的长或宽的边框统一使用一个图像文件来绘制,
+    使用border-image属性,会让浏览器在显示图像边框时,自动将所使用到的图
+    像分割为9部分进行处理.
+* 变形处理
+** transform功能的基础知识
+*** 功能分类
+**** 旋转
+     使用rotate方法来实现文字或图像的旋转处理.
+**** 缩放
+     使用scale方法来实现文字或图像的缩放处理
+     #+BEGIN_SRC html
+       <!DOCTYPE html>
+       <html>
+
+       <head>
+           <meta charset="utf-8" />
+           <style type="text/css">
+              div {
+                  width: 300px;
+                  margin: 150px auto;
+                  background-color: yellow;
+                  text-align: center;
+                  transform: scale(0.5, 2);
+                  -webkit-transform: scale(0.5, 2);
+              }
+           </style>
+       </head>
+       <body>
+           <div>
+               示例文字
+           </div>
+       </body>
+       </html>     
+     #+END_SRC
+**** 倾斜
+     使用skew来实现文字或图像的倾斜处理,在参数中分别指定水平方向上的倾
+     斜角度与垂直方向上的倾斜角度.
+**** 移动
+     使用translate方法来将文字或图像进行移动,在参数中分别指定水平方向
+     上的移动距离和垂直方向上的移动距离.
+*** 对元素使用多种变形
+    可同时对一个元素进行旋转,绽放,倾斜和移动的变换.
+*** 指定变形的基准点
+    使用transform-origin来改变变形过程中的基准点.水平方向可以指定
+    left,center,right,垂直方向可以指定top,center,bottom.
+* 动画功能
+** Transitions功能
+   Transitions属性的使用方法如下:
+   : Transition: property duration timing-function
+   其中property表示对哪个属性进行平滑过渡,duration表示在多长时间内完成
+   属性值的平滑过渡,timing-function表示通过什么方法来进行平滑过渡.
+   #+BEGIN_SRC html
+     <!DOCTYPE html>
+     <html>
+
+     <head>
+         <meta charset="utf-8" />
+         <style type="text/css">
+           div {
+               background-color: #ffff00;
+               transition: background-color 1s linear, color 1s linear, width 1s linear;
+               -webkit-transition: background-color 1s linear, color 1s linear, width 1s linear;
+           }
+           div:hover {
+               background-color: #00ffff;
+               color: #ffffff;
+               width: 400px;
+           }
+         </style>
+     </head>
+     <body>
+         <div>示例文字</div>
+     </body>
+     </html>   
+   #+END_SRC
+** Animations功能
+   Animations通过定义多个关键帧以及定义每个关键帧中元素的属性来实现更
+   为复杂的动画效果.
+   #+BEGIN_SRC html
+     <!DOCTYPE html>
+     <html>
+     <head>
+         <meta charset="utf-8" />
+         <style type="text/css">
+           div {
+               background-color: #ffff00;
+           }
+           @keyframes myColor{
+               0% {
+                   background-color: red;
+               }
+               40% {
+                   background-color: darkblue;
+               }
+               70% {
+                   background-color: yellow;
+               }
+               100% {
+                   background-color: red;
+               }
+           }
+
+           div:hover {
+               animation-name: myColor;
+               animation-duration: 5s;
+               animation-timing-function: linear;
+           }
+         </style>
+     </head>
+     <body>
+         <div>示例文字</div>
+     </body>
+     </html>   
+   #+END_SRC
+* 布局相关样式
+** 多栏布局
+   多栏布局可以将一个元素中的内容分为两栏或多栏显示,并且确保各栏中内容
+   的底部对齐.
+   #+BEGIN_SRC html
+     head>
+         <meta charset="utf-8" />
+         <style type="text/css">
+             div {
+                 width: 50%;
+                 column-count: 2;
+                 column-gap: 2em;
+                 column-rule: 1px solid red;
+             }
+           
+             div#div3 {
+                 width: 100%;
+                 background-color: yellow;
+                 height: 200px;
+             }
+         </style>
+     </head>   
+   #+END_SRC
+** 盒布局
+   #+BEGIN_SRC html
+
+     <head>
+         <meta charset="utf-8" />
+         <style type="text/css">
+             #container {
+                 display: -webkit-box;
+             }
+             #left-sidebar {
+                 width: 200px;
+                 padding: 20px;
+                 background-color: orange;
+             }
+             #contents {
+                 width: 300px;
+                 padding: 20px;
+                 background-color: yellow;
+             }
+             #right-sidebar {
+                 width: 200px;
+                 padding: 20px;
+                 background-color: limegreen;
+             }
+             #left-sidebar, #content, #right-sidebar {
+                 box-sizing: border-box;
+             }
+         </style>
+     </head>   
+   #+END_SRC
+*** 设置盒布局
+    1. box
+       设置display的属性值为box.
+    2. box-flex
+       使用自适应窗口的弹性布局.
+    3. box-ordinal-group
+       改变各元素的显示顺序.
+    4. box-orient
+       改变各元素的显示方向.
+    5. box-pack, box-align
+       指定水平方向与垂直方向的对齐方式.

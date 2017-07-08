@@ -1,0 +1,938 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>CSS3快速参考</h1>
+          <p>CSS3基本知识总结.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">CSS3学习笔记</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> 选择器</h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-sec-1-1" class="outline-3">
+<h3 id="sec-1-1"><span class="section-number-3">1.1</span> 属性选择器</h3>
+<div class="outline-text-3" id="text-1-1">
+<ol class="org-ol">
+<li>[att=val]
+</li>
+<li>[att*=val]
+如果元素用att表示的属性之属性值中包含用val指定的字符的话，则该元
+素使用这个样式。
+</li>
+<li>[att^=val]
+如果元素用att表示的属性之属性值的开头字符为用val指定的字符的话,
+则该元素使用这个样式。
+</li>
+<li>[att$=val]
+如果元素用att表示的属性之属性值的结尾字符为用val指定的字符的话,
+则该元素使用这个样式。
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-1-2" class="outline-3">
+<h3 id="sec-1-2"><span class="section-number-3">1.2</span> 伪类选择器</h3>
+<div class="outline-text-3" id="text-1-2">
+<p>
+伪类选择器是CSS中已经定义好的选择器，不能随便起名。
+在CSS中，常用的伪类选择器是使用在a(锚)元素上的几种选择器，它们的使
+用方法如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">a:link { }
+a:visited { }
+a:hover { }
+a:active {}
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-1-2-1" class="outline-4">
+<h4 id="sec-1-2-1"><span class="section-number-4">1.2.1</span> 伪元素选择器</h4>
+<div class="outline-text-4" id="text-1-2-1">
+<p>
+伪元素选择器是针对CSS中已经定义好的伪元素使用的选择器，它的使用方
+法如下：
+</p>
+<pre class="example">
+选择器：伪元素{属性：值}
+</pre>
+<p>
+伪元素也可以与类配合使用，使用方法如下：
+</p>
+<pre class="example">
+选择器 类名：伪元素{属性：值}
+</pre>
+
+<p>
+在CSS中，主要有如下4个伪元素选择器：
+</p>
+<ul class="org-ul">
+<li>first-line
+为元素中的第一行方案使用样式。
+</li>
+<li>first-letter
+为元素中的文字首字母或第一个字使用样式。
+</li>
+<li>before
+在某元素之前插入一些内容。
+</li>
+<li>after
+在某元素之后插入一些内容。
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-1-2-2" class="outline-4">
+<h4 id="sec-1-2-2"><span class="section-number-4">1.2.2</span> 结构性伪类选择器</h4>
+<div class="outline-text-4" id="text-1-2-2">
+<ol class="org-ol">
+<li>root选择器
+将样式绑定到页面的根元素中。
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;style type="text/css"&gt;
+  :root{
+  background-color: yellow;
+  }
+  body{
+  background-color: limegreen;
+  }
+&lt;/style&gt;
+</pre>
+</div>
+</li>
+<li>not选择器
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;style type="text/css"&gt;
+  body *:not(h1) {
+  background-color: yellow;
+  }
+&lt;/style&gt;
+</pre>
+</div>
+</li>
+<li>empty选择器
+指定当元素内容为空时的样式
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;style type="text/css"&gt;
+  :empty {
+  background-color: yellow;
+  }
+&lt;/style&gt;
+</pre>
+</div>
+</li>
+<li>target选择器
+对页面中某个target元素（该元素的id被当做页面中的超链接来使用）
+指定样式，该样式只在用户点击了页面中的超链接，并且跳转到target
+元素后起作用。
+</li>
+</ol>
+</div>
+</div>
+<div id="outline-container-sec-1-2-3" class="outline-4">
+<h4 id="sec-1-2-3"><span class="section-number-4">1.2.3</span> 子元素选择器</h4>
+<div class="outline-text-4" id="text-1-2-3">
+<p>
+first-child, last-child, nth-child, nth-last-child.
+</p>
+
+<p>
+nth-of-type, nth-last-type.
+</p>
+
+<p>
+针对同类型的子元素
+</p>
+
+<p>
+only-child
+</p>
+
+<p>
+当父元素只有一个子元素才有的样式。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-2-4" class="outline-4">
+<h4 id="sec-1-2-4"><span class="section-number-4">1.2.4</span> UI元素状态伪类选择器</h4>
+<div class="outline-text-4" id="text-1-2-4">
+<p>
+共有11种：E:hover, E:active, E:focus, E:enabled, E:disabled,
+E:read-only, E:read-write, E:checked, E:default, E:indeterminate,
+E::selection.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-2-5" class="outline-4">
+<h4 id="sec-1-2-5"><span class="section-number-4">1.2.5</span> 通用兄弟元素选择器</h4>
+<div class="outline-text-4" id="text-1-2-5">
+<pre class="example">
+子元素-兄弟元素{}
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-1-3" class="outline-3">
+<h3 id="sec-1-3"><span class="section-number-3">1.3</span> 使用选择器插入内容</h3>
+<div class="outline-text-3" id="text-1-3">
+</div><div id="outline-container-sec-1-3-1" class="outline-4">
+<h4 id="sec-1-3-1"><span class="section-number-4">1.3.1</span> 插入文字</h4>
+<div class="outline-text-4" id="text-1-3-1">
+<div class="org-src-container">
+
+<pre class="src src-html">h2:before {
+content: 'COLUM';
+}
+</pre>
+</div>
+
+<p>
+指定个别元素不进行插入：
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-html">h2.sample.before {
+ content: none
+}
+
+&lt;h2 class="sample"&gt;标题2&lt;/h2&gt;
+</pre>
+</div>
+
+<p>
+none也可以改为 normal，但是none只能用于 before , after两种选择器，
+而normal可用于其他用来插入内容的选择中。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-1-3-2" class="outline-4">
+<h4 id="sec-1-3-2"><span class="section-number-4">1.3.2</span> 播放图像文件</h4>
+<div class="outline-text-4" id="text-1-3-2">
+<div class="org-src-container">
+
+<pre class="src src-html">h2:before {
+content: url(mark.png);
+}
+
+&lt;h2&gt;你好&lt;/h2&gt;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-1-3-3" class="outline-4">
+<h4 id="sec-1-3-3"><span class="section-number-4">1.3.3</span> 使用content属性播放项目编号</h4>
+<div class="outline-text-4" id="text-1-3-3">
+<div class="org-src-container">
+
+<pre class="src src-html">h1:before {
+content: counter(mycounter);
+}
+h1 {
+counter-increment: mycounter;
+}
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> 文字与字体</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1"><span class="section-number-3">2.1</span> 文字阴影</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+text-shadow的使用方法如下：
+</p>
+<pre class="example">
+textshadow length length length color
+</pre>
+<p>
+前面三个length分别指阴影离开文字的横方向距离、阴影离开文字的纵方向
+距离和阴影的模糊半径,color指阴影的颜色。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2"><span class="section-number-3">2.2</span> 文本自动换行</h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+使用 word-break 属性来自己决定自动换行的处理方法。
+</p>
+</div>
+</div>
+<div id="outline-container-sec-2-3" class="outline-3">
+<h3 id="sec-2-3"><span class="section-number-3">2.3</span> 使用服务器端字体</h3>
+<div class="outline-text-3" id="text-2-3">
+<p>
+@font-face属性的使用方法如下：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">@font-face {
+font-family: WebFont;
+src: url('fonts/maotizi.ttf') format("truetype");
+font-weight: normal;
+}
+</pre>
+</div>
+
+<p>
+本地端字体：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">@font-face {
+font-family: Arial;
+src: local('Arial');
+}
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-2-4" class="outline-3">
+<h3 id="sec-2-4"><span class="section-number-3">2.4</span> 保持字体大小不变</h3>
+<div class="outline-text-3" id="text-2-4">
+<p>
+使用 font-size-ajust 属性可以在字体发生变化的情况下，保持字体大小不
+变。
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> 盒相关样式</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> 盒的类型</h3>
+<div class="outline-text-3" id="text-3-1">
+</div><div id="outline-container-sec-3-1-1" class="outline-4">
+<h4 id="sec-3-1-1"><span class="section-number-4">3.1.1</span> 盒的基本类型</h4>
+<div class="outline-text-4" id="text-3-1-1">
+<p>
+CSS中的盒分为block类型和inline类型.div与p元素属于block类型,而span
+和a元素属于inline类型.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-3-1-2" class="outline-4">
+<h4 id="sec-3-1-2"><span class="section-number-4">3.1.2</span> inline-block类型</h4>
+<div class="outline-text-4" id="text-3-1-2">
+<p>
+属于block类型盒中的一种,但是在显示时具有inline类型盒的特点.
+可用于在一行中并列显示多个block类型的元素.
+</p>
+
+<div class="org-src-container">
+<label class="org-src-name">使用inline-block类型来显示水平菜单</label>
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+    &lt;meta charset="utf-8"/&gt;
+    &lt;style type="text/css"&gt;
+        ul {
+            margin: 0;
+            padding: 0;
+        }
+        li {
+            display: inline-block;
+            width: 100px;
+            padding: 10px 0;
+            background-color: #00ccff;
+            border: solid 1px #666666;
+            text-align: center;
+        }
+        a {
+            color: #000000;
+            text-decoration: none;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;ul&gt;
+        &lt;li&gt;&lt;a href="#"&gt;菜单1&lt;/a&gt;&lt;/li&gt;
+        &lt;li&gt;&lt;a href="#"&gt;菜单2&lt;/a&gt;&lt;/li&gt;
+        &lt;li&gt;&lt;a href="#"&gt;菜单3&lt;/a&gt;&lt;/li&gt;
+        &lt;li&gt;&lt;a href="#"&gt;菜单4&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3-1-3" class="outline-4">
+<h4 id="sec-3-1-3"><span class="section-number-4">3.1.3</span> inline-table类型</h4>
+<div class="outline-text-4" id="text-3-1-3">
+<p>
+table默认是block类型,table与前后的文字不会显示在同一行,可以将table
+的显示类型改为inline-table,就可以与前后的文字显示在同一行了.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+        table {
+            display: inline-table;
+            border: solid 3px #00aaff;
+            vertical-align: bottom;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+    你好.
+    &lt;table&gt;
+        &lt;tr&gt;
+            &lt;td&gt;A&lt;/td&gt;
+            &lt;td&gt;B&lt;/td&gt;
+            &lt;td&gt;C&lt;/td&gt;
+            &lt;td&gt;D&lt;/td&gt;
+            &lt;td&gt;E&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+            &lt;td&gt;F&lt;/td&gt;
+            &lt;td&gt;G&lt;/td&gt;
+            &lt;td&gt;H&lt;/td&gt;
+            &lt;td&gt;I&lt;/td&gt;
+            &lt;td&gt;J&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+            &lt;td&gt;K&lt;/td&gt;
+            &lt;td&gt;L&lt;/td&gt;
+            &lt;td&gt;M&lt;/td&gt;
+            &lt;td&gt;N&lt;/td&gt;
+            &lt;td&gt;O&lt;/td&gt;
+        &lt;/tr&gt;
+    &lt;/table&gt;
+    你好
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3-1-4" class="outline-4">
+<h4 id="sec-3-1-4"><span class="section-number-4">3.1.4</span> list-item类型</h4>
+<div class="outline-text-4" id="text-3-1-4">
+<p>
+如果在display属性中将元素的类型设置为list-item类型,则可以将多个元
+素作为列表来显示,同时在元素的开头加上列表的标记.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+        div {
+            display: list-item;
+            list-style-type: circle;
+            margin-left: 30px;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+    &lt;div&gt;示例1&lt;/div&gt;
+    &lt;div&gt;示例2&lt;/div&gt;
+    &lt;div&gt;示例3&lt;/div&gt;
+    &lt;div&gt;示例4&lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3-1-5" class="outline-4">
+<h4 id="sec-3-1-5"><span class="section-number-4">3.1.5</span> run-in类型和compat类型</h4>
+<div class="outline-text-4" id="text-3-1-5">
+<p>
+将元素指定为run-in类型或compact类型的时候,如果元素后面还有block元
+素,则run-in元素将被包含在block类型的元素内部,而compact类型的元素将
+被放置在block类型的元素左边.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><span class="section-number-3">3.2</span> 对于盒中容纳不下的内容的显示</h3>
+<div class="outline-text-3" id="text-3-2">
+</div><div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1"><span class="section-number-4">3.2.1</span> overflow属性</h4>
+<div class="outline-text-4" id="text-3-2-1">
+<p>
+指定对于盒中容纳不下的内容的显示方法.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2"><span class="section-number-4">3.2.2</span> overflow-x和overflow-y属性</h4>
+<div class="outline-text-4" id="text-3-2-2">
+<p>
+可以单独指定水平和垂直方向的显示方法:hidden, scroll, auto,
+visible.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-3-2-3" class="outline-4">
+<h4 id="sec-3-2-3"><span class="section-number-4">3.2.3</span> text-overflow属性</h4>
+<div class="outline-text-4" id="text-3-2-3">
+<p>
+当通过把overflow属性的属性值设定为"hidden"方法,将盒中容纳不下的内
+容隐藏起来时,如果使用text-overflow属性,可以在盒的末尾显示一个代表
+省略的符号"&#x2026;".但是只在当盒子的内容在水平方向上超出盒的容纳范围时
+有效.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3-3" class="outline-3">
+<h3 id="sec-3-3"><span class="section-number-3">3.3</span> 对盒使用阴影</h3>
+<div class="outline-text-3" id="text-3-3">
+</div><div id="outline-container-sec-3-3-1" class="outline-4">
+<h4 id="sec-3-3-1"><span class="section-number-4">3.3.1</span> box-shadow属性的使用方法</h4>
+<div class="outline-text-4" id="text-3-3-1">
+<pre class="example">
+box-shadow: length length length color
+</pre>
+<p>
+前三个length分别指阴影离开文字的横向距离,纵向距离和阴影的模糊半
+径,color指阴影的颜色。
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-3-4" class="outline-3">
+<h3 id="sec-3-4"><span class="section-number-3">3.4</span> 指定针对元素的宽度与高度的计算方法</h3>
+<div class="outline-text-3" id="text-3-4">
+</div><div id="outline-container-sec-3-4-1" class="outline-4">
+<h4 id="sec-3-4-1"><span class="section-number-4">3.4.1</span> box-sizing属性</h4>
+<div class="outline-text-4" id="text-3-4-1">
+<p>
+值可以设置为 content-box(默认值)和border-box.border-box不包含内部
+补白区域,以及边框的宽度与高度.
+</p>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> 与背景和边框相关样式</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> 与背景相关属性</h3>
+<div class="outline-text-3" id="text-4-1">
+</div><div id="outline-container-sec-4-1-1" class="outline-4">
+<h4 id="sec-4-1-1"><span class="section-number-4">4.1.1</span> background-clip</h4>
+<div class="outline-text-4" id="text-4-1-1">
+<p>
+指定背景的显示范围,当设定为border-box时,则背景范围包括边框区域,如果设
+定为padding-box,则不包括边框区域.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-4-1-2" class="outline-4">
+<h4 id="sec-4-1-2"><span class="section-number-4">4.1.2</span> background-origin</h4>
+<div class="outline-text-4" id="text-4-1-2">
+<p>
+指定绘制背景图像的绘制起点,默认是从内部补白区域的左上角开始,可以利
+用该属性指定绘制时从边框的左上角开始或从内容的左上角开始,可取如下
+三个值:
+</p>
+<ul class="org-ul">
+<li>border
+</li>
+<li>padding
+</li>
+<li>content
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-4-1-3" class="outline-4">
+<h4 id="sec-4-1-3"><span class="section-number-4">4.1.3</span> background-size</h4>
+<div class="outline-text-4" id="text-4-1-3">
+<p>
+指定背景图像的尺寸.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> 与边框相关属性</h3>
+<div class="outline-text-3" id="text-4-2">
+</div><div id="outline-container-sec-4-2-1" class="outline-4">
+<h4 id="sec-4-2-1"><span class="section-number-4">4.2.1</span> border-radius属性</h4>
+<div class="outline-text-4" id="text-4-2-1">
+<p>
+指定圆角的半径.绘制4个不同半径的图角边框时,分别指定如下4个属性:
+</p>
+<ul class="org-ul">
+<li>border-top-left-radius
+</li>
+<li>border-top-right-radius
+</li>
+<li>border-bottom-left-radius
+</li>
+<li>border-bottom-right-radius
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-4-2-2" class="outline-4">
+<h4 id="sec-4-2-2"><span class="section-number-4">4.2.2</span> border-image</h4>
+<div class="outline-text-4" id="text-4-2-2">
+<p>
+让处于随时变化状态的元素的长或宽的边框统一使用一个图像文件来绘制,
+使用border-image属性,会让浏览器在显示图像边框时,自动将所使用到的图
+像分割为9部分进行处理.
+</p>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> 变形处理</h2>
+<div class="outline-text-2" id="text-5">
+</div><div id="outline-container-sec-5-1" class="outline-3">
+<h3 id="sec-5-1"><span class="section-number-3">5.1</span> transform功能的基础知识</h3>
+<div class="outline-text-3" id="text-5-1">
+</div><div id="outline-container-sec-5-1-1" class="outline-4">
+<h4 id="sec-5-1-1"><span class="section-number-4">5.1.1</span> 功能分类</h4>
+<div class="outline-text-4" id="text-5-1-1">
+</div><ol class="org-ol"><li><a id="sec-5-1-1-1" name="sec-5-1-1-1"></a>旋转<br ><div class="outline-text-5" id="text-5-1-1-1">
+<p>
+使用rotate方法来实现文字或图像的旋转处理.
+</p>
+</div>
+</li>
+<li><a id="sec-5-1-1-2" name="sec-5-1-1-2"></a>缩放<br ><div class="outline-text-5" id="text-5-1-1-2">
+<p>
+使用scale方法来实现文字或图像的缩放处理
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+       div {
+           width: 300px;
+           margin: 150px auto;
+           background-color: yellow;
+           text-align: center;
+           transform: scale(0.5, 2);
+           -webkit-transform: scale(0.5, 2);
+       }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div&gt;
+        示例文字
+    &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+</div>
+</li>
+<li><a id="sec-5-1-1-3" name="sec-5-1-1-3"></a>倾斜<br ><div class="outline-text-5" id="text-5-1-1-3">
+<p>
+使用skew来实现文字或图像的倾斜处理,在参数中分别指定水平方向上的倾
+斜角度与垂直方向上的倾斜角度.
+</p>
+</div>
+</li>
+<li><a id="sec-5-1-1-4" name="sec-5-1-1-4"></a>移动<br ><div class="outline-text-5" id="text-5-1-1-4">
+<p>
+使用translate方法来将文字或图像进行移动,在参数中分别指定水平方向
+上的移动距离和垂直方向上的移动距离.
+</p>
+</div>
+</li></ol>
+</div>
+<div id="outline-container-sec-5-1-2" class="outline-4">
+<h4 id="sec-5-1-2"><span class="section-number-4">5.1.2</span> 对元素使用多种变形</h4>
+<div class="outline-text-4" id="text-5-1-2">
+<p>
+可同时对一个元素进行旋转,绽放,倾斜和移动的变换.
+</p>
+</div>
+</div>
+<div id="outline-container-sec-5-1-3" class="outline-4">
+<h4 id="sec-5-1-3"><span class="section-number-4">5.1.3</span> 指定变形的基准点</h4>
+<div class="outline-text-4" id="text-5-1-3">
+<p>
+使用transform-origin来改变变形过程中的基准点.水平方向可以指定
+left,center,right,垂直方向可以指定top,center,bottom.
+</p>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> 动画功能</h2>
+<div class="outline-text-2" id="text-6">
+</div><div id="outline-container-sec-6-1" class="outline-3">
+<h3 id="sec-6-1"><span class="section-number-3">6.1</span> Transitions功能</h3>
+<div class="outline-text-3" id="text-6-1">
+<p>
+Transitions属性的使用方法如下:
+</p>
+<pre class="example">
+Transition: property duration timing-function
+</pre>
+<p>
+其中property表示对哪个属性进行平滑过渡,duration表示在多长时间内完成
+属性值的平滑过渡,timing-function表示通过什么方法来进行平滑过渡.
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+      div {
+          background-color: #ffff00;
+          transition: background-color 1s linear, color 1s linear, width 1s linear;
+          -webkit-transition: background-color 1s linear, color 1s linear, width 1s linear;
+      }
+      div:hover {
+          background-color: #00ffff;
+          color: #ffffff;
+          width: 400px;
+      }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div&gt;示例文字&lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-6-2" class="outline-3">
+<h3 id="sec-6-2"><span class="section-number-3">6.2</span> Animations功能</h3>
+<div class="outline-text-3" id="text-6-2">
+<p>
+Animations通过定义多个关键帧以及定义每个关键帧中元素的属性来实现更
+为复杂的动画效果.
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+      div {
+          background-color: #ffff00;
+      }
+      @keyframes myColor{
+          0% {
+              background-color: red;
+          }
+          40% {
+              background-color: darkblue;
+          }
+          70% {
+              background-color: yellow;
+          }
+          100% {
+              background-color: red;
+          }
+      }
+
+      div:hover {
+          animation-name: myColor;
+          animation-duration: 5s;
+          animation-timing-function: linear;
+      }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div&gt;示例文字&lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-7" class="outline-2">
+<h2 id="sec-7"><span class="section-number-2">7</span> 布局相关样式</h2>
+<div class="outline-text-2" id="text-7">
+</div><div id="outline-container-sec-7-1" class="outline-3">
+<h3 id="sec-7-1"><span class="section-number-3">7.1</span> 多栏布局</h3>
+<div class="outline-text-3" id="text-7-1">
+<p>
+多栏布局可以将一个元素中的内容分为两栏或多栏显示,并且确保各栏中内容
+的底部对齐.
+</p>
+<div class="org-src-container">
+
+<pre class="src src-html">head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+        div {
+            width: 50%;
+            column-count: 2;
+            column-gap: 2em;
+            column-rule: 1px solid red;
+        }
+
+        div#div3 {
+            width: 100%;
+            background-color: yellow;
+            height: 200px;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-sec-7-2" class="outline-3">
+<h3 id="sec-7-2"><span class="section-number-3">7.2</span> 盒布局</h3>
+<div class="outline-text-3" id="text-7-2">
+<div class="org-src-container">
+
+<pre class="src src-html">&lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;style type="text/css"&gt;
+        #container {
+            display: -webkit-box;
+        }
+        #left-sidebar {
+            width: 200px;
+            padding: 20px;
+            background-color: orange;
+        }
+        #contents {
+            width: 300px;
+            padding: 20px;
+            background-color: yellow;
+        }
+        #right-sidebar {
+            width: 200px;
+            padding: 20px;
+            background-color: limegreen;
+        }
+        #left-sidebar, #content, #right-sidebar {
+            box-sizing: border-box;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-7-2-1" class="outline-4">
+<h4 id="sec-7-2-1"><span class="section-number-4">7.2.1</span> 设置盒布局</h4>
+<div class="outline-text-4" id="text-7-2-1">
+<ol class="org-ol">
+<li>box
+设置display的属性值为box.
+</li>
+<li>box-flex
+使用自适应窗口的弹性布局.
+</li>
+<li>box-ordinal-group
+改变各元素的显示顺序.
+</li>
+<li>box-orient
+改变各元素的显示方向.
+</li>
+<li>box-pack, box-align
+指定水平方向与垂直方向的对齐方式.
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. 选择器</a>
+<ul class="nav">
+<li><a href="#sec-1-1">1.1. 属性选择器</a></li>
+<li><a href="#sec-1-2">1.2. 伪类选择器</a></li>
+<li><a href="#sec-1-3">1.3. 使用选择器插入内容</a></li>
+</ul>
+</li>
+<li><a href="#sec-2">2. 文字与字体</a>
+<ul class="nav">
+<li><a href="#sec-2-1">2.1. 文字阴影</a></li>
+<li><a href="#sec-2-2">2.2. 文本自动换行</a></li>
+<li><a href="#sec-2-3">2.3. 使用服务器端字体</a></li>
+<li><a href="#sec-2-4">2.4. 保持字体大小不变</a></li>
+</ul>
+</li>
+<li><a href="#sec-3">3. 盒相关样式</a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. 盒的类型</a></li>
+<li><a href="#sec-3-2">3.2. 对于盒中容纳不下的内容的显示</a></li>
+<li><a href="#sec-3-3">3.3. 对盒使用阴影</a></li>
+<li><a href="#sec-3-4">3.4. 指定针对元素的宽度与高度的计算方法</a></li>
+</ul>
+</li>
+<li><a href="#sec-4">4. 与背景和边框相关样式</a>
+<ul class="nav">
+<li><a href="#sec-4-1">4.1. 与背景相关属性</a></li>
+<li><a href="#sec-4-2">4.2. 与边框相关属性</a></li>
+</ul>
+</li>
+<li><a href="#sec-5">5. 变形处理</a>
+<ul class="nav">
+<li><a href="#sec-5-1">5.1. transform功能的基础知识</a></li>
+</ul>
+</li>
+<li><a href="#sec-6">6. 动画功能</a>
+<ul class="nav">
+<li><a href="#sec-6-1">6.1. Transitions功能</a></li>
+<li><a href="#sec-6-2">6.2. Animations功能</a></li>
+</ul>
+</li>
+<li><a href="#sec-7">7. 布局相关样式</a>
+<ul class="nav">
+<li><a href="#sec-7-1">7.1. 多栏布局</a></li>
+<li><a href="#sec-7-2">7.2. 盒布局</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>
