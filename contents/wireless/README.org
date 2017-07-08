@@ -46,7 +46,7 @@
   WiFi P2P学习笔记
 
 * 016
-  WiFi安全集锦
+  WiFi案例集锦
 
 * 017
   WiFi驱动学习笔记
@@ -67,7 +67,7 @@
   通信原理概述
 
 * 023
-  蓝牙链路层管理
+  BLE链路层管理
 
 * 024
   LINK MANAGER PROTOCOL SPECIFICATION
@@ -80,3 +80,9 @@
 
 * 027
   A2DP Profile
+
+* 028
+  Base Band Controller
+
+* 029
+  

@@ -267,6 +267,13 @@
     - Authentication stage 1
     - Authentication stage 2
 
+**** Passive Eavesdropping Protection
+
+**** Man-in-the-Middle(MITM) Attack Proection
+
+**** Association Models
+
+
 ** Information Request
    
 *** Clock Offset
@@ -295,4 +302,13 @@
 ** MODES OF OPERATION
 
 ** ACL logical transport
-   
+
+* main point
+
+** Connection Control 
+
+** Security
+
+
+
+

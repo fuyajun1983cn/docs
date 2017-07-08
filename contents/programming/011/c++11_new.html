@@ -1,0 +1,736 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>C++11 New Features</h1>
+          <p>C++11新特性研究。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">C++11 New Features</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> Initializer List</h2>
+<div class="outline-text-2" id="text-1">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 1. Initializer List
+ */
+
+//C++ 03 initializer list:
+int arr[4] = {3, 2, 4, 5};
+
+vector&lt;int&gt; v;
+v.push_back(3);
+v.push_back(2);
+v.push_back(4);
+v.push_back(5);
+
+
+
+// C++ 11 extended the support 
+vector&lt;int&gt; v = {3, 4, 1, 9};   // Calling initializer_list constructor
+
+// All the relevant STL containers have been updated to accept initializer_list.
+
+// Define your own initializer_list constructor:
+#include &lt;initializer_list&gt;
+class BoVector {
+   vector&lt;int&gt; m_vec;
+   public:
+   BoVector(const initializer_list&lt;int&gt;&amp; v) {
+      for (initializer_list&lt;int&gt;::iterator itr = v.begin(); itr!=v.end(); ++ itr)
+         m_vec.push_back(*itr);
+   }
+};
+
+BoVector v = {0, 2, 3, 4};
+BoVector v{0, 2, 3, 4};   // effectively the same
+
+
+// Automatic normal Initialization
+class Rectangle {
+   public:
+   Rectangle(int height, int width, int length){ }
+};
+
+void draw_rect(Rectangle r);
+
+int main() {
+   draw_rect({5, 6, 9});  // Rectangle{5,6,9} is automatically called
+}
+
+// Note: use it with caution.
+// 1. Not very readable, even with the help of IDE. Funcion name rarely indicates
+//    the type of parameter the function takes.
+// 2. Function could be overloaded with differenct parameter types.
+
+void draw_rect(Triangle t);
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> Uniform Initialization</h2>
+<div class="outline-text-2" id="text-2">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 2. Uniform Initialization
+ */
+
+// C++ 03
+class Dog {     // Aggregate class or struct
+   public:
+      int age;
+      string name;
+};
+Dog d1 = {5, "Henry"};   // Aggregate Initialization
+
+// C++ 11 extended the scope of curly brace initialization
+class Dog {
+   public:
+      Dog(int age, string name) {...};
+};
+Dog d1 = {5, "Henry"}; 
+
+
+/* Uniform Initialization Search Order:
+ * 1. Initializer_list constructor
+ * 2. Regular constructor that takes the appropriate parameters.
+ * 3. Aggregate initializer.
+ */
+
+Dog d1{3};
+
+class Dog {
+   public:
+   int age;                                // 3rd choice
+
+   Dog(int a) {                            // 2nd choice
+      age = a;
+   }
+
+   Dog(const initializer_list&lt;int&gt;&amp; vec) { // 1st choice
+      age = *(vec.begin());      
+   }
+};
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> auto type</h2>
+<div class="outline-text-2" id="text-3">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 3. auto type
+ */
+std::vector&lt;int&gt; vec = {2, 3, 4, 5};
+
+// C++ 03
+for (std::vector&lt;int&gt;::iterator it = vec.begin(); it!=vec.end(); ++ it)
+    m_vec.push_back(*it);
+
+
+// C++ 11: use auto type
+for (auto it = vec.begin(); it!=vec.end(); ++ it)
+    m_vec.push_back(*it);
+
+auto a = 6;    // a is a integer
+auto b = 9.6;  // b is a double
+auto c = a;    // c is an integer
+auto const x = a;   // int const x = a
+auto&amp; y = a;        // int&amp; y = a
+
+// It's static type, no run-time cost, fat-free.
+// It also makes code easier to maintain.
+
+// 1. Don't use auto when type conversion is needed
+// 2. IDE becomes more important
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> foreach</h2>
+<div class="outline-text-2" id="text-4">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 4. foreach
+ */
+// C++ 03:
+   for (vector&lt;int&gt;::iterator itr = v.begin(); itr!=v.end(); ++ itr)
+      cout &lt;&lt; (*itr);
+
+
+// C++ 11:
+   for (auto i: v) { // works on any class that has begin() and end()
+      cout &lt;&lt; i ;    // readonly access
+   }
+
+   for (auto&amp; i: v) {
+      i++;                 // changes the values in v
+   }                       // and also avoids copy construction
+
+   auto x = begin(v);  // Same as: int x = v.begin();
+
+   int arr[4] = {3, 2, 4, 5};
+   auto y = begin(arr); // y == 3
+   auto z = end(arr);   // z == 5
+   // How this worked? Because begin() and end() are defined for array.
+   // Adapt your code to third party library by defining begin() and end()
+   // for their containers.
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> nullptr</h2>
+<div class="outline-text-2" id="text-5">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 5. nullptr
+ *
+ * To replace NULL in C++ 03
+ */
+
+void foo(int i) { cout &lt;&lt; "foo_int" &lt;&lt; endl; }
+void foo(char* pc) { cout &lt;&lt; "foo_char*" &lt;&lt; endl; }
+
+int main() {
+   foo(NULL);    // Ambiguity
+
+   // C++ 11
+   foo(nullptr); // call foo(char*)
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> enum class</h2>
+<div class="outline-text-2" id="text-6">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 6. enum class
+ */
+
+   // C++ 03
+   enum apple {green_a, red_a};
+   enum orange {big_o, small_o};
+   apple a = green_a;
+   orange o = big_o;
+
+   if (a == o) 
+      cout &lt;&lt; "green apple and big orange are the same\n";
+   else
+      cout &lt;&lt; "green apple and big orange are not the same\n";
+
+
+   // C++ 11
+   enum class apple {green, red};
+   enum class orange {big, small};
+   apple a = apple::green;
+   orange o = orange::big;
+
+   if (a == o) 
+      cout &lt;&lt; "green apple and big orange are the same\n";
+   else
+      cout &lt;&lt; "green apple and big orange are not the same\n";
+
+   // Compile fails because we haven't define ==(apple, orange)
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-7" class="outline-2">
+<h2 id="sec-7"><span class="section-number-2">7</span> <code>static_assert</code></h2>
+<div class="outline-text-2" id="text-7">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 7. static_assert
+ */
+
+// run-time assert
+   assert( myPointer != NULL );
+
+// Compile time assert (C++ 11)
+   static_assert( sizeof(int) == 4 );
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-8" class="outline-2">
+<h2 id="sec-8"><span class="section-number-2">8</span> Delegating Constructor</h2>
+<div class="outline-text-2" id="text-8">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 8. Delegating Constructor 
+ */
+
+class Dog {
+   public:
+   Dog() { ... }
+   Dog(int a) { Dog(); doOtherThings(a); }
+};
+
+
+// C++ 03:
+class Dog {
+   init() { ... };
+   public:
+   Dog() { init(); }
+   Dog(int a) { init(); doOtherThings(); }
+};
+/* Cons:
+ * 1. Cumbersome code.
+ * 2. init() could be invoked by other functions.
+ */
+
+// C++ 11:
+class Dog {
+   int age = 9;
+   public:
+   Dog() { ... }
+   Dog(int a) : Dog() { doOtherThings(); }
+};
+// Limitation: Dog() has to be called first.
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-9" class="outline-2">
+<h2 id="sec-9"><span class="section-number-2">9</span> override (for virtual function)</h2>
+<div class="outline-text-2" id="text-9">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 9. override (for virtual function)
+ *
+ * To avoid inadvertently create new function in derived classes.
+ */
+// C++ 03
+class Dog {
+   virtual void A(int);
+   virtual void B() const;
+}
+
+class Yellowdog : public Dog {
+   virtual void A(float);  // Created a new function
+   virtual void B(); // Created a new function 
+}
+
+
+// C++ 11
+class Dog {
+   virtual void A(int);
+   virtual void B() const;
+   void C();
+}
+
+class Yellowdog : public Dog {
+   virtual void A(float) override;  // Error: no function to override
+   virtual void B() override;       // Error: no function to override
+   void C() override;               // Error: not a virtual function
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-10" class="outline-2">
+<h2 id="sec-10"><span class="section-number-2">10</span> final (for virtual function and for class)</h2>
+<div class="outline-text-2" id="text-10">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 10. final (for virtual function and for class)
+ */
+
+class Dog final {    // no class can be derived from Dog
+   ...
+};
+
+class Dog {
+   virtual void bark() final;  // No class can override bark() 
+};
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-11" class="outline-2">
+<h2 id="sec-11"><span class="section-number-2">11</span> Compiler Generated Default Constructor</h2>
+<div class="outline-text-2" id="text-11">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 11. Compiler Generated Default Constructor
+ */
+class Dog {
+   Dog(int age) {}
+};
+
+Dog d1;  // Error: compiler will not generate the default constructor
+
+
+// C++ 11:
+class Dog {
+   Dog(int age);
+   Dog() = default;    // Force compiler to generate the default constructor
+};
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-12" class="outline-2">
+<h2 id="sec-12"><span class="section-number-2">12</span> delete</h2>
+<div class="outline-text-2" id="text-12">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 12. delete
+ */
+
+class Dog {
+   Dog(int age) {}
+}
+
+Dog a(2);
+Dog b(3.0); // 3.0 is converted from double to int
+a = b;     // Compiler generated assignment operator
+
+
+// C++ 11:
+class Dog {
+   Dog(int age) {}
+   Dog(double ) = delete;
+   Dog&amp; operator=(const Dog&amp;) = delete;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-13" class="outline-2">
+<h2 id="sec-13"><span class="section-number-2">13</span> constexpr</h2>
+<div class="outline-text-2" id="text-13">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 13. constexpr
+ */
+int arr[6];    //OK
+int A() { return 3; }
+int arr[A()+3];   // Compile Error 
+
+// C++ 11
+constexpr int A() { return 3; }  // Forces the computation to happen 
+                                 // at compile time.
+int arr[A()+3];   // Create an array of size 6
+
+// Write faster program with constexpr
+constexpr int cubed(int x) { return x * x * x; }
+
+int y = cubed(1789);  // computed at compile time
+
+//Function cubed() is:
+//1. Super fast. It will not consume run-time cycles
+//2. Super small. It will not occupy space in binary.
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-14" class="outline-2">
+<h2 id="sec-14"><span class="section-number-2">14</span> New String Literals</h2>
+<div class="outline-text-2" id="text-14">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 14. New String Literals
+ */
+
+  // C++ 03:
+  char*     a = "string";  
+
+  // C++ 11:
+  char*     a = u8"string";  // to define an UTF-8 string. 
+  char16_t* b = u"string";   // to define an UTF-16 string. 
+  char32_t* c = U"string";   // to define an UTF-32 string. 
+  char*     d = R"string \\"    // to define raw string.
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-15" class="outline-2">
+<h2 id="sec-15"><span class="section-number-2">15</span> lambda function</h2>
+<div class="outline-text-2" id="text-15">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 15. lambda function
+ */
+
+cout &lt;&lt; [](int x, int y){return x+y}(3,4) &lt;&lt; endl;  // Output: 7
+auto f = [](int x, int y) { return x+y; };
+cout &lt;&lt; f(3,4) &lt;&lt; endl;   // Output: 7
+
+
+template&lt;typename func&gt;
+void filter(func f, vector&lt;int&gt; arr) {
+   for (auto i: arr) {
+      if (f(i))
+         cout &lt;&lt; i &lt;&lt; " ";
+   }
+}
+
+int main() {
+   vector&lt;int&gt; v = {1, 2, 3, 4, 5, 6 };
+
+   filter([](int x) {return (x&gt;3);},  v);    // Output: 4 5 6
+   ...
+   filter([](int x) {return (x&gt;2 &amp;&amp; x&lt;5);},  v); // Output: 3 4
+
+
+   int y = 4;  
+   filter([&amp;](int x) {return (x&gt;y);},  v);    // Output: 5 6
+   //Note: [&amp;] tells compiler that we want variable capture
+}
+
+// Lambda function works almost like a language extention
+template
+for_nth_item
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-16" class="outline-2">
+<h2 id="sec-16"><span class="section-number-2">16</span> User defined Literals</h2>
+<div class="outline-text-2" id="text-16">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 17. User defined Literals
+ */
+
+// C++ went a long way to make user defined types (classes) to behave same as buildin types.
+// User defined literals pushes this effort even further
+
+//Old C++:
+long double height = 3.4;
+
+// Remember in high school physics class?
+height = 3.4cm;
+ratio = 3.4cm / 2.1mm; 
+
+//Why we don't do that anymore?
+// 1. No language support
+// 2. Run time cost associated with the unit translation
+
+
+
+// C++ 11:
+long double operator"" _cm(long double x) { return x * 10; }
+long double operator"" _m(long double x) { return x * 1000; }
+long double operator"" _mm(long double x) { return x; }
+
+int main() {
+   long double height = 3.4_cm;
+   cout &lt;&lt; height  &lt;&lt; endl;              // 34
+   cout &lt;&lt; (height + 13.0_m)  &lt;&lt; endl;   // 13034
+   cout &lt;&lt; (130.0_mm / 13.0_m)  &lt;&lt; endl; // 0.01
+}
+
+//Note: add constexpr to make the translation happen in compile time.
+
+
+// Restriction: it can only work with following paramters:
+   char const*
+   unsigned long long
+   long double
+   char const*, std::size_t
+   wchar_t const*, std::size_t
+   char16_t const*, std::size_t
+   char32_t const*, std::size_t
+// Note: return value can be of any types.
+
+
+// Example:
+int operator"" _hex(char const* str, size_t l) { 
+   // Convert hexdecimal formated str to integer ret
+   return ret;
+}
+
+int operator"" _oct(char const* str, size_t l) { 
+   // Convert octal formated str to integer ret
+   return ret;
+}
+
+int main() {
+   cout &lt;&lt; "FF"_hex &lt;&lt; endl;  // 255
+   cout &lt;&lt; "40"_oct &lt;&lt; endl;  // 32
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-17" class="outline-2">
+<h2 id="sec-17"><span class="section-number-2">17</span> Variadic Template</h2>
+<div class="outline-text-2" id="text-17">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * Variadic Template
+ *
+ * A template that can take any number of template arguments of any type.
+ * Both class and function templates can be variadic.
+ */
+template&lt;typename... arg&gt;
+class BoTemplate;
+
+BoTemplate&lt;float&gt; t1;
+BoTemplate&lt;int, long, double, float&gt; t2;
+BoTemplate&lt;int, std::vector&lt;double&gt;&gt; t3;
+
+BoTemplate&lt;&gt; t4;
+
+
+// Combination of variadic and non-variadic argument
+template&lt;typename T, typename... arg&gt;
+class BoTemplate;
+
+BoTemplate&lt;&gt; t4;  // Error
+BoTemplate&lt;int, long, double, float&gt; t2;  // OK
+
+
+// Define a default template argument
+template&lt;typename T = int, typename... arg&gt;
+class BoTemplate;
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-18" class="outline-2">
+<h2 id="sec-18"><span class="section-number-2">18</span> Template Alias</h2>
+<div class="outline-text-2" id="text-18">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * Template Alias
+ */
+  template&lt;class T&gt; class Dog { /* ... */ };
+  template&lt;class T&gt;
+    using DogVec = std::vector&lt;T, Dog&lt;T&gt;&gt;;
+
+  DogVec&lt;int&gt; v;  // Same as: std::vector&lt;int, Dog&lt;int&gt;&gt;
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-19" class="outline-2">
+<h2 id="sec-19"><span class="section-number-2">19</span> decltype</h2>
+<div class="outline-text-2" id="text-19">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * decltype
+ *
+ * It is equivalent of GNU typeof
+ */
+  const int&amp; foo();      // Declare a function foo()
+  decltype(foo())  x1;  //  type is const int&amp;
+
+  struct S { double x; };
+  decltype(S::x)   x2;  //  x2 is double
+
+  auto s = make_shared&lt;S&gt;();
+  decltype(s-&gt;x)   x3;  //  x3 is double
+
+  int i;
+  decltype(i)      x4;  //  x4 is int  
+
+  float f;              
+  decltype(i + f)  x5;   // x5 is float
+
+  // decltype turns out to be very useful for template generic programming
+  template&lt;type X, type Y&gt;
+  void foo(X x, Y y) {
+     ...
+     decltype(x+y) z;
+     ...
+  }
+
+  // How about return type needs to use decltype?
+  template&lt;type X, type Y&gt;
+  decltype(x+y) goo(X x, Y y) {      // Error: x &amp; y are undefined 
+     return  x + y;
+  }
+
+  // Combining auto and decltype to implement templates with trailing return type
+  template&lt;type X, type Y&gt;
+  auto goo(X x, Y y) -&gt; decltype(x+y) {
+     return  x + y;
+  }
+</pre>
+</div>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. Initializer List</a></li>
+<li><a href="#sec-2">2. Uniform Initialization</a></li>
+<li><a href="#sec-3">3. auto type</a></li>
+<li><a href="#sec-4">4. foreach</a></li>
+<li><a href="#sec-5">5. nullptr</a></li>
+<li><a href="#sec-6">6. enum class</a></li>
+<li><a href="#sec-7">7. <code>static_assert</code></a></li>
+<li><a href="#sec-8">8. Delegating Constructor</a></li>
+<li><a href="#sec-9">9. override (for virtual function)</a></li>
+<li><a href="#sec-10">10. final (for virtual function and for class)</a></li>
+<li><a href="#sec-11">11. Compiler Generated Default Constructor</a></li>
+<li><a href="#sec-12">12. delete</a></li>
+<li><a href="#sec-13">13. constexpr</a></li>
+<li><a href="#sec-14">14. New String Literals</a></li>
+<li><a href="#sec-15">15. lambda function</a></li>
+<li><a href="#sec-16">16. User defined Literals</a></li>
+<li><a href="#sec-17">17. Variadic Template</a></li>
+<li><a href="#sec-18">18. Template Alias</a></li>
+<li><a href="#sec-19">19. decltype</a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>
