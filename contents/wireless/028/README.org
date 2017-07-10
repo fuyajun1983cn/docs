@@ -1,0 +1,17 @@
+#+TITLE: Base Band Controller
+
+* Topology -- Piconet and Scatternet
+
+* Time Division Duplex
+
+* Adaptive Frequency Hopping(AFH)
+
+* Master, Slave Roles and Role Switch
+
+* Channel, Transport and Links
+
+* Packet Format
+
+* Packet Types
+
+* Link Controller States
