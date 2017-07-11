@@ -499,3 +499,158 @@
        改变各元素的显示方向.
     5. box-pack, box-align
        指定水平方向与垂直方向的对齐方式.
+* Media Queries相关样式
+** COMMENT 根据浏览器的窗口大小来选择使用不同的样式
+   #+BEGIN_SRC html
+     <!DOCTYPE html>
+     <html>
+
+     <head>
+         <meta charset="utf-8" />
+         <style type="text/css">
+             body {
+                 margin: 20px 0;
+             }
+             
+             #container {
+                 width: 960px;
+                 height: auto;
+             }
+             
+             #wrapper {
+                 width: 740px;
+                 float: left;
+             }
+             
+             p {
+                 line-height: 600px;
+                 text-align: center;
+                 font-weight: bold;
+                 font-size: 2em;
+                 margin: 0 0 20px 0;
+             }
+             
+             #main {
+                 width: 520px;
+                 float: right;
+                 background-color: yellow;
+             }
+             
+             #sub01 {
+                 width: 200px;
+                 float: left;
+                 background: orange;
+             }
+             
+             #sub02 {
+                 width: 200px;
+                 float: right;
+                 background: green;
+             }
+
+             /*窗口宽度在1000px以上*/
+             @media screen and (min-width: 1000px) {
+                 /* 3栏显示 */
+                 #container {
+                     width: 1000px;
+                 }
+                 #wrapper {
+                     width: 780px;
+                     float: left;
+                 }
+                 #main {
+                     width: 560px;
+                     float: right;
+                 }
+                 #sub01 {
+                     width: 200px;
+                     float: left;
+                 }
+                 #sub02 {
+                     width: 200px;
+                     float: right;
+                 }
+             }
+             /*窗口宽度在640px以上, 999px以下*/
+             @media screen and (min-width: 640px) and (max-width: 999px) {
+                 /* 2栏显示 */
+                 #container {
+                     width: 640px;
+                 }
+                 #wrapper {
+                     width: 640px;
+                     float: none;
+                 }
+                 p {
+                     line-height: 400px;
+                 }
+                 #main {
+                     width: 420px;
+                     float: right;    
+                 }
+                 #sub01 {
+                     width: 200px;
+                     float: left;
+                 }
+                 #sub02 {
+                     width: 100%;
+                     float: none;
+                     clear: both;
+                     line-height: 150px;
+                 }
+             }
+             /*窗口宽度在639px以下*/
+             @media screen and (max-width: 639px) {
+                 /* 1栏显示 */
+                 #container {
+                     width: 100%;
+                 }
+                 #wrapper {
+                     width: 100%;
+                     float: none;
+                 }
+                 body  {
+                     margin: 20px;
+                 }
+                 p {
+                     line-height: 300px;
+                 }
+                 #main {
+                     width: 100%;
+                     float: none;    
+                 }
+                 #sub01 {
+                     width: 100%;
+                     float: none;
+                     line-height: 100px;
+                 }
+                 #sub02 {
+                     width: 100%;
+                     float: none;
+                     line-height: 100px;
+                 }
+             }
+         </style>
+     </head>
+
+     <body>
+         <div id="container">
+             <div id="wrapper">
+                 <p id="main">
+                     MAIN
+                 </p>
+                 <p id="sub01">
+                     SUB 01
+                 </p>
+             </div>
+             <p id="sub02">
+                 SUB 02
+             </p>
+         </div>
+     </body>
+
+     </html>   
+   #+END_SRC
+** Media Queries使用方法总结
+   使用方法如下:
+   : @media 设备类型 and {设备特性} {样式代码}
