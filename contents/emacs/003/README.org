@@ -1,0 +1,82 @@
+#+TITLE: Common Lisp基础语法研究
+
+* S-表达式(读取器)
+  S-表达式的基本元素是:
+  - 列表(list)
+    由括号所包围,并可包含任何数量的由空格所分隔的元素.列表元素本身也可
+    以是S-表达式.
+  - 原子(atom)
+    原子是所有其他的内容.
+
+** 命名
+   一般使用带连字符的名字,全局变量在开始和结尾处带有"*",常量名都以"+"
+   开始和结尾.
+
+** 函数调用
+   : (functoin-name argument*)
+   
+** 特殊操作符
+   IF, QUOTE, LET
+
+** 宏
+   宏是一个以S-表达式为其参数的函数,并返回一个Lisp形式,然后对其求值并
+   用该值取代宏形式.
+
+   当使用COMPILE-EILE来编译整个源代码文件时,文件中所有宏形式将被递归展
+   开,直到代码中只包含函数调用形式和特殊形式.
+
+** 真假和等价
+   NIL是唯一的假值,其他所有的都真值.符号T是标准的真值,可用于返回一个非
+   NIL但又没有其他值可用的情况.
+   
+   nil, (), 'nil以及'()求值结果都是相同的. t和't的求值结果也是相同的.
+
+   EQ用于测试"对象标识",只有当两个对象相同时才是EQ等价的,但它不能保证
+   带有相同值的两个数字可能会被看作等价或不等价,一般不要使用EQ用来比较
+   可能是数字或字符的值上.  
+
+   Common Lisp定义了EQL来获得与EQ相同的行为,并保证相同类型的两个对象表
+   示相同的数字或字符值时,它们是等价的.
+
+   EQUAL相比EQL的宽松之处在于,它将在递归上具有相同结构和内容的列表视为
+   等价.
+
+   EQUALP则更加宽松,例如它在考虑等价时,忽略大小写的区别.
+
+** 函数
+   可选参数:
+   : (defun foo (a b &optional c d) (list a b c d))
+
+   有时,有必要去了解一个可选形参的值究竟是被调用者明确指定还是使用了默
+   认值,可以使用如下形式:
+   #+BEGIN_SRC lisp
+     (defun foo (a b &optional (c 3 c-supplied-p))
+       (list a b c c-supplied-p))   
+   #+END_SRC
+
+   可变长参数(剩余形参):
+   : (defun format (stream string &rest values) ...)
+
+   关键字形参:
+   #+BEGIN_SRC lisp
+     (defun foo (&key a b c))
+     ;;(foo :a 1 :b 2 :c 3) -> (1 2 3)
+     ;;(foo :c 3 :b 2 :a 1) -> (1 2 3)
+     ;;(foo :a 1 :c 3) -> (1 nil 3)
+     ;;(foo) -> (NIL NIL NIL)
+     (defun foo (&key a (b 30) (c 20 c-p)))
+     ;; a,b都有默认值,且如果没有传递c的值的话,c-p还会返回一个boolean值.   
+   #+END_SRC
+
+   这些参数类型的声明顺序:必要形参,可选形参,剩余形参,关键字形参.
+
+   RETURN-FROM特殊操作符能够立即以任何值从函数中返回.
+   #+BEGIN_SRC lisp
+     (defun foo (n)
+       (dotimes (i 10)
+         (dotimes (j 10)
+           (when (> (* i j) n)
+             (return-from foo (list i j))))))   
+   #+END_SRC
+
+* Lisp表达式(求值器)
