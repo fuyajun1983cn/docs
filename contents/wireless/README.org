@@ -85,4 +85,4 @@
   Base Band Controller
 
 * 029
-  
+  Host Controller Interface
