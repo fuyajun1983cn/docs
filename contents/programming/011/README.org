@@ -578,3 +578,63 @@
          return  x + y;
       }  
   #+END_SRC
+
+* user defined literals 
+
+  C++ went a long way to make user defined types (classes) to behave
+  same as build-in types. User defined literals pushes this effort
+  even further
+
+  add constexpr to make the translation happen in compile time.
+  
+  #+BEGIN_SRC c++
+    constexpr long double operator"" _cm(long double x) { return x * 10; }
+    constexpr long double operator"" _m(long double x) { return x * 1000; }
+    constexpr long double operator"" _mm(long double x) { return x; }
+
+    int main(int argc, char *argv[])
+    {
+      long double height = 3.4_cm;
+      cout << height  << endl;              // 34
+      cout << (height + 13.0_m)  << endl;   // 13034
+      cout << (130.0_mm / 13.0_m)  << endl; // 0.01
+      
+      return 0;
+    }
+      
+  #+END_SRC
+
+
+  Restriction: it can only work with following parameters:
+  #+BEGIN_SRC c++
+    char const*
+    unsigned long long
+    long double
+    char const*, std::size_t
+    wchar_t const*, std::size_t
+    char16_t const*, std::size_t
+    char32_t const*, std::size_t  
+  #+END_SRC
+  
+  更多例子：
+  #+BEGIN_SRC c++
+    int operator"" _bin(const char* str, size_t l)
+    {
+      int ret = 0;
+      for (size_t i = 0;i < l; i++) {
+        if (str[i] == '1')
+          ret += 1 << (l-i-1);
+      }
+      return ret;
+    }
+
+    int main(int argc, char *argv[])
+    {
+      cout<<"110"_bin<<endl;
+      cout<<"111"_bin<<endl;
+      
+      return 0;
+    }
+      
+  #+END_SRC
+  
