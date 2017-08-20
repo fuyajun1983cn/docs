@@ -42,37 +42,57 @@ operate:
 </p>
 <ul class="org-ul">
 <li>Application
+
+<p>
 The application, like in all other types of systems, is the
 highest layer and the one responsible for containing the logic,
 user interface, and data handling of everything related to the
 actual use-case that the application implements. The architecture
 of an application is highly dependent on each particular
 implementation.
+</p>
 </li>
+
 <li>Host
+
+<p>
 Includes the following layers:
+</p>
+
 <ul class="org-ul">
 <li>Generic Access Profile (GAP)
 </li>
+
 <li>Generic Attribute Profile (GATT)
 </li>
+
 <li>Logical Link Control and Adaptation Protocol (L2CAP)
 </li>
+
 <li>Attribute Protocol (ATT)
 </li>
+
 <li>Security Manager (SM)
 </li>
+
 <li>Host Controller Interface (HCI), Host side
 </li>
 </ul>
 </li>
+
 <li>Controller
+
+<p>
 Includes the following layers:
+</p>
+
 <ul class="org-ul">
 <li>Host Controller Interface (HCI), Controller side
 </li>
+
 <li>Link Layer (LL)
 </li>
+
 <li>Physical Layer (PHY)
 </li>
 </ul>
@@ -133,14 +153,12 @@ is fixed at 1 Mbit/s, which is therefore the upper physical throughput
 limit for the technology. 
 </p>
 
-<div class="note info">
-  <h5>Notes</h5>
-  <p>
+<p>
+NOTES:
 In practice, however, as with any other protocol stack, this upper limit
 is never actually reached when it comes to application throughput,
 due mainly to protocol overheads in each of the different layers.
 </p>
-</div>
 </div>
 </div>
 
@@ -163,15 +181,20 @@ hardware by silicon vendors to avoid overloading the central processing unit tha
 all of the software layers in the stack. This functionality usually
 includes:
 </p>
+
 <ul class="org-ul">
 <li>Preamble, Access Address, and air protocol framing
 </li>
+
 <li>CRC generation and verification
 </li>
+
 <li>Data whitening
 </li>
+
 <li>Random number generation
 </li>
+
 <li>AES encryption
 </li>
 </ul>
@@ -204,19 +227,35 @@ on devices with more resources, such as smartphones and tablets.
 <p>
 The Link Layer defines the following roles:
 </p>
+
 <ul class="org-ul">
 <li>Advertiser
+
+<p>
 A device sending advertising packets.
+</p>
 </li>
+
 <li>Scanner
+
+<p>
 A device scanning for advertising packets.
+</p>
 </li>
+
 <li>Master
+
+<p>
 A device that initiates a connection and manages it later.
+</p>
 </li>
+
 <li>Slave
+
+<p>
 A device that accepts a connection request and follows the
 master’s timing. 
+</p>
 </li>
 </ul>
 
@@ -240,15 +279,22 @@ one or both can be set on a particular device:
 
 <ul class="org-ul">
 <li>Public device address
+
+<p>
 This is the equivalent to a fixed, BR/EDR, factory-programmed
 device address. It must be registered with the IEEE Registration
 Authority and will never change during the lifetime of the
 device.
+</p>
 </li>
+
 <li>Random device address
+
+<p>
 This address can either be preprogrammed on the device or
 dynamically generated at runtime. It has many practical uses in
 BLE.
+</p>
 </li>
 </ul>
 
@@ -272,6 +318,7 @@ serve two purposes:
 <li>To broadcast data for applications that do not need the overhead
 of a full connection establishment
 </li>
+
 <li>To discover slaves and to connect to them
 </li>
 </ul>
@@ -314,11 +361,17 @@ The specification defines two basic types of scanning procedures:
 
 <ul class="org-ul">
 <li>Passive scanning
+
+<p>
 The scanner simply listens for advertising packets, and the
 advertiser is never aware of the fact that one or more packets
 were actually received by a scanner.
+</p>
 </li>
+
 <li>Active scanning
+
+<p>
 The scanner issues a Scan Request packet after receiving an
 advertising packet. The advertiser receives it and responds with
 a Scan Response packet. This additional packet doubles the
@@ -326,6 +379,7 @@ effective payload that the advertiser is able to send to the
 scanner, but it is important to note that this does not provide a
 means for the scanner to send any user data at all to the
 advertiser.
+</p>
 </li>
 </ul>
 
@@ -349,12 +403,19 @@ different properties. The first is connectability:
 
 <ul class="org-ul">
 <li>Connectable
+
+<p>
 A scanner can initate a connection upon reception of such an
 advertising packet.
+</p>
 </li>
+
 <li>Non-connectable
+
+<p>
 A scanner cannot initiate a connection (this packet is intented
 for broadcast only). 
+</p>
 </li>
 </ul>
 
@@ -365,12 +426,19 @@ The second property is scannability:
 
 <ul class="org-ul">
 <li>Scannable
+
+<p>
 A scanner can issue a scan request upon reception of such an
 advertising packet.
+</p>
 </li>
+
 <li>Non-scannable
+
+<p>
 A scanner cannot issue a scan request upon reception of such an
 advertising packet. 
+</p>
 </li>
 </ul>
 
@@ -380,14 +448,21 @@ And the third is directability:
 
 <ul class="org-ul">
 <li>Directed
+
+<p>
 A packet of this type contains only the advertiser’s and the
 target scanner’s Bluetooth Addresses in its payload. No user data
 is allowed. All directed advertising packets are therefore
 connectable.
+</p>
 </li>
+
 <li>Undirected
+
+<p>
 A packet of this type is not targeted at any particular scanner,
 and it can contain user data in its payload.
+</p>
 </li>
 </ul>
 
@@ -445,19 +520,28 @@ by the master during the establishment of a connection:
 
 <ul class="org-ul">
 <li>Connection interval
+
+<p>
 The time between the beginning of two consecutive connection
 events. This value ranges from 7.5 ms (high throughput) to 4 s
 (lowest possible throughput but also least power hungry).
+</p>
 </li>
 
 <li>Slave latency
+
+<p>
 The number of connection events that a slave can choose to skip
 without risking a disconnection.
+</p>
 </li>
 
 <li>Connection supervision timeout
+
+<p>
 The maximum time between two received valid data packets before a
 connection is considered lost.
+</p>
 </li>
 </ul>
 
@@ -513,6 +597,8 @@ procedures, including these two critical processes:
 
 <ul class="org-ul">
 <li>Changing the connection parameters
+
+<p>
 Each connection is established with a given set of connection
 parameters set by the master, but conditions and requirements
 might change during the lifetime of the connection. A slave might
@@ -524,14 +610,18 @@ new connection parameters and, in the case of the master, to set
 them unilaterally at any time. That way, each connection can be
 fine-tuned to provide the best balance between throughput and
 power consumption.
+</p>
 </li>
 
 <li>Encryption
+
+<p>
 Security is critical in BLE, and the Link Layer provides the
 means to exchange data securely over an encrypted link. The keys
 are generated and managed by the host, but the Link Layer
 performs the actual data encryption and decryption transparently
 to the upper layers. 
+</p>
 </li>
 </ul>
 
@@ -663,132 +753,201 @@ categories:
 
 <ul class="org-ul">
 <li>Error Handling
+
+<p>
 Used by the server to respond to any of the requests when an
 error occurs, this includes only:
+</p>
 
 <ul class="org-ul">
 <li>Error Response
+
+<p>
 Sent as a response to a request in lieu of the corresponding
 operation response whenever an error prevented the request from
 being executed on the server.
+</p>
 </li>
 </ul>
 </li>
 
 <li>Server Configuration
+
+<p>
 Used to configure the ATT protocol itself, this includes only:
+</p>
 
 <ul class="org-ul">
 <li>Exchange MTU Request/Response
+
+<p>
 Exchange between client and server of their respective Maximum
 Transmission Units (MTU or maximum packet size accepted).
+</p>
 </li>
 </ul>
 </li>
 
 <li>Find Information
+
+<p>
 Used by the client to obtain information about the layout of the
 server’s attributes, they include:
+</p>
 
 <ul class="org-ul">
 <li>Find Information Request/Response
+
+<p>
 Obtain a list of all attributes in a particular handle range.
+</p>
 </li>
 
 <li>Find by Type Value
+
+<p>
 Obtain the handle range between an attribute identifed by its
 UUID and its value and the next group delimiter.
+</p>
 </li>
 </ul>
 </li>
 
 <li>Read Operations
+
+<p>
 Used by the client to obtain the value of one or more attributes,
 they include: 
+</p>
 
 <ul class="org-ul">
 <li>Read by Type Request/Response
+
+<p>
 Obtain the value of one or more attributes using a UUID.
+</p>
 </li>
 
 <li>Read Request/Response
+
+<p>
 Obtain the value of attributes using a handle.
+</p>
 </li>
 
 <li>Read Blob Request/Response
+
+<p>
 Obtain part of a value of a long attribute using a handle.
+</p>
 </li>
 
 <li>Read Multiple Request/Response
+
+<p>
 Obtain the value of one or more attributes using multiple
 handles.
+</p>
 </li>
 
 <li>Read by Group Type Request/Response
+
+<p>
 Similar to Read by Type, but the UUID must be of a grouping
 type.
+</p>
 </li>
 </ul>
 </li>
 
 <li>Write Operations
+
+<p>
 Used by the client to set the value of one or more attributes,
 they include:
+</p>
 
 <ul class="org-ul">
 <li>Write Request/Response
+
+<p>
 Write to the value of an attribute and expect a response from
 the server.
+</p>
 </li>
 
 <li>Write Command
+
+<p>
 Write to the value of an attribute without any response or
 acknowledgement. This operation does not follow the
 request/response sequencing and can be sent at any time.
+</p>
 </li>
 
 <li>Signed Write Command
+
+<p>
 Similar to Write Command, but using a signature. This operation
 does not follow the request/response sequencing and can be sent
 at any time.
+</p>
 </li>
 </ul>
 </li>
 
 <li>Queued Writes
+
+<p>
 Used by the client to write to attribute values that are longer
 than what can fit in a single packet, they include:
+</p>
 
 <ul class="org-ul">
 <li>Prepare Write Request/Response
+
+<p>
 Queue a write operation in the server for a particular handle,
 after which the successful queuing is acknowledged by the
 server.
+</p>
 </li>
 
 <li>Execute Write Request/Response
+
+<p>
 Execute all pending queued write operations, the server then
 reports the success or failure to the client.
+</p>
 </li>
 </ul>
 </li>
 
 <li>Server Initiated
+
+<p>
 Used by the server to asynchronously push attribute values to the
 client, they include: 
+</p>
 
 <ul class="org-ul">
 <li>Handle Value Indication/Confirmation
+
+<p>
 Asynchronous server update of an attribute’s value and
 identified by its handle, expects an acknowledgement in the
 form of a confirmation from the client.
+</p>
 </li>
 
 <li>Handle Value Notification
+
+<p>
 Asynchronous server update of an attribute’s value and
 identified by its handle, without acknowledgment. This
 operation does not follow the request/response sequencing and
 can be sent at any time.
+</p>
 </li>
 </ul>
 </li>
@@ -821,12 +980,18 @@ The Security Manager defines two roles:
 
 <ul class="org-ul">
 <li>Initiator
+
+<p>
 Always corresponds to the Link Layer master and therefore the GAP
 central.
+</p>
 </li>
 
 <li>Responder
+
+<p>
 Always corresponds to the Link Layer slave and therefore the GAP peripheral.
+</p>
 </li>
 </ul>
 
@@ -851,28 +1016,37 @@ procedures:
 
 <ul class="org-ul">
 <li>Pairing
+
+<p>
 The procedure by which a temporary common security encryption key
 is generated to be able to switch to a secure, encrypted
 link. This temporary key is not stored and is therefore not
 reusable in subsequent connections.
+</p>
 </li>
 
 <li>Bonding
+
+<p>
 A sequence of pairing followed by the generation and exchange of
 permanent security keys, destined to be stored in nonvolatile
 memory and therefore creating a permanent bond between two
 devices, which will allow them to quickly set up a secure link in
 subsequent connections without having to perform a bonding
 procedure again.
+</p>
 </li>
 
 <li>Encryption Re-establishment
+
+<p>
 After a bonding procedure is complete, keys might have been
 stored on both sides of the connection. If encryption keys have
 been stored, this procedure defines how to use those keys in
 subsequent connections to re-establish a secure, encrypted
 connection without having to go through the pairing (or bonding)
 procedure again. 
+</p>
 </li>
 </ul>
 
@@ -921,23 +1095,32 @@ following STK generation methods:
 
 <ul class="org-ul">
 <li>Just Works
+
+<p>
 The STK is generated on both sides, based on the packets
 exchanged in plain text. This provides no security against
 man-in-the-middle (MITM) attacks.
+</p>
 </li>
 
 <li>Passkey Display
+
+<p>
 One of the peers displays a randomly generated, six-digit passkey
 and the other side is asked to enter it (or in certain cases both
 sides enter the key, if no display is available). This provides
 protection against MITM attacks and is used whenever possible.
+</p>
 </li>
 
 <li>Out Of Band (OOB)
+
+<p>
 When using this method, additional data is transferred by means
 other than the BLE radio, such as another wireless technology
 like NFC. This method also provides protection against MITM
 attacks. 
+</p>
 </li>
 </ul>
 
@@ -949,21 +1132,30 @@ advertising procedure:
 
 <ul class="org-ul">
 <li>Encryption
+
+<p>
 This mechanism consists of the full encryption of all packets
 transmitted over an established connection.
+</p>
 </li>
 
 <li>Privacy
+
+<p>
 The privacy feature allows an advertiser to hide its public
 Bluetooth address by using temporary, randomly generated
 addresses that can be recognized by a scanner that is bonded with
 the advertising device.
+</p>
 </li>
 
 <li>Signing
+
+<p>
 With this mechanism, a device can send an unencrypted packet over
 an established connection that is digitally signed (i.e., the
 source of which can be verfied). 
+</p>
 </li>
 </ul>
 
@@ -988,22 +1180,31 @@ mechanisms to be enforced:
 <ul class="org-ul">
 <li>Encryption Information (Long Term Key or LTK) and Master
 Identification (EDIV, Rand)
+
+<p>
 This is a 128-bit encryption key shared by both sides (LTK) along
 with two values (EDIV, Rand) acting as its identifier, since a
 device may be bonded with multiple other peers.
+</p>
 </li>
 
 <li>Identity Information (Identity Resolving Key or IRK) and Identity
 Address Information (Address Type and Bluetooth Device Address)
+
+<p>
 The IRK is used to implement privacy: it can generate and resolve
 resolvable addresses that protect an advertising device from
 being tracked by malicious peers. The actual public or static
 random address of the device distributing it is included along
 with the IRK.
+</p>
 </li>
 
 <li>Signing Information (Connection Signature Resolving Key or CSRK)
+
+<p>
 A key used to digitally sign unencrypted data.
+</p>
 </li>
 </ul>
 
@@ -1017,14 +1218,12 @@ each direction, for a total of six keys distributed between peers (three from sl
 master and three from master to slave).
 </p>
 
-<div class="note info">
-  <h5>Note</h5>
-  <p>
+<p>
+NOTES:
 If no keys at all are exchanged during a bonding procedure, the bond
 between the two devices will still be valid, but no security procedures
 whatsoever will be available between them.
 </p>
-</div>
 
 <p>
 Since each key is asymmetrical (and therefore the process of key distribution is symmetrical)
@@ -1076,7 +1275,9 @@ between applications.
 
 <p>
 It defines generic data objects that can be used and reused by a variety of application
-profiles (known as GATT-based profiles). It maintains the same client/server architecture present in ATT, but the data is now encapsulated in services, which consist of one
+profiles (known as GATT-based profiles). It maintains the same
+client/server architecture present in ATT, 
+but the data is now encapsulated in services, which consist of one
 or more characteristics. Each characteristic can be thought of as the union of a piece of
 user data along with metadata (descriptive information about that value such as properties,
 user-visible name, units, and more).
@@ -1111,12 +1312,16 @@ operation of devices:
 <ul class="org-ul">
 <li>Roles and interaction between them
 </li>
+
 <li>Operational modes and transitions across those
 </li>
+
 <li>Operational procedures to achieve consistent and interoperable communication
 </li>
+
 <li>Security aspects, including security modes and procedures
 </li>
+
 <li>Additional data formats for nonprotocol data
 </li>
 </ul>

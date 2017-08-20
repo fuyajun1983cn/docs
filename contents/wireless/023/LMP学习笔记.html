@@ -346,7 +346,7 @@ connSlaveLatency) * connInterval。
 <h2 id="sec-11"><span class="section-number-2">11</span> 连接建立过程</h2>
 <div class="outline-text-2" id="text-11">
 <p>
-当Initiator发送CONNECT<sub>REQ包时，链路层已经处于连接状态，且角色为</sub>
+当Initiator发送CONNECT_REQ包时，链路层已经处于连接状态，且角色为
 Master。
 </p>
 </div>
@@ -359,7 +359,7 @@ Master。
 <li>连接更新过程
 
 <p>
- 主机可通过LL<sub>CONNECTION</sub><sub>UPDATE</sub><sub>REQ请求更新连接参数（connInterval</sub>, connSlaveLatency and connSupervisionTimeout）。
+ 主机可通过LL_CONNECTION_UPDATE_REQ请求更新连接参数（connInterval, connSlaveLatency and connSupervisionTimeout）。
 (connIntervalmin(Host specified)&lt;connInterval&lt;connIntervalmax(Host Specified)
 </p>
 

@@ -12,24 +12,38 @@
   into several layers that provide the functionality required to
   operate:
   - Application
+
     The application, like in all other types of systems, is the
     highest layer and the one responsible for containing the logic,
     user interface, and data handling of everything related to the
     actual use-case that the application implements. The architecture
     of an application is highly dependent on each particular
     implementation.
+
   - Host
+
     Includes the following layers:
+
     - Generic Access Profile (GAP)
+
     - Generic Attribute Profile (GATT)
+
     - Logical Link Control and Adaptation Protocol (L2CAP)
+
     - Attribute Protocol (ATT)
+
     - Security Manager (SM)
+
     - Host Controller Interface (HCI), Host side
+
   - Controller
+
     Includes the following layers:
+
     - Host Controller Interface (HCI), Controller side
+
     - Link Layer (LL)
+
     - Physical Layer (PHY)
 
 * Physical Layer
@@ -84,10 +98,15 @@
   hardware by silicon vendors to avoid overloading the central processing unit that runs
   all of the software layers in the stack. This functionality usually
   includes:
+
   - Preamble, Access Address, and air protocol framing
+
   - CRC generation and verification
+
   - Data whitening
+
   - Random number generation
+
   - AES encryption
 
 
@@ -110,13 +129,21 @@
   on devices with more resources, such as smartphones and tablets.
 
   The Link Layer defines the following roles:
+
   - Advertiser
+
     A device sending advertising packets.
+
   - Scanner
+
     A device scanning for advertising packets.
+
   - Master
+
     A device that initiates a connection and manages it later.
+
   - Slave
+
     A device that accepts a connection request and follows the
     master’s timing. 
 
@@ -132,11 +159,14 @@
    one or both can be set on a particular device:
    
    - Public device address
+
      This is the equivalent to a fixed, BR/EDR, factory-programmed
      device address. It must be registered with the IEEE Registration
      Authority and will never change during the lifetime of the
      device.
+
    - Random device address
+
      This address can either be preprogrammed on the device or
      dynamically generated at runtime. It has many practical uses in
      BLE.
@@ -151,6 +181,7 @@
 
    - To broadcast data for applications that do not need the overhead
      of a full connection establishment
+
    - To discover slaves and to connect to them
 
    Each advertising packet can carry up to 31 bytes of advertising data payload, along with
@@ -178,10 +209,13 @@
    The specification defines two basic types of scanning procedures:
    
    - Passive scanning
+
      The scanner simply listens for advertising packets, and the
      advertiser is never aware of the fact that one or more packets
      were actually received by a scanner.
+
    - Active scanning
+
      The scanner issues a Scan Request packet after receiving an
      advertising packet. The advertiser receives it and responds with
      a Scan Response packet. This additional packet doubles the
@@ -201,9 +235,12 @@
    different properties. The first is connectability:
 
    - Connectable
+
      A scanner can initate a connection upon reception of such an
      advertising packet.
+
    - Non-connectable
+
      A scanner cannot initiate a connection (this packet is intented
      for broadcast only). 
 
@@ -211,20 +248,26 @@
    The second property is scannability:
    
    - Scannable
+
      A scanner can issue a scan request upon reception of such an
      advertising packet.
+
    - Non-scannable
+
      A scanner cannot issue a scan request upon reception of such an
      advertising packet. 
 
    And the third is directability:
    
    - Directed
+
      A packet of this type contains only the advertiser’s and the
      target scanner’s Bluetooth Addresses in its payload. No user data
      is allowed. All directed advertising packets are therefore
      connectable.
+
    - Undirected
+
      A packet of this type is not targeted at any particular scanner,
      and it can contain user data in its payload.
 
@@ -259,15 +302,18 @@
    by the master during the establishment of a connection:
    
    - Connection interval
+
      The time between the beginning of two consecutive connection
      events. This value ranges from 7.5 ms (high throughput) to 4 s
      (lowest possible throughput but also least power hungry).
 
    - Slave latency
+
      The number of connection events that a slave can choose to skip
      without risking a disconnection.
 
    - Connection supervision timeout
+
      The maximum time between two received valid data packets before a
      connection is considered lost.
 
@@ -308,6 +354,7 @@
    procedures, including these two critical processes:
    
    - Changing the connection parameters
+
      Each connection is established with a given set of connection
      parameters set by the master, but conditions and requirements
      might change during the lifetime of the connection. A slave might
@@ -321,6 +368,7 @@
      power consumption.
 
    - Encryption
+
      Security is critical in BLE, and the Link Layer provides the
      means to exchange data securely over an encrypted link. The keys
      are generated and managed by the host, but the Link Layer
@@ -412,94 +460,117 @@
    categories:
    
    - Error Handling
+
      Used by the server to respond to any of the requests when an
      error occurs, this includes only:
 
      - Error Response
+
        Sent as a response to a request in lieu of the corresponding
        operation response whenever an error prevented the request from
        being executed on the server.
 
    - Server Configuration
+
      Used to configure the ATT protocol itself, this includes only:
      
      - Exchange MTU Request/Response
+
        Exchange between client and server of their respective Maximum
        Transmission Units (MTU or maximum packet size accepted).
 
    - Find Information
+
      Used by the client to obtain information about the layout of the
      server’s attributes, they include:
 
      - Find Information Request/Response
+
        Obtain a list of all attributes in a particular handle range.
 
      - Find by Type Value
+
        Obtain the handle range between an attribute identifed by its
        UUID and its value and the next group delimiter.
 
    - Read Operations
+
      Used by the client to obtain the value of one or more attributes,
      they include: 
 
      - Read by Type Request/Response
+
        Obtain the value of one or more attributes using a UUID.
 
      - Read Request/Response
+
        Obtain the value of attributes using a handle.
 
      - Read Blob Request/Response
+
        Obtain part of a value of a long attribute using a handle.
 
      - Read Multiple Request/Response
+
        Obtain the value of one or more attributes using multiple
        handles.
 
      - Read by Group Type Request/Response
+
        Similar to Read by Type, but the UUID must be of a grouping
        type.
 
    - Write Operations
+
      Used by the client to set the value of one or more attributes,
      they include:
 
      - Write Request/Response
+
        Write to the value of an attribute and expect a response from
        the server.
 
      - Write Command
+
        Write to the value of an attribute without any response or
        acknowledgement. This operation does not follow the
        request/response sequencing and can be sent at any time.
 
      - Signed Write Command
+
        Similar to Write Command, but using a signature. This operation
        does not follow the request/response sequencing and can be sent
        at any time.
 
    - Queued Writes
+
      Used by the client to write to attribute values that are longer
      than what can fit in a single packet, they include:
 
      - Prepare Write Request/Response
+
        Queue a write operation in the server for a particular handle,
        after which the successful queuing is acknowledged by the
        server.
 
      - Execute Write Request/Response
+
        Execute all pending queued write operations, the server then
        reports the success or failure to the client.
 
    - Server Initiated
+
      Used by the server to asynchronously push attribute values to the
      client, they include: 
 
      - Handle Value Indication/Confirmation
+
        Asynchronous server update of an attribute’s value and
        identified by its handle, expects an acknowledgement in the
        form of a confirmation from the client.
 
      - Handle Value Notification
+
        Asynchronous server update of an attribute’s value and
        identified by its handle, without acknowledgment. This
        operation does not follow the request/response sequencing and
@@ -520,10 +591,12 @@
   The Security Manager defines two roles:
 
   - Initiator
+
     Always corresponds to the Link Layer master and therefore the GAP
     central.
 
   - Responder
+
     Always corresponds to the Link Layer slave and therefore the GAP peripheral.
 
   Although it is always up to the initiator to trigger the beginning of a procedure, the
@@ -539,12 +612,14 @@
    procedures:
 
    - Pairing
+
      The procedure by which a temporary common security encryption key
      is generated to be able to switch to a secure, encrypted
      link. This temporary key is not stored and is therefore not
      reusable in subsequent connections.
 
    - Bonding
+
      A sequence of pairing followed by the generation and exchange of
      permanent security keys, destined to be stored in nonvolatile
      memory and therefore creating a permanent bond between two
@@ -553,6 +628,7 @@
      procedure again.
 
    - Encryption Re-establishment
+
      After a bonding procedure is complete, keys might have been
      stored on both sides of the connection. If encryption keys have
      been stored, this procedure defines how to use those keys in
@@ -588,17 +664,20 @@
    following STK generation methods:
 
    - Just Works
+
      The STK is generated on both sides, based on the packets
      exchanged in plain text. This provides no security against
      man-in-the-middle (MITM) attacks.
 
    - Passkey Display
+
      One of the peers displays a randomly generated, six-digit passkey
      and the other side is asked to enter it (or in certain cases both
      sides enter the key, if no display is available). This provides
      protection against MITM attacks and is used whenever possible.
 
    - Out Of Band (OOB)
+
      When using this method, additional data is transferred by means
      other than the BLE radio, such as another wireless technology
      like NFC. This method also provides protection against MITM
@@ -609,16 +688,19 @@
    advertising procedure:
 
    - Encryption
+
      This mechanism consists of the full encryption of all packets
      transmitted over an established connection.
 
    - Privacy
+
      The privacy feature allows an advertiser to hide its public
      Bluetooth address by using temporary, randomly generated
      addresses that can be recognized by a scanner that is bonded with
      the advertising device.
 
    - Signing
+
      With this mechanism, a device can send an unencrypted packet over
      an established connection that is digitally signed (i.e., the
      source of which can be verfied). 
@@ -635,12 +717,14 @@
 
    - Encryption Information (Long Term Key or LTK) and Master
      Identification (EDIV, Rand)
+
      This is a 128-bit encryption key shared by both sides (LTK) along
      with two values (EDIV, Rand) acting as its identifier, since a
      device may be bonded with multiple other peers.
 
    - Identity Information (Identity Resolving Key or IRK) and Identity
      Address Information (Address Type and Bluetooth Device Address)
+
      The IRK is used to implement privacy: it can generate and resolve
      resolvable addresses that protect an advertising device from
      being tracked by malicious peers. The actual public or static
@@ -648,6 +732,7 @@
      with the IRK.
 
    - Signing Information (Connection Signature Resolving Key or CSRK)
+
      A key used to digitally sign unencrypted data.
 
    Each of these keys or key sets is asymmetrical and unidirectional: it can be used only in
@@ -695,7 +780,9 @@
   between applications.
 
   It defines generic data objects that can be used and reused by a variety of application
-  profiles (known as GATT-based profiles). It maintains the same client/server architecture present in ATT, but the data is now encapsulated in services, which consist of one
+  profiles (known as GATT-based profiles). It maintains the same
+  client/server architecture present in ATT, 
+  but the data is now encapsulated in services, which consist of one
   or more characteristics. Each characteristic can be thought of as the union of a piece of
   user data along with metadata (descriptive information about that value such as properties,
   user-visible name, units, and more).
@@ -717,7 +804,11 @@
   operation of devices:
 
   - Roles and interaction between them
+
   - Operational modes and transitions across those
+
   - Operational procedures to achieve consistent and interoperable communication
+
   - Security aspects, including security modes and procedures
+
   - Additional data formats for nonprotocol data
