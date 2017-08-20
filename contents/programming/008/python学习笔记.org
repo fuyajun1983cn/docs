@@ -47,8 +47,19 @@
    
 *** fnmatch
 
-*** re
+*** COMMENT re
+    #+CAPTION: 简单示例
+    #+BEGIN_SRC python
+      import re
 
+      def main():
+          fh = open('raven.txt')
+          for line in fh:
+              if re.search('(Len|Neverm)ore', line):
+                  print(line, end='')
+
+      if __name__ == "__main__": main()    
+    #+END_SRC
 ** 数据结构
 
 *** collections 

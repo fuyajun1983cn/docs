@@ -31,3 +31,6 @@
 
 * 011
   C++11 New Features.
+
+* 012
+  Python数据库操作

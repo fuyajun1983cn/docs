@@ -86,3 +86,6 @@
 
 * 029
   Host Controller Interface
+
+* 030
+  BLE Protocol Basics
