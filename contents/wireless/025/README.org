@@ -120,6 +120,11 @@
   ACL-U logical link.
 
 ** CHANNEL IDENTIFIERS
+
+   A channel is a single sequence of packets, from and to a single pair of
+   services on a single device. Between two devices, there can be multiple channels active at the same
+   time.
+
    A channel identifier (CID) is the local name representing a logical channel
    endpoint on the device. The null identifier (0x0000) shall never be used as a
    destination endpoint. Identifiers from 0x0001 to 0x003F are reserved for
@@ -134,8 +139,16 @@
    L2CAP configuration mechanism. Fixed channels shall only run over ACL-U, ASB-U, or
    LE-U logical links and shall not be moved.
 
+   In Bluetooth low energy, only fixed channels are supported. Fixed channels don’t have any configuration
+   parameters to negotiate, and they exist as soon as the lower layers have established a connection;
+   consequently, there is no time wasted waiting for the channel to be
+   created. Only those fixed channels support connectionless model. 
+
    for the remaining CIDs, two simultaneously active L2CAP channels
    shall not share the same CID.
+
+   #+CAPTION: L2CAP Channel Identifiers
+   [[./images/007.png]]
 
 ** OPERATION BETWEEN DEVICES
    
@@ -170,19 +183,166 @@
    each L2CAP channel.
    
    The modes are:
+
    - Basic L2CAP Mode (equivalent to L2CAP specification in Bluetooth
      v1.1)
+
      the default mode
+
    - Flow Control Mode
+
    - Retransmission Mode
+
    - Enhanced Retransmission Mode
+
      used for all reliable channels created over AMP-U logical links
      and for ACL-U logical links operation under some conditions.
+
    - Streaming Mode
+
      used for streaming applications created over AMP-U logical links
      and ACL-U logical links operating under some conditions.
+
    - LE Credit Based Flow Control Mode
 
+
+
+*** Bluetooth LE Credit-Based Flow Control for L2CAP Connection-Oriented Channels
+    
+**** The theory
+     
+     The L2CAP layer of the BLE Host Stack performs data multiplexing
+     through the use of a Channel ID (CID), which is a 2-byte value
+     contained by the L2CAP Basic Header, as seen in the general L2CAP
+     packet format: 
+
+     [[./images/005.png]]
+
+     Several CIDs are reserved. For instance, 0x0004 is used by the
+     ATT, 0x0006 by the SMP, 0x0005 is the Signaling Channel. The
+     0x0040-0x007F range is assigned for the Connection-Oriented
+     Channels.
+
+     The LE Credit-Based Flow Control is an L2CAP mode of operation
+     for Connection-Oriented Channels in which an endpoint device has
+     complete control over how many packets the peer device may send
+     at any time through the use of credits.
+
+     One credit represents the permission to send one LE-frame over
+     the established channel. The receiving device gives a fixed
+     number of credits to the sending device, so that the latter knows
+     exactly how many LE-frames it may send. The attempt to send more
+     frames than permitted results in the receiving device closing the
+     channel. 
+
+     An initial number of credits are given by each device to the peer
+     when the connection is created. Subsequently, each device can
+     give more credits as it deems necessary; if a device wants to
+     send more data than it is allowed, there’s nothing it can do but
+     wait until it receives more credits from the peer. 
+
+     A Protocol Service Multiplexer must be associated with any
+     credit-based connection. It is abbreviated as =LE_PSM= and is a
+     two-byte value identifying the protocol that uses the
+     credit-based connection. The specification defined the ranges for
+     allowed =LE_PSMs=; some are reserved by specific profiles
+     (e.g. IPSP) and others may be dynamically used by custom
+     application profiles. 
+     
+**** The protocol
+
+     An LE Credit-Based connection is created and managed on the L2CAP
+     Signaling Channel, with the following commands and parameters.
+
+     - LE Credit-Based Connection Request, with the parameters:
+
+       - =LE_PSM=
+
+       - Source Channel ID (SCID)
+
+       - Maximum Transmission Unit (MTU)
+
+       - Maximum Payload Size (MPS)
+
+       - Initial Credits
+
+     - LE Credit-Based Connection Response
+
+       + Destination CID (DCID)
+
+       + MTU
+
+       + MPS
+
+       + Initial Credits
+
+       + Result
+
+     - LE Flow Control Credit
+
+       + CID
+
+       + Credits
+
+     The requesting device must specify the LE_PSM for which the
+     connection is opened, the CID to which the responder will send
+     data (SCID), the supported MTU and MPS and the initial number of
+     credits given to the responder. 
+
+     In turn, the responding device can reject the request (reason is
+     found in the Result parameter) or can accept it (Result is 0) and
+     also provide the CID where the requesting device can send data
+     (DCID), initial credits for this CID and its own MTU and MPS. 
+
+     The minimum values between the two devices’ MTU and MPS are
+     used. MTU is the maximum transmission unit, i.e. the maximum size
+     of data (an SDU – Service Data Unit) to be transmitted. MPS is
+     the maximum payload size, i.e. the maximum size of a single L2CAP
+     packet, which is an LE-frame and “eats” one credit when is
+     transmitted. 
+
+     At any moment, any of the two devices can send a Flow Control
+     Credit command to increase the credits of the peer on the given
+     CID.
+
+**** The data packets - example
+
+     Let’s assume device A sends an LE Credit-Based Connection Request
+     with:
+
+     - =LE_PSM= = 0x0080
+     - SCID = 0x004a
+     - MTU = 100
+     - MPS = 40
+     - I.C. = 5
+
+     Device B answers with an LE Credit-Based Connection Response:
+
+     - DCID = 0x004b
+     - MTU =260
+     - MPS = 60
+     - I.C. = 10
+
+     So MTU becomes 100 and MPS becomes 40. This means that a device
+     can send SDUs of maximum 100 bytes, but these 100 bytes will be
+     fragmented to fit into LE-frames of maximum 40 bytes payload. 
+
+     An LE-frame contains:
+
+     - The basic L2CAP header: Length (2 bytes) and CID (2 bytes)
+     - Payload (length maximum equal to MPS)
+
+     When a large SDU is sent, the first LE-frame Payload starts with
+     2 bytes of SDU Length then follow the first MPS-2 bytes of
+     SDU. Subsequent LE-frames each contain MPS bytes of SDU, while
+     the last one may contain less than MPS bytes. 
+
+     If device A from our example wants to send an SDU of 90 bytes, it
+     would need 3 credits because the 90 bytes can be split in 3
+     LE-frames: 
+
+     [[./images/006.png]]
+     
 ** MAPPING CHANNELS TO LOGICAL LINKS
    L2CAP maps channels to Controller logical links, which in turn run over
    Controller physical links. All logical links going between a local Controller and
@@ -200,6 +360,60 @@
    an LE physical link between two devices shall be treated as best effort and
    mapped to a single LE-U logical link.
 
+* BLE L2CAP
+  
+** L2CAP Channels
+
+   There are three Bluetooth low energy channels: Channel identifier 0x0004 is used for the Attribute
+   Protocol, Channel identifier 0x0005 is used for the Bluetooth low
+   energy signaling channel; Channel identifier 0x0006 is used for the
+   Security Manager. All the other channel
+   identifiers from 0x0007 to 0x003E are reserved, and channel identifiers from 0x0040 to 0xFFFF can
+   be used for connection-oriented channels.
+
+** The L2CAP Packet Structure
+
+   Each L2CAP packet contains a 32-bit header followed by its payload. It is assumed that segmentation
+   and reassembly is used; thus, the length of the packet must be included in the packet header so that the
+   end of the packet can be determined. The segmentation and reassembly scheme used requires the
+   marking of packets over the HCI interface. There is no way to denote that a given L2CAP packet segment is the end of the current packet. This
+   means that the only way to determine if the current packet is complete is to either send a new packet,
+   assuming that one is ready to be sent, or to include the packet
+   length in the very first packet sent.
+
+   #+CAPTION: L2CAP Packet Format
+   [[./images/008.png]]
+
+   For all Bluetooth Low Energy channels, the information payload
+   starts with a Maximum Transmission Units(MTU) size of 23 bytes. So
+   the Bluetooth Low Engergy devices must support a total Length of 27
+   bytes data.(4 + 23)
+
+** The LE Signaling Channel
+
+   The LE Signaling channel is used for Signaling at host layer. as
+   illustrated in the following figure, each LE Signaling packet
+   contains a single opcode, followed by any parameters. The following
+   command opcodes are supported on the LE Signaling channel:
+
+   - Command Reject
+   - Connection Parameter Update Request
+   - Connection Parameter Update Response
+
+
+   #+CAPTION: The L2CAP command packet
+   [[./images/009.png]]
+
+   Whenever a signaling command is sent, an identifier is included in the information payload. This
+   identifier is just 1 byte in length and is used to match responses with requests.Identifiers can’t be reused unless all other identifiers have
+   been used. This leads implementations to use an increment operation
+   to ensure this rule is met. indentifier 0x0 is never used. 
+
+   In Bluetooth low energy, because only one request has been defined, and because this request can
+   only be sent when no other request is outstanding, the logic for
+   identifiers is very simple.
+
+   
      
    
    
@@ -208,6 +422,7 @@
 
    
 
+   
    
    
    

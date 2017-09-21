@@ -1,6 +1,43 @@
 #+TITLE: Base Band Controller
 
+
+* Introduction
+  
+  The Baseband is the physical layer of the Bluetooth. It manages
+  physical channels and links apart from other services like error
+  correction, data whitening, hop selection and Bluetooth
+  security. The Baseband layer lies on top of the Bluetooth radio
+  layer in the bluetooth stack. The baseband protocol is implemented
+  as a Link Controller  , which works with the link manager for
+  carrying out link level routines like link connection and power
+  control. The baseband also manages asynchronous and synchronous
+  links, handles packets and does paging and inquiry to access and
+  inquire Bluetooth devices in the area. The baseband transceiver
+  applies a time-division duplex (TDD) scheme. (alternate transmit and
+  receive). Therefore apart from different hopping frequency
+  (frequency division), the time is also slotted. 
+
 * Topology -- Piconet and Scatternet
+  
+  The Bluetooth system provides a point-to-point connection or a
+  point-to-multipoint connection, Two or more devices sharing the same
+  physical channel form a piconet.One Bluetooth device acts as the master of the piconet,
+  whereas the other device(s) act as slave(s). Up to seven slaves can
+  be active in a Piconet. The channel access is controlled by the
+  master. 
+
+  [[./images/01.png]]
+
+  Data is transmitted over the air in packets with two modes:
+  
+  - Basic Rate
+
+    1Mbps
+
+  - Enhanced Data Rate(Optional)
+
+    2 ~ 3 Mbps
+
 
 * Time Division Duplex
 

@@ -1,0 +1,172 @@
+#+TITLE: Generic Access Profile(BLE)
+
+* Overview
+  The sections of the GAP chapter in the core specification that
+  apply to Bluetooth Low Energy define the following different aspects
+  of device interaction:
+
+  - Roles
+
+    Each device can operate in one or more roles at the same time.Each
+    role imposes restrictions and enforces certain behavioral
+    requirements. 
+
+  - Modes
+
+    Further refining the concept of a role, a mode is a state in which
+    the device can switch to for a certain amount of time to achieve a
+    particular goal or, more especifically, to allow a peer to perform
+    a particular procedure.
+
+  - Procedures
+
+    A procedure is a sequence of actions (usually Link Layer control
+    sequences or packet exchanges) that allows a device to attain a
+    certain goal. A procedure is typically associated with a mode on
+    the other peer, so they are often tightly coupled together.
+
+  - Security
+
+    GAP builds on top of the Security Manager and the Security Manager
+    Protocol by defining security modes and procedures that specify
+    how peers set the level of security required by a particular data
+    exchange and later how that security level is enforced. GAP
+    further defines additional security features not associated with
+    particular modes or procedures, and implementations are free to
+    use those to increase the level of data protection required by
+    each application.
+
+  - Additional GAP Data Formats
+    
+    In addition to all of the above, GAP is also used as a placeholder
+    for certain additional data format definitions that are related to
+    the modes and procedures defined by the GAP sepcification.
+
+* Roles
+
+  GAP specifies four roles that a device can adopt to join a BLE
+  network:
+
+  - Broadcaster
+
+    transmit-only applications that distribute data regularly, the
+    broadcaster role periodically sends out advertising packets with
+    data. Broadcasters send data in advertising packets rather than
+    connection data packets, and the data is accessible to any device
+    that is listening. The broadcaster role uses the Link Layer
+    advertiser role.
+
+  - Observer
+
+    receive-only applications that want to collect data from
+    broadcasting devices, the observer role listens for data embedded
+    in advertising packets from broadcasting peers. The observer role
+    uses the Link Layer scanner role.
+
+  - Central
+
+    The central role corresponds to the Link Layer master. A device
+    capable of establishing multiple connections to peers, the central
+    role is always the initiator of connections and essentially allows
+    devices onto the network. 
+
+    The central starts by listening for other devices’ advertising
+    packets and then initiates a connection with a selected
+    device. This process can be repeated to include multiple devices
+    in a single network.
+
+  - Peripheral
+
+    The peripheral role corresponds to the Link Layer slave. This role
+    uses advertising packets to allow centrals to find it and,
+    subsequently, to establish a connection with it.
+
+
+  Each particular device can operate in one or more roles at a time,
+  and the specification imposes no restrictions on this regard.
+
+* Modes and Procedures
+
+  #+CAPTION: Modes and their applicable procedures
+  | Mode                 | Applicable Role(s)              | Applicable Peer Procedure(s)  |
+  |----------------------+---------------------------------+-------------------------------|
+  | Broadcast            | Broadcaster                     | Observation                   |
+  | Non-discoverable     | Peripheral                      | N/A                           |
+  | Limited discoverable | Peripheral                      | Limited and General Discovery |
+  | General discoverable | Peripheral                      | General Discovery             |
+  | Non-connectable      | Peripheral,Broadcaster,Observer | N/A                           |
+  | Any-connectable      | Peripheral                      | Any connection establishment  |
+  |----------------------+---------------------------------+-------------------------------|
+  
+
+  #+CAPTION: Procedures and their required modes
+  | Procedure                    | Aplicable Role(s)   | Applicable Peer Mode(s)       |
+  |------------------------------+---------------------+-------------------------------|
+  | Observation                  | Observer            | Broadcast                     |
+  | Limited Discovery            | Central             | Limited discoverable          |
+  | General discovery            | Central             | Limited and General Discovery |
+  | Name discovery               | Central, Peripheral | N/A                           |
+  | Any connection establishment | Central             | Any connectable               |
+  | Connection parameter update  | Peripheral,Central  | N/A                           |
+  | Terminate connection         | Peripheral,Central  | N/A                           |
+  |------------------------------+---------------------+-------------------------------|
+
+** Broadcast and Observation
+
+   The broadcast mode and the observation procedure defined in GAP establish the framework
+   through which devices can send data unidirectionally, as a broadcaster to one or
+   more actively listening peer devices (the observers).
+
+   a broadcaster broadcasts data without any confirmation or acknowledgement, and an
+   observer listens (temporarily or indefinitely) for potential broadcasters without any
+   guarantee of ever actually receiving any data.
+
+   The advertising packets sent by the broadcaster contain actual valid user data, along
+   with a few items of metadata (such as Bluetooth device address)
+   inserted by the Link Layer.
+
+   Each advertising packet contains up to 31 bytes of data (the actual
+   available user data length will be lower due to headers and format
+   overheads), but that can be doubled by using the scan request/ scan
+   response transaction just after the successful reception of an
+   advertising packet on the part of the observer, yielding up to 62
+   bytes of data per advertising event. 
+
+   Since a scan response packet is sent only upon request from the
+   observer, the most critical and important data should always be placed
+   in the advertising packet itself, not in the scan response packet. A
+   broadcaster can send =ADV_NONCONN_IND= or =ADV_SCAN_IND= advertising
+   packets.
+
+** Discovery
+
+   A device’s discoverability refers to how the peripheral advertises its presence to other
+   devices and what those devices can or should do with that information. The differences
+   between the different discoverable modes and discovery procedures concern whether
+   advertising and scanning are actually being performed but also take into account the
+   nature of the data included in advertising packets. More specifically, a SIG-defined optional
+   field within the advertising data named *Flags AD* governs a device’s discoverable
+   mode.
+
+   Used only by peripherals, these modes allow central devices to discover peripherals
+   within their listening range. Discovery commonly refers to detecting the presence and
+   the basic information of another device nearby. That does not necessarily imply an
+   intention to create a connection or exchange data, although that is naturally often the
+   case. In some instances, and especially with central devices equipped with user-visible
+   displays, discovery is simply used to populate a list with nearby devices from which the
+   user can then select one.
+
+   
+*** Discoverability modes
+
+    The following discoverability modes allow a certain amount of flexibility to peripheral
+    designers, depending on design priorities (battery life, fast
+    connection times, etc.):
+
+    - Non-discoverable mode
+
+      
+
+
+
+

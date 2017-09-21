@@ -6,8 +6,8 @@ layout: default
     <div class="container">
       <div class="row">
         <div class="col-sm-12">
-          <h1>Linker Manager Protocol学习笔记</h1>
-          <p>Bluetooth Core Specification V5.0 Linker Manager Protocol learning notes.</p>
+          <h1>BLE链接管理</h1>
+          <p>Bluetooth Low Energy深入研究笔记。</p>
         </div>
       </div>
     </div>
@@ -17,7 +17,7 @@ layout: default
 
 
 <div id="content" class="container">
-<div class="row"><div class="col-md-9"><h1 class="title">蓝牙链接层管理</h1>
+<div class="row"><div class="col-md-9"><h1 class="title">BLE链接层管理</h1>
 
 <div id="outline-container-sec-1" class="outline-2">
 <h2 id="sec-1"><span class="section-number-2">1</span> 概述</h2>
@@ -81,8 +81,7 @@ Scanning状态。可以拥有多个状态机实例。
 Initiating状态。 
 </li>
 <li>当设备角色为Slave时，如果链路层已经工作在Connection或Initiating
-状态，则链路层不能工作在Advertising状态，如果处于该广播状态会导
-致链路层进入Connection状态的话。
+状态，如果处于广播状态会导致链路层进入Connection状态的话。则链路层不能工作在Advertising状态，
 </li>
 </ol>
 </div>
@@ -346,7 +345,7 @@ connSlaveLatency) * connInterval。
 <h2 id="sec-11"><span class="section-number-2">11</span> 连接建立过程</h2>
 <div class="outline-text-2" id="text-11">
 <p>
-当Initiator发送CONNECT_REQ包时，链路层已经处于连接状态，且角色为
+当Initiator发送 <code>CONNECT_REQ</code> 包时，链路层已经处于连接状态，且角色为
 Master。
 </p>
 </div>
@@ -359,7 +358,7 @@ Master。
 <li>连接更新过程
 
 <p>
- 主机可通过LL_CONNECTION_UPDATE_REQ请求更新连接参数（connInterval, connSlaveLatency and connSupervisionTimeout）。
+ 主机可通过 <code>LL_CONNECTION_UPDATE_REQ</code> 请求更新连接参数（connInterval, connSlaveLatency and connSupervisionTimeout）。
 (connIntervalmin(Host specified)&lt;connInterval&lt;connIntervalmax(Host Specified)
 </p>
 
@@ -378,7 +377,7 @@ instant处或之前发生的连接事件。
 </p>
 
 <p>
-当从设备接收到一个LL<sub>CONNECTION</sub><sub>UPDATE</sub><sub>REQ协议数据包，且</sub>
+当从设备接收到一个 <code>LL_CONNECTION_UPDATE_REQ</code> 协议数据包，且
 (Instant - connEventCount) % 65536 &gt;= 32767时，从设备的链路层应当
 认为连接已经丢失，并退出连接状态。
 </p>
@@ -462,11 +461,4 @@ PDU类型有如下一些：
 </div>
 </nav>
 </div></div></div>
-<footer id="postamble" class="">
-<div><p class="author">Author: Fu Yajun</p>
-<p class="date">Created: 2017-06-21 三 20:40</p>
-<p class="creator"><a href="http://www.gnu.org/software/emacs/">Emacs</a> 25.2.1 (<a href="http://orgmode.org">Org-mode</a> 8.2.10)</p>
-</div>
-</footer>
-</body>
 </html>

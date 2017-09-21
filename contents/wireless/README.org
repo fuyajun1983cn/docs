@@ -26,7 +26,7 @@
 
 * 009
   CWAP学习笔记
-
+  
 * 010
   CWNA学习笔记
 
@@ -89,3 +89,9 @@
 
 * 030
   BLE Protocol Basics
+
+* 031
+  GAP Proifle
+
+* 032
+  

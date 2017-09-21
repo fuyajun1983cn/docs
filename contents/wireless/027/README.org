@@ -1,9 +1,216 @@
 #+TITLE: A2DP要点记录
 
-* Feature and Procedure
 
+* Profile Overview
+
+  #+CAPTION: Protocol Model
+  [[./images/01.png]]
+
+  The Baseband, LMP, L2CAP, and SDP are Bluetooth protocols defined in
+  the Bluetooth Core specifications. AVDTP consists of a signaling entity for
+  negotiation of streaming parameters and a transport entity that handles streaming itself.
+
+  The entity in the application layer defines application service and
+  transport service parameters. The entity also adapts the audio
+  streaming data into the defined packet format, or vice versa. 
+
+** Configurations and Roles
+   The following roles are defined for devices that implement this
+   profile:
+
+   - Source (SRC)
+
+     A device is the *SRC* when it acts as a source of a digital audio
+     stream that is delivered to the *SNK* of the piconet.
+
+   - Sink (SNK)
+
+     A device is the *SNK* when it acts as a sink of a digital audio
+     stream delivered from the *SRC* on the same piconet.
+
+
+* Application Layer
+
+** Audio Streaming Set Up
+   When a device wishes to start streaming of audio content, the device firstly needs to set
+   up a streaming connection.
+   
+   During such set up procedure, the devices select the most suitable
+   audio streaming parameters. There are two kinds of services
+   configured; one is an application service capability, and the other is
+   a transport service capability. This profile specifies
+   audio-specific parameters necessary for these signaling
+   procedures. 
+
+   The application service capability for A2DP consists of audio codec capability and
+   content protection capability.
+
+   The transport service capability is provided by AVDTP in order to manipulate the
+   streaming packets more intelligently. Appropriate configuration of these services
+   increases channel throughput.
+
+*** Signaling procedures
+
+    #+CAPTION: Audio Streaming Set Up
+    [[./images/02.png]]
+    
 ** Audio Streaming
+   Once streaming connection is established and Start Streaming procedure in GAVDP is
+   executed, both SRC and SNK are in the STREAMING state, in which the SRC (SNK) is
+   ready to send (receive) audio stream.The SRC uses the Send Audio
+   Stream procedure to send audio data to the SNK, which in turn
+   employs the Receive Audio Stream procedure to receive the audio
+   data.
+
+   Note again that the devices shall be in the STREAMING state to send/receive audio
+   stream. If the SRC/SNK wishes to send/receive the audio stream whereas the state is
+   still at OPEN, the SRC/SNK shall initiate Start Streaming procedure
+   defined in GAVDP.
+
+*** Signaling Procedure
+
+    #+CAPTION: Audio Streaming
+    [[./images/04.png]]
 
 *** Send Audio Stream
 
+    In the Send Audio Stream procedure, the SRC shall, if needed, encode the data into a
+    selected format in the signaling session. Then, the application layer of the SRC shall
+    adapt the encoded data into the defined media payload format.
+
+    When content protection is in use, a content protection header may precede encrypted
+    audio content. This is content protection method dependent.
+
+    Afterwards, the stream data shall be handed down to the AVDTP entity through the
+    exposed interface (Interface 4) defined in Chapter 2 of AVDTP. The stream data
+    shall be sent out on the transport channel using the selected transport services defined
+    in Section 5.4 of AVDTP
+
 *** Receive Audio Stream
+    
+    The AVDTP entity of the SNK shall receive the stream data from the transport channel
+    using the selected transport services and pass it to the application layer by exposed
+    interface defined in Chapter 2 of AVDTP
+
+    When a content protection method is active, the application layer of the SNK shall
+    process the retrieved AVDTP payload as described by the content protection method.
+    Typically, this processing entails content protection header analysis and decryption of
+    associated encrypted content.
+
+    If applicable, the frame of audio data shall be decoded according to the selected coding
+    format.
+
+    #+CAPTION: Block Diagram of Audio Streaming Procedures and the Packet Format
+    [[./images/03.png]]
+
+* Audio Codec Interoperability Requirements
+
+  
+** Support of Codecs
+
+   | Codec Type     | Support |
+   |----------------+---------|
+   | SBC            | M       |
+   | MPEG-1,2 Audio | O       |
+   | MPEG-2,4 AAC   | O       |
+   | ATRAC family   | O       |
+   |----------------+---------|
+   
+   
+*** Codec Interoperability Requirements
+    
+    When the SRC wishes to send an audio data whose codec format is not supported by
+    the SNK, the data shall be transcoded into SBC. Therefore, the following requirements
+    are applied to the SRC when it supports Non-Mandatory codecs.
+
+    - Transcoding to SBC is only required for any SRC input whose
+      format is not supported by the SNK
+
+    For example, when the SRC accepts pre-encoded audio data in the Non-Mandatory
+    codec format, the SRC shall have a decoder of this Non-Mandatory codec as well as a
+    SBC encoder for transcoding.
+
+    
+** SBC
+   
+   #+CAPTION: Codec Specific Information Elements for SBC
+   [[./images/05.png]]
+
+   Note: In the Get Capabilities Response of AVDTP, one or more bits may be defined/set
+   in each field. On the other hand, in the Set Configuration Command and the
+   Reconfigure Command of AVDTP, only one bit shall be defined/set in
+   each field.
+
+   
+*** Sampling Frequency
+
+    #+CAPTION: Sampling Frequency for SBC
+    [[./images/06.png]]
+
+    
+*** Channel Mode
+
+    #+CAPTION: Channel Mode for SBC
+    [[./images/07.png]]
+
+    
+*** Block Length
+
+    Both encoder in the SRC and decoder in the SNK shall support all
+    of the parameters.
+
+    #+CAPTION: Block Length for SBC
+    [[./images/08.png]]
+
+    
+*** Subbands
+
+    #+CAPTION: Number of Subbands for SBC
+    [[./images/09.png]]
+
+*** Allocation Method
+
+    #+CAPTION: Allocation Method for SBC
+    [[./images/10.png]]
+
+    
+*** Minimum / Maximum Bitpool Value
+
+    The codec information that determines the bit rate is contained in the SBC frame header
+    and repeatedly sent to the SNK associated with audio data stream. The SRC is capable
+    of changing the bit rate dynamically by changing the bitpool parameter without
+    suspending. The other parameters can be changed during the Change Parameters
+    procedure defined in GAVDP.
+
+    The decoder of the SNK shall support all possible bitpool values that do not result in
+    excess of the maximum bit rate. This profile limits the available maximum bit rate to
+    320kb/s for mono, and 512kb/s for two-channel modes.
+
+    #+CAPTION: Recommended sets of SBC parameters in the SRC device
+    [[./images/11.png]]
+
+    Note again that the frame length shown in this table is variable according to the bitpool
+    value. For the most efficient use of the transport in L2CAP, the frame length may be
+    adjusted when media payload is constructed.
+
+* Generic Audio/Video Distribution Profile
+
+** Signaling process
+
+   In the following diagrams the SRC is assumed to be the INT, while
+   the SNK to be the ACP. However, the INT/ACP roles are flexible; for
+   example, it is possible that the SRC initiates the Connection
+   Establishment procedure, followed by a Start Streaming procedure
+   initiated by the SNK. It depends on the implementation.
+
+   
+*** Streaming setup and release
+
+    [[./images/12.png]]
+
+*** Streaming Suspend and Resume
+
+    [[./images/13.png]]
+
+    
+    

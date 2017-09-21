@@ -1,0 +1,12 @@
+#+TITLE: Generic Access Profile(BR/EDR)
+
+
+* Bluetooth Parameters Representation
+  
+* Modes
+
+* Idle Mode Procedures
+
+* Authentication
+
+* Security

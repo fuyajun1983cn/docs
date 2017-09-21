@@ -170,14 +170,14 @@
 
 * 连接建立过程
 
-  当Initiator发送CONNECT_REQ包时，链路层已经处于连接状态，且角色为
+  当Initiator发送 =CONNECT_REQ= 包时，链路层已经处于连接状态，且角色为
   Master。
 
 * 链路层控制
 
   1. 连接更新过程
 
-     主机可通过LL_CONNECTION_UPDATE_REQ请求更新连接参数（connInterval, connSlaveLatency and connSupervisionTimeout）。
+     主机可通过 =LL_CONNECTION_UPDATE_REQ= 请求更新连接参数（connInterval, connSlaveLatency and connSupervisionTimeout）。
 	(connIntervalmin(Host specified)<connInterval<connIntervalmax(Host Specified)
  
      Instant:连接更新请求的一个域值，它表示连接事件计数值达到某个值的
@@ -190,7 +190,7 @@
      收到了它发出的ACK包或者connEventCount = Instant。从设备也应该监听
      instant处或之前发生的连接事件。 
 
-     当从设备接收到一个LL_CONNECTION_UPDATE_REQ协议数据包，且
+     当从设备接收到一个 =LL_CONNECTION_UPDATE_REQ= 协议数据包，且
      (Instant - connEventCount) % 65536 >= 32767时，从设备的链路层应当
      认为连接已经丢失，并退出连接状态。
 

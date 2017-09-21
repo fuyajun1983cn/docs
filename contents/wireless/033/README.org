@@ -1,0 +1,119 @@
+#+TITLE: PAN Profile
+
+* Introduction
+
+  The document describes how to use the Bluetooth Network
+  Encapsulation Protocol (BNEP) Specification to provide
+  networking capabilities for Bluetooth devices.
+
+  The PAN profile defines a means of enabling Bluetooth devices to
+  participate in a personal area network. Completely un-modified
+  Ethernet payloads can be transmitted using the Bluetooth Network
+  Encapsulation Protocol (BNEP) to exchange packets between Bluetooth
+  devices.
+
+  The profile defines how PAN is supported in the following
+  situations.
+
+  - Ad-hoc IP networking by two or more Bluetooth devices in a single
+    piconet.
+
+  - Network access for one or more Bluetooth devices.
+
+* Profile overview
+  
+** Scenarios
+
+   For this profile, three general scenarios are discussed:
+ 
+   (1) Network access points,
+
+   (2) Group Ad-hoc Networks, 
+
+   (3) PANU-PANU. 
+
+   Each of the scenarios has unique network architecture and unique
+   network requirements, but all are various combinations of a PAN.
+
+   
+*** Network Access Points
+
+    A network access point is a unit that contains one or more
+    Bluetooth radio devices and acts as a bridge, proxy, or router
+    between a Bluetooth network and some other network technology.
+
+    Network access points SHALL provide access to other networks via
+    technologies such as Ethenet, ISDN, Home PNA, Cable Modem and
+    cellular. 
+
+    
+*** Group Ad-hoc Networks
+
+    Group ad-hoc networking allows mobile hosts to cooperatively
+    create ad-hoc wireless networks without the use of additional
+    networking hardware or infrastructure.
+
+*** PANU-PANU
+
+    In this scenario, a point to point connection between two PANUs
+    allows direct communication between these two nodes only.
+
+** PAN Profile Scenarios summary
+
+   The NAP role provides network services to each of the Bluetooth
+   devices connected, while the GN role allows two or more Bluetooth
+   devices to become part of an ad-hoc network. 
+
+   Connecting to a Network Access Point or the formation of a Group
+   Ad-hoc Network provide the facility for applications to use IP and
+   other networking protocols. 
+
+   Connections between two PANUs are used to simulate a cross-over
+   cable between two nodes only.
+
+** Profile stack
+
+   #+CAPTION: Network Access Point Profile Stack for Phase I
+   [[./images/01.png]]
+
+   
+   #+CAPTION: Group Ad-hoc Network Profile Stack for Phase I
+   [[./images/02.png]]
+
+   
+   #+CAPTION: PANU to PANU Profile Stack for Phase I
+   [[./images/03.png]]
+
+   ME is the Management Entity which co-ordinates procedures during
+   initialization, configuration and connection management.
+
+** Configurations and roles
+
+   The following roles are defined within the PAN profile.
+
+   - Network Access Point (NAP) and NAP service
+
+     The device with the NAP service forwards Ethernet packets between
+     each of the connected Bluetooth devices, referred to as PAN
+     users, see below. A device with the NAP service is simply
+     referred to as a NAP. The NAP and the PAN User exchange data
+     using the Bluetooth Network Encapsulation Protocol (BNEP)
+
+   - Group Ad-hoc Network (GN) and GN service
+
+     A Bluetooth device that supports the GN service is able to
+     forward Ethernet packets to each of the connected Bluetooth
+     devices, the PAN users, as needed. The Group Ad-hoc Network and
+     the PAN User exchange data using the Bluetooth Network
+     Encapsulation Protocol (BNEP) 
+
+     Group Ad-hoc Networks do not provide access to any additional
+     networks. Instead, Group Ad-hoc Networks are intended to allow a
+     group of devices to form temporary network and exchange
+     information.
+
+   - PAN User (PANU) and PANU service
+
+     This is the Bluetooth device that uses either the NAP or the GN
+     service. PANU supports the client role for both the NAP and GN
+     roles, and direct PANU to PANU communication. 
