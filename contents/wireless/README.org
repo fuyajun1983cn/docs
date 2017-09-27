@@ -1,97 +1,122 @@
 #+TITLE: 目录索引
 
-* 001
+* ✔ DONE 001
+  CLOSED: [2017-09-27 三 18:55]
   802.11e
 
-* 002
+* ✔ DONE 002
+  CLOSED: [2017-09-27 三 18:55]
   hostapd初始化流程源码分析
 
-* 003
+* ✔ DONE 003
+  CLOSED: [2017-09-27 三 18:55]
   蓝牙学习总结
-
-* 004
+  
+* ✔ DONE 004
+  CLOSED: [2017-09-27 三 18:55]
   802.1X
 
-* 005
+* ✔ DONE 005
+  CLOSED: [2017-09-27 三 18:55]
   802.11ac
 
-* 006
+* ⚑ WAITING 006
   802.11i学习笔记
 
-* 007
+* ✔ DONE 007
+  CLOSED: [2017-09-27 三 19:15]
   802.11n学习笔记
 
-* 008
+* ✔ DONE 008
+  CLOSED: [2017-09-27 三 19:15]
   cfg80211学习笔记
 
-* 009
+* ✔ DONE 009
+  CLOSED: [2017-09-27 三 19:15]
   CWAP学习笔记
   
-* 010
+* ✔ DONE 010
+  CLOSED: [2017-09-27 三 19:15]
   CWNA学习笔记
 
-* 011
+* ✔ DONE 011
+  CLOSED: [2017-09-27 三 19:15]
   EAP协议学习笔记
 
-* 012
+* ⚑ WAITING 012
   iw源码分析记录
 
-* 013
+* ✔ DONE 013
+  CLOSED: [2017-09-27 三 19:15]
   Miracast学习笔记
 
-* 014
+* ✔ DONE 014
+  CLOSED: [2017-09-27 三 19:15]
   MLME学习笔记
 
-* 015
+* ✔ DONE 015
+  CLOSED: [2017-09-27 三 19:20]
   WiFi P2P学习笔记
 
-* 016
+* ✔ DONE 016
+  CLOSED: [2017-09-27 三 19:20]
   WiFi案例集锦
 
-* 017
+* ✔ DONE 017
+  CLOSED: [2017-09-27 三 19:20]
   WiFi驱动学习笔记
 
-* 018
+* ✔ DONE 018
+  CLOSED: [2017-09-27 三 19:20]
   wpa_supplicant学习要点记录
 
 * 019
   wpa学习笔记
 
-* 020
+* ✔ DONE 020
+  CLOSED: [2017-09-27 三 19:20]
   WPS学习笔记
 
-* 021
+* ✔ DONE 021
+  CLOSED: [2017-09-27 三 19:20]
   无线权柄指南
 
-* 022
+* ✔ DONE 022
+  CLOSED: [2017-09-27 三 19:20]
   通信原理概述
 
-* 023
+* ✔ DONE 023
+  CLOSED: [2017-09-27 三 19:20]
   BLE链路层管理
 
-* 024
+* ☛ TODO 024
   LINK MANAGER PROTOCOL SPECIFICATION
 
-* 025
+* ✔ DONE 025
+  CLOSED: [2017-09-27 三 19:20]
   L2CAP学习笔记
 
-* 026
+* ☛ TODO 026
   HFP Profile
 
-* 027
+* ☛ TODO 027
   A2DP Profile
 
-* 028
+* ☛ TODO 028
   Base Band Controller
 
-* 029
+* ☛ TODO 029
   Host Controller Interface
 
-* 030
+* ✔ DONE 030
+  CLOSED: [2017-09-27 三 19:20]
   BLE Protocol Basics
 
-* 031
+* ☛ TODO 031
   GAP Proifle
 
-* 032
-  
+* ☛ TODO 032
+  GAP(BLE)
+
+* ☛ TODO 033
+  PAN

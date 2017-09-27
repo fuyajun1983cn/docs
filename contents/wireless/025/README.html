@@ -1,0 +1,804 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>L2CAP学习笔记</h1>
+          <p>Bluetooth Core Specification 5.0, L2CAP protocol specification learning notes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">L2CAP协议学习</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> 概述</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+The Bluetooth logical link control and
+adaptation protocol (L2CAP) supports
+higher level protocol <b>multiplexing</b>,
+<b>packet segmentation</b> and <b>reassembly</b>,
+and the conveying of quality of service
+information. The protocol state
+machine, packet format, and
+composition are described in this
+document.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> INTRODUCTION</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+L2CAP provides connectionoriented and connectionless data services
+to upper layer protocols with protocol multiplexing capability and
+segmentation and reassembly operation.
+</p>
+
+<p>
+Upper layer data packets (L2CAP Service Data Units, SDU) is up to 64
+kilobytes in length. 
+</p>
+
+<p>
+L2CAP also permits per-channel flow control and retransmission.
+</p>
+
+<p>
+The L2CAP layer provides logical channels, named L2CAP channels, which
+are multiplexed over one or more logical links.
+</p>
+</div>
+
+<div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1"><span class="section-number-3">2.1</span> L2CAP FEATURES</h3>
+<div class="outline-text-3" id="text-2-1">
+
+<figure>
+<p><img src="./images/001.png" class="img-responsive" alt="001.png">
+</p>
+</figure>
+</div>
+
+<div id="outline-container-sec-2-1-1" class="outline-4">
+<h4 id="sec-2-1-1"><span class="section-number-4">2.1.1</span> Protocol/channel multiplexing</h4>
+<div class="outline-text-4" id="text-2-1-1">
+<p>
+An L2CAP channel shall operate over one Controller at a
+time. During channel setup, protocol multiplexing capability is
+used to route the connection to the correct upper layer protocol. 
+</p>
+
+<p>
+For data transfer, logical channel multiplexing is needed.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-1-2" class="outline-4">
+<h4 id="sec-2-1-2"><span class="section-number-4">2.1.2</span> Segmentation and reassembly</h4>
+<div class="outline-text-4" id="text-2-1-2">
+<p>
+This provides the following benefits:
+</p>
+<ul class="org-ul">
+<li>Segmentation will allow the interleaving of application data
+units in order to satisfy latency requirements.
+</li>
+<li>Memory and buffer management is easier when L2CAP controls the packet size.
+</li>
+<li>Error correction by retransmission can be made more efficient.
+</li>
+<li>The amount of data that is destroyed when an L2CAP PDU is
+corrupted or lost can be made smaller than the application's
+data unit.
+</li>
+<li>The application is decoupled from the segmentation required to
+map the application packets into the lower layer packets.
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-2-1-3" class="outline-4">
+<h4 id="sec-2-1-3"><span class="section-number-4">2.1.3</span> Flow control per L2CAP channel</h4>
+<div class="outline-text-4" id="text-2-1-3">
+<p>
+Controllers provide error and flow control for data going over the air and HCI
+flow control exists for data going over an HCI transport. When several data
+streams run over the same Controller using separate L2CAP channels, each
+channel requires individual flow control. A window based flow control
+scheme is provided.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-1-4" class="outline-4">
+<h4 id="sec-2-1-4"><span class="section-number-4">2.1.4</span> Error control and retransmissions</h4>
+<div class="outline-text-4" id="text-2-1-4">
+<p>
+L2CAP provides error checks and retransmissions of L2CAP PDUs.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-1-5" class="outline-4">
+<h4 id="sec-2-1-5"><span class="section-number-4">2.1.5</span> Support for Streaming</h4>
+<div class="outline-text-4" id="text-2-1-5">
+<p>
+Streaming applications such as audio set up an L2CAP channel with an
+agreed-upon data rate。 don't use flow control mechanisms in L2CAP
+layer and below(HCI &amp; Controller). A flush timeout is used to keep data flowing on
+the transmit side.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-1-6" class="outline-4">
+<h4 id="sec-2-1-6"><span class="section-number-4">2.1.6</span> Fragmentation and Recombination</h4>
+<div class="outline-text-4" id="text-2-1-6">
+<p>
+During transmission of an L2CAP PDU, many different levels of
+fragmentation and recombination may occur in both peer devices.
+</p>
+
+<p>
+However the PDU is fragmented within the stack, the
+receiving L2CAP entity still recombines the fragments to obtain the original
+L2CAP PDU.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2-1-7" class="outline-4">
+<h4 id="sec-2-1-7"><span class="section-number-4">2.1.7</span> Quality of Service</h4>
+<div class="outline-text-4" id="text-2-1-7">
+<p>
+The L2CAP connection establishment process allows the exchange of
+information regarding the quality of service (QoS) expected between two
+Bluetooth devices. Each L2CAP implementation monitors the resources
+used by the protocol and ensures that QoS contracts are honored.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2"><span class="section-number-3">2.2</span> ASSUMPTIONS</h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+The protocol is designed based on the following assumptions:
+</p>
+<ol class="org-ol">
+<li>Controllers provide orderly delivery of data packets, although
+there might be individual packet corruption and duplicates.
+</li>
+<li>Controllers always provide the impression of full-duplex
+communication channels. This does not imply that all L2CAP
+communications are bidirectional. Unidirectional traffic does
+not require duplex channels.
+</li>
+<li>The L2CAP layer provides a channel with a degree of reliability
+based on the mechanisms available in Controllers and with
+additional packet segmentation, error detection, and
+retransmission that can be enabled in the enhanced L2CAP layer.
+</li>
+<li>Controllers provide error and flow control for data going over
+the air and HCI flow control exists for data going over an HCI
+transport. It has four modes to provide different level of flow
+control requirements. The Flow and Error Control block provides four modes:
+<ul class="org-ul">
+<li>Enhanced Retransmission mode
+offer segmentation, flow control and L2CAP PDU retransmissions.
+</li>
+<li>Retransmission Mode
+offer segmentation, flow control and L2CAP PDU retransmissions.
+</li>
+<li>Flow control mode
+offers just the segmentation and flow control functions.
+</li>
+<li>Streaming mode
+offers segmentation and receiver side packet flushing.
+</li>
+</ul>
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-2-3" class="outline-3">
+<h3 id="sec-2-3"><span class="section-number-3">2.3</span> SCOPE</h3>
+<div class="outline-text-3" id="text-2-3">
+<p>
+The following features are outside the scope of L2CAP’s
+responsibilities:
+</p>
+<ol class="org-ol">
+<li>L2CAP does not transport synchronous data designated for SCO or
+eSCO logical transports.
+</li>
+<li>L2CAP does not support a reliable broadcast channel.
+</li>
+</ol>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> GENERAL OPERATION</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+L2CAP is based around the concept of ’channels’. Each one of the endpoints of
+an L2CAP channel is referred to by a <i>channel identifier (CID)</i>.
+</p>
+
+
+<figure>
+<p><img src="./images/004.png" class="img-responsive" alt="004.png">
+</p>
+<figcaption><span class="figure-number">Figure 2:</span> Dynamically allocated CID assignments</figcaption>
+</figure>
+
+<p>
+The AMP-U logical link shares the CID name space with its associated
+ACL-U logical link.
+</p>
+</div>
+
+<div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> CHANNEL IDENTIFIERS</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+A channel is a single sequence of packets, from and to a single pair of
+services on a single device. Between two devices, there can be multiple channels active at the same
+time.
+</p>
+
+<p>
+A channel identifier (CID) is the local name representing a logical channel
+endpoint on the device. The null identifier (0x0000) shall never be used as a
+destination endpoint. Identifiers from 0x0001 to 0x003F are reserved for
+specific L2CAP functions.At a minimum, the L2CAP Signaling channel (Fixed Channel 0x0001) or the
+L2CAP LE Signaling channel (Fixed Channel 0x0005) shall be
+supported. The Information Request / Response mechanism shall be used to determine which fixed channels a remote
+device supports over the ACL-U logical link.
+</p>
+
+<p>
+The characteristics of each fixed channel are defined on a per channel basis.
+Fixed channel characteristics include configuration parameters (e.g., reliability,
+MTU size, QoS), security, and the ability to change parameters using the
+L2CAP configuration mechanism. Fixed channels shall only run over ACL-U, ASB-U, or
+LE-U logical links and shall not be moved.
+</p>
+
+<p>
+In Bluetooth low energy, only fixed channels are supported. Fixed channels don’t have any configuration
+parameters to negotiate, and they exist as soon as the lower layers have established a connection;
+consequently, there is no time wasted waiting for the channel to be
+created. Only those fixed channels support connectionless model. 
+</p>
+
+<p>
+for the remaining CIDs, two simultaneously active L2CAP channels
+shall not share the same CID.
+</p>
+
+
+<figure>
+<p><img src="./images/007.png" class="img-responsive" alt="007.png">
+</p>
+<figcaption><span class="figure-number">Figure 3:</span> L2CAP Channel Identifiers</figcaption>
+</figure>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><span class="section-number-3">3.2</span> OPERATION BETWEEN DEVICES</h3>
+<div class="outline-text-3" id="text-3-2">
+
+<figure>
+<p><img src="./images/002.png" class="img-responsive" alt="002.png">
+</p>
+<figcaption><span class="figure-number">Figure 4:</span> Channels between devices</figcaption>
+</figure>
+
+<p>
+There are also a number of CIDs reserved for special purposes. 
+</p>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+<caption class="t-above"><span class="table-number">Table 1:</span> Types of Channel Identifiers</caption>
+
+<colgroup>
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">Channel Type</th>
+<th scope="col" class="text-left">Local CID (sending)</th>
+<th scope="col" class="text-left">Remote CID (receiving)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">Connection-oriented</td>
+<td class="text-left">Dynamically allocated and fixed</td>
+<td class="text-left">Dynamically allocated and fixed</td>
+</tr>
+
+<tr>
+<td class="text-left">Connectionless data</td>
+<td class="text-left">0x0002 (fixed)</td>
+<td class="text-left">0x0002 (fixed)</td>
+</tr>
+
+<tr>
+<td class="text-left">L2CAP Signaling</td>
+<td class="text-left">0x0001 and 0x0005 (fixed)</td>
+<td class="text-left">0x0001 and 0x0005 (fixed)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+<div id="outline-container-sec-3-3" class="outline-3">
+<h3 id="sec-3-3"><span class="section-number-3">3.3</span> OPERATION BETWEEN LAYERS</h3>
+<div class="outline-text-3" id="text-3-3">
+<p>
+L2CAP implementations transfer data between upper layer protocols
+and the lower layer protocol.any L2CAP implementation should:
+</p>
+<ul class="org-ul">
+<li>export a number of services
+</li>
+<li>support a set of signaling commands
+</li>
+<li>accept certain types of events from lower layers and generate
+events to upper layers. 
+</li>
+</ul>
+
+
+
+<figure>
+<p><img src="./images/003.png" class="img-responsive" alt="003.png">
+</p>
+<figcaption><span class="figure-number">Figure 5:</span> L2CAP transaction model</figcaption>
+</figure>
+</div>
+</div>
+
+<div id="outline-container-sec-3-4" class="outline-3">
+<h3 id="sec-3-4"><span class="section-number-3">3.4</span> MODES OF OPERATION</h3>
+<div class="outline-text-3" id="text-3-4">
+<p>
+L2CAP channels may operate in one of five different modes as selected for
+each L2CAP channel.
+</p>
+
+<p>
+The modes are:
+</p>
+
+<ul class="org-ul">
+<li>Basic L2CAP Mode (equivalent to L2CAP specification in Bluetooth
+v1.1)
+
+<p>
+the default mode
+</p>
+</li>
+
+<li>Flow Control Mode
+</li>
+
+<li>Retransmission Mode
+</li>
+
+<li>Enhanced Retransmission Mode
+
+<p>
+used for all reliable channels created over AMP-U logical links
+and for ACL-U logical links operation under some conditions.
+</p>
+</li>
+
+<li>Streaming Mode
+
+<p>
+used for streaming applications created over AMP-U logical links
+and ACL-U logical links operating under some conditions.
+</p>
+</li>
+
+<li>LE Credit Based Flow Control Mode
+</li>
+</ul>
+</div>
+
+
+
+<div id="outline-container-sec-3-4-1" class="outline-4">
+<h4 id="sec-3-4-1"><span class="section-number-4">3.4.1</span> Bluetooth LE Credit-Based Flow Control for L2CAP Connection-Oriented Channels</h4>
+<div class="outline-text-4" id="text-3-4-1">
+</div><ol class="org-ol"><li><a id="sec-3-4-1-1" name="sec-3-4-1-1"></a>The theory<br ><div class="outline-text-5" id="text-3-4-1-1">
+<p>
+The L2CAP layer of the BLE Host Stack performs data multiplexing
+through the use of a Channel ID (CID), which is a 2-byte value
+contained by the L2CAP Basic Header, as seen in the general L2CAP
+packet format: 
+</p>
+
+
+<figure>
+<p><img src="./images/005.png" class="img-responsive" alt="005.png">
+</p>
+</figure>
+
+<p>
+Several CIDs are reserved. For instance, 0x0004 is used by the
+ATT, 0x0006 by the SMP, 0x0005 is the Signaling Channel. The
+0x0040-0x007F range is assigned for the Connection-Oriented
+Channels.
+</p>
+
+<p>
+The LE Credit-Based Flow Control is an L2CAP mode of operation
+for Connection-Oriented Channels in which an endpoint device has
+complete control over how many packets the peer device may send
+at any time through the use of credits.
+</p>
+
+<p>
+One credit represents the permission to send one LE-frame over
+the established channel. The receiving device gives a fixed
+number of credits to the sending device, so that the latter knows
+exactly how many LE-frames it may send. The attempt to send more
+frames than permitted results in the receiving device closing the
+channel. 
+</p>
+
+<p>
+An initial number of credits are given by each device to the peer
+when the connection is created. Subsequently, each device can
+give more credits as it deems necessary; if a device wants to
+send more data than it is allowed, there’s nothing it can do but
+wait until it receives more credits from the peer. 
+</p>
+
+<p>
+A Protocol Service Multiplexer must be associated with any
+credit-based connection. It is abbreviated as <code>LE_PSM</code> and is a
+two-byte value identifying the protocol that uses the
+credit-based connection. The specification defined the ranges for
+allowed <code>LE_PSMs</code>; some are reserved by specific profiles
+(e.g. IPSP) and others may be dynamically used by custom
+application profiles. 
+</p>
+</div>
+</li>
+
+<li><a id="sec-3-4-1-2" name="sec-3-4-1-2"></a>The protocol<br ><div class="outline-text-5" id="text-3-4-1-2">
+<p>
+An LE Credit-Based connection is created and managed on the L2CAP
+Signaling Channel, with the following commands and parameters.
+</p>
+
+<ul class="org-ul">
+<li>LE Credit-Based Connection Request, with the parameters:
+
+<ul class="org-ul">
+<li><code>LE_PSM</code>
+</li>
+
+<li>Source Channel ID (SCID)
+</li>
+
+<li>Maximum Transmission Unit (MTU)
+</li>
+
+<li>Maximum Payload Size (MPS)
+</li>
+
+<li>Initial Credits
+</li>
+</ul>
+</li>
+
+<li>LE Credit-Based Connection Response
+
+<ul class="org-ul">
+<li>Destination CID (DCID)
+</li>
+
+<li>MTU
+</li>
+
+<li>MPS
+</li>
+
+<li>Initial Credits
+</li>
+
+<li>Result
+</li>
+</ul>
+</li>
+
+<li>LE Flow Control Credit
+
+<ul class="org-ul">
+<li>CID
+</li>
+
+<li>Credits
+</li>
+</ul>
+</li>
+</ul>
+
+<p>
+The requesting device must specify the LE<sub>PSM</sub> for which the
+connection is opened, the CID to which the responder will send
+data (SCID), the supported MTU and MPS and the initial number of
+credits given to the responder. 
+</p>
+
+<p>
+In turn, the responding device can reject the request (reason is
+found in the Result parameter) or can accept it (Result is 0) and
+also provide the CID where the requesting device can send data
+(DCID), initial credits for this CID and its own MTU and MPS. 
+</p>
+
+<p>
+The minimum values between the two devices’ MTU and MPS are
+used. MTU is the maximum transmission unit, i.e. the maximum size
+of data (an SDU – Service Data Unit) to be transmitted. MPS is
+the maximum payload size, i.e. the maximum size of a single L2CAP
+packet, which is an LE-frame and “eats” one credit when is
+transmitted. 
+</p>
+
+<p>
+At any moment, any of the two devices can send a Flow Control
+Credit command to increase the credits of the peer on the given
+CID.
+</p>
+</div>
+</li>
+
+<li><a id="sec-3-4-1-3" name="sec-3-4-1-3"></a>The data packets - example<br ><div class="outline-text-5" id="text-3-4-1-3">
+<p>
+Let’s assume device A sends an LE Credit-Based Connection Request
+with:
+</p>
+
+<ul class="org-ul">
+<li><code>LE_PSM</code> = 0x0080
+</li>
+<li>SCID = 0x004a
+</li>
+<li>MTU = 100
+</li>
+<li>MPS = 40
+</li>
+<li>I.C. = 5
+</li>
+</ul>
+
+<p>
+Device B answers with an LE Credit-Based Connection Response:
+</p>
+
+<ul class="org-ul">
+<li>DCID = 0x004b
+</li>
+<li>MTU =260
+</li>
+<li>MPS = 60
+</li>
+<li>I.C. = 10
+</li>
+</ul>
+
+<p>
+So MTU becomes 100 and MPS becomes 40. This means that a device
+can send SDUs of maximum 100 bytes, but these 100 bytes will be
+fragmented to fit into LE-frames of maximum 40 bytes payload. 
+</p>
+
+<p>
+An LE-frame contains:
+</p>
+
+<ul class="org-ul">
+<li>The basic L2CAP header: Length (2 bytes) and CID (2 bytes)
+</li>
+<li>Payload (length maximum equal to MPS)
+</li>
+</ul>
+
+<p>
+When a large SDU is sent, the first LE-frame Payload starts with
+2 bytes of SDU Length then follow the first MPS-2 bytes of
+SDU. Subsequent LE-frames each contain MPS bytes of SDU, while
+the last one may contain less than MPS bytes. 
+</p>
+
+<p>
+If device A from our example wants to send an SDU of 90 bytes, it
+would need 3 credits because the 90 bytes can be split in 3
+LE-frames: 
+</p>
+
+
+<figure>
+<p><img src="./images/006.png" class="img-responsive" alt="006.png">
+</p>
+</figure>
+</div>
+</li></ol>
+</div>
+</div>
+
+<div id="outline-container-sec-3-5" class="outline-3">
+<h3 id="sec-3-5"><span class="section-number-3">3.5</span> MAPPING CHANNELS TO LOGICAL LINKS</h3>
+<div class="outline-text-3" id="text-3-5">
+<p>
+L2CAP maps channels to Controller logical links, which in turn run over
+Controller physical links. All logical links going between a local Controller and
+remote Controller run over a single physical link.There is one ACL-U logical
+link per BR/EDR physical link and one LE-U logical link per LE physical link,
+while there may be multiple AMP-U logical links per AMP physical
+link.
+</p>
+
+<p>
+All Best Effort and Guaranteed channels going over a BR/EDR physical link
+between two devices shall be mapped to a single ACL-U logical link. All Best
+Effort channels going over an AMP physical link between two Controllers shall
+be mapped to a single AMP-U logical link while each Guaranteed channel
+going between two Controllers shall be mapped to its own AMP-U logical link
+with one AMP-U logical link per Guaranteed channel. All channels going over
+an LE physical link between two devices shall be treated as best effort and
+mapped to a single LE-U logical link.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> BLE L2CAP</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> L2CAP Channels</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+There are three Bluetooth low energy channels: Channel identifier 0x0004 is used for the Attribute
+Protocol, Channel identifier 0x0005 is used for the Bluetooth low
+energy signaling channel; Channel identifier 0x0006 is used for the
+Security Manager. All the other channel
+identifiers from 0x0007 to 0x003E are reserved, and channel identifiers from 0x0040 to 0xFFFF can
+be used for connection-oriented channels.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> The L2CAP Packet Structure</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+Each L2CAP packet contains a 32-bit header followed by its payload. It is assumed that segmentation
+and reassembly is used; thus, the length of the packet must be included in the packet header so that the
+end of the packet can be determined. The segmentation and reassembly scheme used requires the
+marking of packets over the HCI interface. There is no way to denote that a given L2CAP packet segment is the end of the current packet. This
+means that the only way to determine if the current packet is complete is to either send a new packet,
+assuming that one is ready to be sent, or to include the packet
+length in the very first packet sent.
+</p>
+
+
+<figure>
+<p><img src="./images/008.png" class="img-responsive" alt="008.png">
+</p>
+<figcaption><span class="figure-number">Figure 8:</span> L2CAP Packet Format</figcaption>
+</figure>
+
+<p>
+For all Bluetooth Low Energy channels, the information payload
+starts with a Maximum Transmission Units(MTU) size of 23 bytes. So
+the Bluetooth Low Engergy devices must support a total Length of 27
+bytes data.(4 + 23)
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3" class="outline-3">
+<h3 id="sec-4-3"><span class="section-number-3">4.3</span> The LE Signaling Channel</h3>
+<div class="outline-text-3" id="text-4-3">
+<p>
+The LE Signaling channel is used for Signaling at host layer. as
+illustrated in the following figure, each LE Signaling packet
+contains a single opcode, followed by any parameters. The following
+command opcodes are supported on the LE Signaling channel:
+</p>
+
+<ul class="org-ul">
+<li>Command Reject
+</li>
+<li>Connection Parameter Update Request
+</li>
+<li>Connection Parameter Update Response
+</li>
+</ul>
+
+
+
+<figure>
+<p><img src="./images/009.png" class="img-responsive" alt="009.png">
+</p>
+<figcaption><span class="figure-number">Figure 9:</span> The L2CAP command packet</figcaption>
+</figure>
+
+<p>
+Whenever a signaling command is sent, an identifier is included in the information payload. This
+identifier is just 1 byte in length and is used to match responses with requests.Identifiers can’t be reused unless all other identifiers have
+been used. This leads implementations to use an increment operation
+to ensure this rule is met. indentifier 0x0 is never used. 
+</p>
+
+<p>
+In Bluetooth low energy, because only one request has been defined, and because this request can
+only be sent when no other request is outstanding, the logic for
+identifiers is very simple.
+</p>
+</div>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. 概述</a></li>
+<li><a href="#sec-2">2. INTRODUCTION</a>
+<ul class="nav">
+<li><a href="#sec-2-1">2.1. L2CAP FEATURES</a></li>
+<li><a href="#sec-2-2">2.2. ASSUMPTIONS</a></li>
+<li><a href="#sec-2-3">2.3. SCOPE</a></li>
+</ul>
+</li>
+<li><a href="#sec-3">3. GENERAL OPERATION</a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. CHANNEL IDENTIFIERS</a></li>
+<li><a href="#sec-3-2">3.2. OPERATION BETWEEN DEVICES</a></li>
+<li><a href="#sec-3-3">3.3. OPERATION BETWEEN LAYERS</a></li>
+<li><a href="#sec-3-4">3.4. MODES OF OPERATION</a></li>
+<li><a href="#sec-3-5">3.5. MAPPING CHANNELS TO LOGICAL LINKS</a></li>
+</ul>
+</li>
+<li><a href="#sec-4">4. BLE L2CAP</a>
+<ul class="nav">
+<li><a href="#sec-4-1">4.1. L2CAP Channels</a></li>
+<li><a href="#sec-4-2">4.2. The L2CAP Packet Structure</a></li>
+<li><a href="#sec-4-3">4.3. The LE Signaling Channel</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>
