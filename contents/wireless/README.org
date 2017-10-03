@@ -70,7 +70,7 @@
   CLOSED: [2017-09-27 三 19:20]
   wpa_supplicant学习要点记录
 
-* 019
+* ⚑ WAITING 019
   wpa学习笔记
 
 * ✔ DONE 020

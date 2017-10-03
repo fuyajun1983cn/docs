@@ -1,36 +1,42 @@
 
-* 001
+* ✔ DONE 001
+  CLOSED: [2017-10-03 二 09:45]
   C++学习笔记
 
-* 002
+* ⚑ WAITING 002
   glib编程
 
-* 003
+* ☛ TODO 003
   Javascript学习笔记
 
-* 004
+* ☛ TODO 004
   Java学习笔记
 
-* 005
+* ✔ DONE 005
+  CLOSED: [2017-10-03 二 09:45]
   libpcap编程小结
 
-* 006
+* ⚑ WAITING 006
   lua学习笔记
 
-* 007
+* ✔ DONE 007
+  CLOSED: [2017-10-03 二 09:45]
   设计模式
 
-* 008
+* ☛ TODO 008
   python学习笔记
 
-* 009
+* ✔ DONE 009
+  CLOSED: [2017-10-03 二 09:50]
   css学习笔记
 
-* 010
+* ☛ TODO 010
   算法学习
 
-* 011
+* ✔ DONE 011
+  CLOSED: [2017-10-03 二 09:45]
   C++11 New Features.
 
-* 012
+* ✔ DONE 012
+  CLOSED: [2017-10-03 二 09:55]
   Python数据库操作

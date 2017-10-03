@@ -41,13 +41,58 @@
 
      确定对象是否有name属性，返回一个boolean值。 
 
+** 抽象基类
+   在Python上，如果要声明一个抽象类，必须使用抽象基类。 使用metaclass
+   的机制，可以在创建一个类的时候，Python自动转而去创建另一个类的实例。
+   这个类是MetaAbc，是从abc包中引入的。
+
+   #+CAPTION: 声明一个抽象类接口
+   #+BEGIN_SRC python
+     """
+     define an interface 
+     """
+     import abc
+
+     class MyABC(metaclass=abc.ABCMeta):
+
+         @abc.abstractmethod
+         def do_something(self, value):
+             """Required Method"""
+
+         @abc.abstractproperty
+         def some_property(self):
+             """Required Property"""
+   #+END_SRC
+
+   子类必须实现抽象方法，属性
+
+   #+CAPTION: 子类
+   #+BEGIN_SRC python
+     """subclass"""
+     class MyClass(MyABC):
+         """Implementation of MyABC"""
+
+         def __init__(self, value = None):
+             self._myprop = value
+
+         def do_something(self, value):
+         """Implementation of abstract method"""
+             self._myprop *= 2 + value
+
+         @property
+         def some_property(self):
+             """Implementation of abstract property"""
+             return self._myprop
+
+   #+END_SRC
+
 * 标准库
 
 ** 文本
    
 *** fnmatch
 
-*** COMMENT re
+*** re
     #+CAPTION: 简单示例
     #+BEGIN_SRC python
       import re
@@ -61,7 +106,6 @@
       if __name__ == "__main__": main()    
     #+END_SRC
 ** 数据结构
-
 *** collections 
 
 *** operator
