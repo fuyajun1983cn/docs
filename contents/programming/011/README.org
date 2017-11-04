@@ -211,6 +211,9 @@
        // Compile fails because we haven't define ==(apple, orange)  
   #+END_SRC
 
+  通过关键字class声明的枚举类型是Scoped Enum，引用时必须包含枚举类型的
+  名称。
+
 * =static_assert=
   #+BEGIN_SRC c++
     /*
@@ -391,6 +394,7 @@
   #+END_SRC
 
 * lambda function
+  
   #+BEGIN_SRC c++
     /*
      ,* 15. lambda function
@@ -425,6 +429,29 @@
     // Lambda function works almost like a language extention
     template
     for_nth_item  
+  #+END_SRC
+
+
+  non-local variables can always be accessed in a lambda, local
+  variables have to be captured. 
+
+  #+BEGIN_SRC c++
+    // non-local variables can always be accessed in a lambda
+    function<bool()> g() 
+    {
+        static auto a = 5;
+        static auto b = -3;
+        return []() { return a + b > 0; };
+    }
+
+    // local variables have to be captured
+    function<bool()> f() 
+    {
+        auto a = 5;
+        auto b = -3;
+        // won't compile if a & b aren't captured
+        return [a, b]() { return a + b > 0; };  
+    }  
   #+END_SRC
 
 * User defined Literals
@@ -637,4 +664,58 @@
     }
       
   #+END_SRC
-  
+
+* concurrency
+  C++定义了线程，互斥量，条件变量以及future等在多线程编程中用到的一些
+  基础工具。
+
+  #+BEGIN_SRC c++
+    #include <iostream>
+
+    using namespace std;
+
+    int factorial(int N)
+    {
+    }
+
+    int main()
+    {
+        /* thread */
+        std::thread t1(factorial, 6);
+        std::this_thread::sleep_for(chrono::miliseconds(3));
+        chrono::steady_clock::time_point tp = chrono::steady_clock::now() + chrono::miliseconds(4);
+        std::this_thread::sleep_until(tp);
+        
+        /* Mutex */
+        std::mutex mu;
+        std::lock_guard<mutex> locker(mu)
+        //can lock and unlock many times, can transfer ownershipt using std::move()
+        std::unique_lock<mutex> ulocker(mu);  
+        ulocker.try_lock();
+        ulocker.try_lock_for(chrono::nanoseconds(500));
+        ulocker.try_lock_until(tp);
+        
+        
+        /* Condition Variable */
+        std::condition_variable cond;
+        cond.wait_for(ulocker, chrono::miliseconds(2));
+        cond.wait_until(ulocker, tp);
+        
+        /*Future and Promise */
+        std::promise<int> p;
+        std::future<int> f = p.get_future(); 
+        f.get();
+        f.wait();
+        f.wait_for(chrono::miliseconds(2));
+        f.wait_until(tp);
+        
+        /* async()) */
+        // can lauch a function in the same thread or another thread 
+        std::future<int>fu = async(factorial, 6); 
+        
+        /* Packeged Task */
+        std::packaged_task<int(int)> f(factorial);
+        std::future<int> fu2 = t.get_future();
+        t(6);
+    }  
+  #+END_SRC

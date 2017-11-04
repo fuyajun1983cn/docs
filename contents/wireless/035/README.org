@@ -1,0 +1,253 @@
+#+TITLE: Masters and Slaves: Roles in a Bluetooth Piconet
+
+* Frequency-Hopping Spread Spectrum
+  
+  Bluetooth uses the Industrial Scientific and Medical (ISM) band,
+  which is free to use in most countries. The regulators expect lots
+  of devices to be using the same spectrum, so they have set out rules
+  for using ISM bandwidth to make sure that devices can share the
+  bandwidth. The rules state that you must spread the power of your
+  transmissions across the ISM band somehow. Two main methods are used
+  for spreading out the power: *direct sequence spread spectrum (DSSS)*
+  and *frequency-hopping spread spectrum.*
+
+  Direct sequence spread spectrum smears a transmission across a wide
+  range of frequencies at low power. Frequency-hopping spread spectrum
+  uses a small bandwidth but changes (or hops) frequency after each
+  packet. 
+
+  Bluetooth uses frequency-hopping spread spectrum. There are 79
+  channels of 1MHz each; after each transmit or receive, devices hop
+  to a new channel. shows a recording from a Tektonix WCA380 spectrum
+  analyzer. This figure shows how many Bluetooth piconets can share the ISM
+  band. Occasionally, two piconets may collide on the same channel,
+  but they will just hop off to new frequencies and retransmit any
+  data that was lost. 
+
+  #+CAPtion: Spectrum analyzer trace of Bluetooth piconets in action.
+  [[./images/01.gif]]
+
+* Masters, Slaves, and Piconets
+
+  We've seen how devices can avoid one another's transmissions by
+  constantly changing channels, but how do they know which channel to
+  be on at any particular time? The answer comes from the master: When
+  Bluetooth devices first connect, the master's clock and the
+  Bluetooth device address (=BD_ADDR=) are passed to the slaves in a
+  special packet called a *frequency-hop synchronization packet* (FHS
+  packet). The master's Bluetooth device address is used to calculate
+  the sequence of frequency hops that all devices in a piconet will
+  follow, and the master's clock decides which is the current hop in
+  the sequence (the phase). All the devices in a piconet keep a track
+  of the difference between their own native clock and the master's
+  clock, so they know exactly which frequency to transmit or receive
+  on at any moment. 
+  
+  Every piconet has a different master, with its own unique Bluetooth
+  device address and clock, so every piconet has its own unique
+  frequency-hopping sequence.
+
+* Scatternets and Speed
+
+  t is possible for a device to take part in two different piconets by
+  swapping between two different frequency-hopping sequences. the
+  figure shows two different examples of scatternets. On the left, a
+  device is a master in one piconet and a slave in another. On the
+  right, a device is a slave to two different masters. 
+
+  #+CAPTION: Bluetooth scatternets.
+  [[./images/02.gif]]
+
+  Of course, it is not possible to be a master of two different
+  piconets. This is because a piconet is a group of devices all
+  synchronized on a hopping sequence set by the master. By definition,
+  any devices that share a master must be on the same piconet. 
+
+  A device that is present on two different piconets must visit each
+  piconet often enough to keep the link supervision timeout from
+  elapsing. If the device is a master, it must transmit to its slaves
+  every *Tpoll* slots, where Tpoll is a poll interval that is negotiated
+  between master and slave. 
+  
+  Receive and transmit slots are both 650 microseconds long. A pair of
+  slots takes 1250 microseconds, so it takes just that long to
+  transmit a single-slot packet and receive a single-slot packet. At
+  first thought, you might imagine that a Bluetooth device that wants
+  to visit another piconet for just long enough to transmit and
+  receive a single packet will be missing from its current piconet for
+  only 1250 microseconds. This would be true if all piconets were
+  perfectly synchronized, but that's not the case: There is no
+  mechanism to synchronize piconets, so the slot timing on any pair of
+  piconets likely will not match. Even if the slots on two piconets
+  did start at precisely the same time, Bluetooth clocks do not all
+  tick at precisely the same rate, so in time they would drift apart.  
+
+  the figure shows what happens if a Bluetooth device is a slave on
+  one piconet but has to visit another piconet where it is the master,
+  perhaps to poll a slave to comply with a polling interval that it
+  has negotiated. The start of the slot pair that our device wants on
+  the second piconet is not synchronized with the end of the last slot
+  pair that it is using on the first piconet, so the device must wait
+  around for the start of its transmit slot. When it goes back to the
+  first piconet, the lack of synchronization leaves it waiting around
+  for a lot that it can use. The shaded slots on the diagram are
+  useful slots; the unshaded ones cannot be used. You can see that our
+  device lost two slot pairs on piconet 1 so that it could use one
+  slot pair on piconet 2. 
+
+  #+CAPTION: Slot timing in a scatternet.
+  [[./images/03.gif]]
+
+  Obviously, scatternets are not the most efficient way to use
+  Bluetooth bandwidth. The problem arises because the piconets that
+  make up scatternets aren't synchronized. The first solution that
+  comes to mind is just make all the piconets in an area synchronized
+  with one another. The problem with that is that masters transmit in
+  even slots and slaves transmit in odd slots. Thus, timing that
+  worked for a device that is the master on one piconet and a slave on
+  another would be wrong for a device that was a slave on two
+  piconets. Besides, Bluetooth piconets can form and dissolve in a few
+  seconds, so trying to decide which piconet should set the overall
+  timing when piconets are constantly forming and dissolving would be
+  nearly impossible! 
+
+  Sometimes it doesn't matter whether a few slots are wasted moving
+  between the different piconets that make up a scatternet. If data
+  rates are low, a few slots lost now and then aren't at all
+  important. When it is important, then the solution is simply to
+  avoid using scatternets by uniting devices into one piconet. For
+  example, LAN access points need to share their bandwidth among many
+  slaves, so they want to be as efficient as possible. To maintain
+  maximum efficiency, they keep all devices connected to them in just
+  one piconet. 
+
+  
+* Why LAN Access Points' Roles Change
+
+  By default, the device that initiates a connection becomes the
+  master of that connection. So, you might think that for a LAN access
+  point to be master of all its slaves, it just has to make sure that
+  it initiates all the connections. That's fine in theory, but in
+  practice the access point doesn't know which devices want to
+  connect, so it can't initiate the connections. 
+
+  Instead, the LAN access point allows devices to connect with it, but
+  when it accepts the connection, it accepts on the condition that the
+  connecting device will accept a master-slave switch and become a
+  slave. In that way, we have the best of both worlds: Devices can
+  decide for themselves whether to connect to the LAN access point,
+  but the access point gets to be the master and can efficiently
+  manage its bandwidth. 
+
+* Preparing for the Switch
+
+  The first stage of a master-slave switch can be done even before
+  devices first find one another: The host must send an
+  =HCI_Write_Link_Policy_Settings= command with the lowest bit of the
+  =Link_Policy_settings= bit set. This allows the Link Manager to create
+  a master-slave switch. The link policy must be set correctly, both
+  on a LAN access point and on the connecting device. 
+
+  In the next stage, a device decides to connect to the LAN access
+  point. Its host sends an =HCI_Create_Connection= command with
+  =Allow_Role_Switch= = 0x01. This gives the device's Link Manager
+  permission to accept a role switch on the connection. 
+
+  The connection begins as usual, with the device that wants to
+  connect to the access point paging and the access point page
+  scanning. An ACL connection is established, and an HCI Connection
+  Request event is sent up to the host on the LAN access point. The
+  LAN access point's host replies with an
+  =HCI_Accept_Connection_Request= with Role = 0x00. This indicates that
+  the LAN access point must become the master for this connection and
+  tells the LAN access point's Link Manager to perform the role
+  switch. 
+
+  Normally at this point, the LAN access point's Link Manager would
+  send an =LMP_accepted= message accepting the connecting device's
+  =LMP_host_connection_request=. Instead, it sends an =LMP_slot_offset=
+  message to warn the connecting device that a role change is about to
+  happen and to give it the information that it needs to make the role
+  change.
+
+* A Matter of Timing
+
+  The =LMP_slot_offset= message goes from the slave (at this stage,
+  that's the LAN access point) to the master (at this stage, that's
+  the device connecting to the LAN access point). 
+  
+  It carries the current slave's Bluetooth device address and the
+  offset in timing between the current slave and the current
+  master. This offset is calculated by taking the time that a transmit
+  slot would start if the current slave (the LAN access point) was the
+  master of the piconet, and subtracting the time when a transmit slot
+  starts in the current piconet. This difference is shown in the
+  figure:
+  
+  #+CAPTION: Timing diagram for slot offset.
+  ./images/04.gif
+
+  The slot offset allows the current master (the device that is
+  connecting to the LAN access point) to work out the detailed timing
+  of a piconet where the LAN access point is the master.
+
+* Making the Switch
+
+  Now that the LAN access point has told the device everything that it
+  needs to know about timing, the LAN access point's Link Manager can
+  send an =LMP_switch_req=. The Link Manager on the connecting device
+  accepts the request, and the two devices swap time slots. The LAN
+  access point takes over the even (master) slots, and the connecting
+  device gets the odd (slave) slots.
+
+  Next the LAN access point sends an FHS packet. The header of the
+  packet must have an active member address (=AM_ADDR=) identifying the
+  device that should receive the packet. Now we're in an odd situation
+  here: The LAN access point is starting the transmission as if it
+  were the master, but the connecting device hasn't been allocated an
+  active member address yet—how can it know what address to look for?
+  The answer is quite simple: Just for this one packet, the LAN access
+  point lends the connecting device its own =AM_ADDR= and uses that in
+  the packet header. The connecting device knows to expect this, so it
+  knows which =AM_ADDR= to look for in the packet header. 
+
+  The loan of the LAN access point's =AM_ADDR= is just for this one
+  packet. Inside the FHS packet is a parameter that allows the LAN
+  access point to allocate a new =AM_ADDR= for the connecting
+  device. From now on, that's the =AM_ADDR= that the connecting device
+  will use. 
+
+  The connecting device gets one more piece of information from the
+  FHS packet: the value that the LAN access point's clock had at the
+  moment it sent the FHS packet. Remember that the connecting device
+  needs this clock value to work out where in its frequency-hopping
+  sequence the LAN access point will be when it is a master. It
+  already has the detailed subslot timing from the slot offset
+  message, so by combining that with the clock value in the FHS
+  packet, it now has everything that it needs to know about timing.  
+
+  The connecting device just needs to acknowledge the FHS packet by
+  returning an ID packet, and both devices can go ahead to the final
+  stage of the switch: jumping onto the timing and hopping sequence of
+  a piconet where the LAN access point is master.
+
+* After the Switch
+
+  Now that the LAN access point is truly the master, it sends poll
+  packets until it gets an answering null from its new slave. The
+  connection is properly established with the LAN access point in
+  control as master, so it can finally send an LMP_accepted message in
+  response to the LMP_host_connection_req that it got long ago before
+  the role switch , see the following figure:
+
+  #+CAPTION: Message sequence chart for master-slave switch.
+  [[./images/05.gif]]
+
+  The master-slave switch is finally completed, so both devices send
+  an HCI role change event to their hosts to let them know what has
+  happened to the connection.
+
+  If they want, both devices may go on to configure the link in other
+  ways, such as setting up encryption, before they finally exchange
+  the =LMP_setup_complete= messages to signal that they are happy with
+  the state of the connection on their new piconet. 

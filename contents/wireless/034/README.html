@@ -1,0 +1,407 @@
+--- 
+layout: default
+---
+<div class="header">
+  <div class="jumbotron">
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Florida源码分析</h1>
+          <p>蓝牙协议栈Florida分析笔记记录。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">Bluedroid源码分析笔记</h1>
+
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> 代码路径</h2>
+<div class="outline-text-2" id="text-1">
+<pre class="example">
+git clone https://source.codeaurora.org/quic/la/platform/system/bt
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> 模块图</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+<a href="./images/001.vsd">./images/001.vsd</a>
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> 代码结构概述</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+代码主要有如下几个模块组成：
+</p>
+<ul class="org-ul">
+<li>BTE（bluetooth embedded system）
+实现BT核心功能
+</li>
+<li>BTA（bluetooth application layer）
+用于和Android frameworks交互。
+</li>
+<li>BTIF（bluetooth interface）
+BT Interface, glue layer with JNI.
+</li>
+<li>BTU（bluetooth upperlayer）
+</li>
+<li>BTM（bluetooth manager）
+</li>
+</ul>
+</div>
+
+<div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> 模块分析</h3>
+<div class="outline-text-3" id="text-3-1">
+</div><div id="outline-container-sec-3-1-1" class="outline-4">
+<h4 id="sec-3-1-1"><span class="section-number-4">3.1.1</span> BTM</h4>
+<div class="outline-text-4" id="text-3-1-1">
+<p>
+定义了一个数据结构: <code>tBTM_CB</code>
+在方法 <code>btm_init</code> 初始化了一个全局的变量:  <code>btm_cb</code> 。
+</p>
+
+<p>
+通过对上述数据结构定义的研究，可以得知，BTM模块对蓝牙的管理主要涉
+及如下几个方面：
+</p>
+<ol class="org-ol">
+<li>ACL Management
+</li>
+<li>Power Management
+</li>
+<li>Device control
+</li>
+<li>BLE Device controllers
+</li>
+<li>Inquiry
+</li>
+<li>SCO Management
+</li>
+<li>Security Management
+</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-sec-3-1-2" class="outline-4">
+<h4 id="sec-3-1-2"><span class="section-number-4">3.1.2</span> BTU</h4>
+<div class="outline-text-4" id="text-3-1-2">
+</div><ol class="org-ol"><li><a id="sec-3-1-2-1" name="sec-3-1-2-1"></a>初始化过程<br ><div class="outline-text-5" id="text-3-1-2-1">
+<p>
+蓝牙在开启的时候，会调用 stack manager的 <code>start_up_stack_async</code> 方
+法，将接下来的一些初始化工作交由 "stack manager"线程去处理，对应的
+回调函数为： <code>event_start_up_stack</code>
+</p>
+
+<p>
+接下来的调用路径如下： 
+</p>
+
+<p>
+bte<sub>main</sub><sub>enable</sub> -&gt; BTU<sub>StartUp</sub> 
+</p>
+
+<p>
+在 <code>BTU_StartUp</code> 函数中，再次将剩余的一些初始化工作交由 "bt
+workqueue" 去处理， 对应的回调函数为： <code>btu_task_start_up</code>
+</p>
+
+<p>
+在该函数中，分别执行了如下一些初始化工作：
+</p>
+<ol class="org-ol">
+<li><code>btu_init_core</code>
+        协议栈核心功能的初始化，包含BTU，BTM, L2CAP以及SDP。
+</li>
+<li><code>BTE_InitStack</code>
+        协议栈核心外的些可靠功能的初始化。
+</li>
+<li><code>bta_sys_init</code>
+        BTA功能模块的初始化。
+</li>
+<li>通过JNI线程通知上层，蓝牙开启完成。
+</li>
+<li>注册BTU的两个消息队列上的处理函数。
+</li>
+</ol>
+</div>
+</li>
+
+<li><a id="sec-3-1-2-2" name="sec-3-1-2-2"></a>HCI消息处理<br ><div class="outline-text-5" id="text-3-1-2-2">
+<p>
+函数调用逻辑：
+btu<sub>hci</sub><sub>msg</sub><sub>ready</sub> -&gt;  btu<sub>hci</sub><sub>msg</sub><sub>process</sub>
+</p>
+</div>
+</li>
+
+<li><a id="sec-3-1-2-3" name="sec-3-1-2-3"></a>BTA消息处理<br ><div class="outline-text-5" id="text-3-1-2-3">
+<p>
+函数调用逻辑：
+btu<sub>bta</sub><sub>msg</sub><sub>ready</sub> -&gt; bta<sub>sys</sub><sub>event</sub>
+</p>
+</div>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-3-1-3" class="outline-4">
+<h4 id="sec-3-1-3"><span class="section-number-4">3.1.3</span> BTE</h4>
+<div class="outline-text-4" id="text-3-1-3">
+</div><ol class="org-ol"><li><a id="sec-3-1-3-1" name="sec-3-1-3-1"></a>初始化过程<br ><div class="outline-text-5" id="text-3-1-3-1">
+<p>
+初始化函数： <code>BTE_InitStack</code>
+</p>
+</div>
+</li></ol>
+</div>
+
+<div id="outline-container-sec-3-1-4" class="outline-4">
+<h4 id="sec-3-1-4"><span class="section-number-4">3.1.4</span> L2CAP</h4>
+<div class="outline-text-4" id="text-3-1-4">
+<p>
+L2CAP是一个核心协议，许多Profile都依赖它，每个依赖它的Profile都必
+须通过 <code>L2CA_Register</code> 来注册自己在L2CAP层的回调函数。
+</p>
+</div>
+
+<ol class="org-ol"><li><a id="sec-3-1-4-1" name="sec-3-1-4-1"></a>Channel State Machine<br ><div class="outline-text-5" id="text-3-1-4-1">
+<p>
+状态机总共有9个状态，他们之间的转换关系如下图所示：
+</p>
+</div>
+</li></ol>
+</div>
+</div>
+
+
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><span class="section-number-3">3.2</span> Profiles</h3>
+<div class="outline-text-3" id="text-3-2">
+</div><div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1"><span class="section-number-4">3.2.1</span> GAP</h4>
+<div class="outline-text-4" id="text-3-2-1">
+</div><ol class="org-ol"><li><a id="sec-3-2-1-1" name="sec-3-2-1-1"></a>配对<br ><div class="outline-text-5" id="text-3-2-1-1">
+<p>
+代码调用流程：
+BT Interface: create<sub>bond</sub>
+-&gt; btif<sub>dm</sub><sub>create</sub><sub>bond</sub>
+-&gt; btif<sub>dm</sub><sub>generic</sub><sub>evt</sub> BTIF<sub>DM</sub><sub>CB</sub><sub>CREATE</sub><sub>BOND</sub>
+-&gt; btif<sub>dm</sub><sub>cb</sub><sub>create</sub><sub>bond</sub>  retry 5 times
+-&gt; BTA<sub>DmBondByTransport</sub>
+-&gt; bta<sub>sys</sub><sub>sendmsg</sub>  BTA<sub>DM</sub><sub>API</sub><sub>BOND</sub><sub>EVT</sub>
+</p>
+
+<p>
+处理bta系统消息的函数为：btu<sub>bta</sub><sub>msg</sub><sub>ready</sub>
+</p>
+
+
+<p>
+bta<sub>dm</sub><sub>action[]</sub> &#x2013;&gt; BTA<sub>DM</sub><sub>API</sub><sub>BOND</sub><sub>EVT</sub>
+-&gt;bta<sub>dm</sub><sub>bond</sub>
+-&gt; BTM<sub>SecBondByTransport</sub>
+-&gt; btm<sub>sec</sub><sub>bond</sub><sub>by</sub><sub>transport</sub>
+</p>
+</div>
+</li>
+
+<li><a id="sec-3-2-1-2" name="sec-3-2-1-2"></a>与蓝牙耳机配对连接过程中的HCI命令序列<br ><ol class="org-ol"><li><a id="sec-3-2-1-2-1" name="sec-3-2-1-2-1"></a>开启蓝牙<br ><div class="outline-text-6" id="text-3-2-1-2-1">
+<ol class="org-ol">
+<li><code>HCI_Reset</code>
+启动蓝牙时，发送了HCI命令：  <code>BT_VND_OP_USERIAL_OPEN</code>
+调用了 <code>rome_soc_init</code> 函数，这是Vendor Specific部分的代码，
+会加载Patch，等一系列芯片相关的初始始化动作，最后会调用上述命
+令。
+</li>
+<li><code>HCI_Read_Buffer_Size</code>
+</li>
+<li><code>HCI_Host_Buffer_Size</code>
+</li>
+<li><code>Vendor Ccommand</code>
+</li>
+<li><code>HCI_Read_Local_Version_Information</code>
+</li>
+<li><code>HCI_Read_BD_ADDR</code>
+</li>
+<li><code>HCI_Read_Local_Supported_Commands</code>
+</li>
+<li><code>HCI_Read_Local_Extended_Feature</code>
+</li>
+<li><code>HCI_Write_Simple_Pairing_Mode</code>
+</li>
+<li><code>Write_LE_Host_Support</code>
+</li>
+<li><code>HCI_Read_Local_Extended_Feature</code>
+</li>
+<li><code>HCI_Read_Local_Extended_Feature</code>
+</li>
+<li><code>LE_Get_Vendor_Capabilities_Command</code>
+</li>
+<li><code>Write Secure Connections Host Support</code>
+</li>
+<li><code>HCI_LE_Read_White_List_Size</code>
+</li>
+<li><code>HCI_LE_Read_Buffer_Size</code>
+</li>
+<li><code>HCI_LE_Read_Supported_State</code>
+</li>
+<li><code>HCI_LE_Read_Local_Supported_Features</code>
+</li>
+<li><code>HCI_LE_Read_Resolving_List_Size</code>
+</li>
+<li><code>HCI_LE_Set_Event_Mask</code>
+</li>
+<li><code>HCI_Set_Event_Mask</code>
+</li>
+<li><code>HCI_LE_Clear_Resolving_List</code>
+</li>
+<li><code>HCI_LE_Set_Resolvable_Private_Address_Timeout</code>
+</li>
+<li><code>HCI_Write_Inquiry_Mode</code>
+</li>
+<li><code>HCI_Write_Page_Scan_Type</code>
+</li>
+<li><code>HCI_Write_Inquiry_Scan</code>
+</li>
+<li><code>HCI_Write_Class_of_Device</code>
+</li>
+<li><code>Write_Page_Timeout</code>
+</li>
+<li><code>Write_Default_Link_Policy_Settings</code>
+</li>
+<li><code>LE_Get_Vendor_Capabilities_Command</code>
+</li>
+<li><code>Change_Local_Name</code>
+</li>
+<li><code>Write_Extended_Inquiry_Response</code>
+</li>
+<li><code>HCI_LE_RAND</code>
+</li>
+<li><code>HCI_LE_Set_Random_Address</code>
+</li>
+<li><code>Write_Extended_Inquiry_Response</code>
+</li>
+<li><code>LE_Multi_Advt_Command</code>
+</li>
+<li><code>Write_Voice_Settings</code>
+</li>
+<li><code>Write_Extended_Inquiry_Response</code>
+</li>
+<li><code>Write_Current_IAC_LAP</code>
+</li>
+<li><code>Write_Inquiry_Scan_Activity</code>
+</li>
+<li><code>Write_Scan_Enable</code>
+</li>
+<li><code>Write_Inquiry_Scan_Activity</code>
+</li>
+</ol>
+</div>
+</li>
+
+<li><a id="sec-3-2-1-2-2" name="sec-3-2-1-2-2"></a>连接请求<br ><div class="outline-text-6" id="text-3-2-1-2-2">
+<ol class="org-ol">
+<li><code>HCI_Accept_Connection_Request</code>
+</li>
+</ol>
+</div>
+</li></ol>
+</li></ol>
+</div>
+
+
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2"><span class="section-number-4">3.2.2</span> AVRCP</h4>
+<div class="outline-text-4" id="text-3-2-2">
+<p>
+bta<sub>av</sub><sub>rc</sub><sub>create</sub>
+-&gt;AVRC<sub>Open</sub>
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-3" class="outline-4">
+<h4 id="sec-3-2-3"><span class="section-number-4">3.2.3</span> HFP Client</h4>
+<div class="outline-text-4" id="text-3-2-3">
+<p>
+当由于一些未知的原因导致协议栈主动断开时，代码流程如下：
+bta<sub>hf</sub><sub>client</sub><sub>sco</sub><sub>shutdown</sub>
+==&gt; bta<sub>hf</sub><sub>client</sub><sub>sco</sub><sub>event</sub>, 此时 bta<sub>hf</sub><sub>client</sub><sub>cb</sub>.scb.sco<sub>state</sub>
+为 BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>OPEN</sub><sub>ST。</sub> bta<sub>hf</sub><sub>client</sub><sub>cb</sub>.scb.sco<sub>state</sub> 状态
+为 BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>OPEN</sub><sub>ST，</sub> 要处理的事件是
+BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>SHUTDOWN</sub><sub>E，</sub> 会调用 bta<sub>hf</sub><sub>client</sub><sub>sco</sub><sub>remove</sub> ，
+并调用 bta<sub>hf</sub><sub>client</sub><sub>cb</sub>.scb.sco<sub>state</sub> 的值为 BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>SHUTTING</sub><sub>ST。</sub>
+</p>
+
+<p>
+接下去最终是要发一个HCI命令去断开SCO Connections。
+</p>
+
+<p>
+当命令执行完毕后，会调用回调函数：bta<sub>hf</sub><sub>client</sub><sub>sco</sub><sub>disc</sub><sub>cback</sub>.  
+此函数会向 BTA System发送一个 BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>CLOSE</sub><sub>EVT</sub> 事件，
+事件码为：0x1b0f。
+</p>
+
+<p>
+该事件会在 bta<sub>hf</sub><sub>client</sub><sub>hdl</sub><sub>event</sub> 中调用 bta<sub>hf</sub><sub>client</sub><sub>sm</sub><sub>execute</sub>
+来处理。
+</p>
+
+<p>
+由于此时 bta<sub>hf</sub><sub>client</sub><sub>cb</sub>.scb.state 为 BTA<sub>HF</sub><sub>CLIENT</sub><sub>OPEN</sub><sub>ST，</sub> 所以会根据此状态下的
+状态表 bta<sub>hf</sub><sub>client</sub><sub>st</sub><sub>open</sub> 进行状态转移，并执行相应的Action。 
+</p>
+
+<p>
+根据此表中的第 0xf 行的信息，将要执行的事件是：
+BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>CONN</sub><sub>CLOSE，</sub>
+且 bta<sub>hf</sub><sub>client</sub><sub>cb</sub>.scb.state 值仍为 BTA<sub>HF</sub><sub>CLIENT</sub><sub>OPEN</sub><sub>ST。</sub>
+</p>
+
+<p>
+根据 bta<sub>hf</sub><sub>client</sub><sub>action</sub> 列出的函数表，执行对应于
+BTA<sub>HF</sub><sub>CLIENT</sub><sub>SCO</sub><sub>CONN</sub><sub>CLOSE</sub> 项的函数，即：
+bta<sub>hf</sub><sub>client</sub><sub>sco</sub><sub>conn</sub><sub>close。</sub>
+</p>
+
+
+
+
+
+
+<p>
+参考：<a href="http://blog.csdn.net/shichaog/article/category/6445694/2">http://blog.csdn.net/shichaog/article/category/6445694/2</a>
+</p>
+</div>
+</div>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. 代码路径</a></li>
+<li><a href="#sec-2">2. 模块图</a></li>
+<li><a href="#sec-3">3. 代码结构概述</a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. 模块分析</a></li>
+<li><a href="#sec-3-2">3.2. Profiles</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</nav>
+</div></div></div>

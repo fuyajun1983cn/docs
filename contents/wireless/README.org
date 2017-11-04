@@ -120,3 +120,8 @@
 
 * ☛ TODO 033
   PAN
+* ☛ TODO 034
+  bluedroid源码分析
+* ✔ DONE 035
+  CLOSED: [2017-11-04 六 12:40]
+  Masters and Slaves: Roles in a Bluetooth Piconet

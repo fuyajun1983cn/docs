@@ -14,8 +14,6 @@ layout: default
   </div>
 </div>
 
-
-
 <div id="content" class="container">
 <div class="row"><div class="col-md-9"><h1 class="title">C++11 New Features</h1>
 
@@ -262,6 +260,11 @@ int main() {
    // Compile fails because we haven't define ==(apple, orange)
 </pre>
 </div>
+
+<p>
+通过关键字class声明的枚举类型是Scoped Enum，引用时必须包含枚举类型的
+名称。
+</p>
 </div>
 </div>
 
@@ -708,6 +711,143 @@ class BoTemplate;
 </div>
 </div>
 </div>
+
+<div id="outline-container-sec-20" class="outline-2">
+<h2 id="sec-20"><span class="section-number-2">20</span> user defined literals</h2>
+<div class="outline-text-2" id="text-20">
+<p>
+C++ went a long way to make user defined types (classes) to behave
+same as build-in types. User defined literals pushes this effort
+even further
+</p>
+
+<p>
+add constexpr to make the translation happen in compile time.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c++">constexpr long double operator"" _cm(long double x) { return x * 10; }
+constexpr long double operator"" _m(long double x) { return x * 1000; }
+constexpr long double operator"" _mm(long double x) { return x; }
+
+int main(int argc, char *argv[])
+{
+  long double height = 3.4_cm;
+  cout &lt;&lt; height  &lt;&lt; endl;              // 34
+  cout &lt;&lt; (height + 13.0_m)  &lt;&lt; endl;   // 13034
+  cout &lt;&lt; (130.0_mm / 13.0_m)  &lt;&lt; endl; // 0.01
+
+  return 0;
+}
+</pre>
+</div>
+
+
+<p>
+Restriction: it can only work with following parameters:
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">char const*
+unsigned long long
+long double
+char const*, std::size_t
+wchar_t const*, std::size_t
+char16_t const*, std::size_t
+char32_t const*, std::size_t
+</pre>
+</div>
+
+<p>
+更多例子：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-c++">int operator"" _bin(const char* str, size_t l)
+{
+  int ret = 0;
+  for (size_t i = 0;i &lt; l; i++) {
+    if (str[i] == '1')
+      ret += 1 &lt;&lt; (l-i-1);
+  }
+  return ret;
+}
+
+int main(int argc, char *argv[])
+{
+  cout&lt;&lt;"110"_bin&lt;&lt;endl;
+  cout&lt;&lt;"111"_bin&lt;&lt;endl;
+
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-21" class="outline-2">
+<h2 id="sec-21"><span class="section-number-2">21</span> concurrency</h2>
+<div class="outline-text-2" id="text-21">
+<p>
+C++定义了线程，互斥量，条件变量以及future等在多线程编程中用到的一些
+基础工具。
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c++">#include &lt;iostream&gt;
+
+using namespace std;
+
+int factorial(int N)
+{
+}
+
+int main()
+{
+    /* thread */
+    std::thread t1(factorial, 6);
+    std::this_thread::sleep_for(chrono::miliseconds(3));
+    chrono::steady_clock::time_point tp = chrono::steady_clock::now() + chrono::miliseconds(4);
+    std::this_thread::sleep_until(tp);
+
+    /* Mutex */
+    std::mutex mu;
+    std::lock_guard&lt;mutex&gt; locker(mu)
+    //can lock and unlock many times, can transfer ownershipt using std::move()
+    std::unique_lock&lt;mutex&gt; ulocker(mu);  
+    ulocker.try_lock();
+    ulocker.try_lock_for(chrono::nanoseconds(500));
+    ulocker.try_lock_until(tp);
+
+
+    /* Condition Variable */
+    std::condition_variable cond;
+    cond.wait_for(ulocker, chrono::miliseconds(2));
+    cond.wait_until(ulocker, tp);
+
+    /*Future and Promise */
+    std::promise&lt;int&gt; p;
+    std::future&lt;int&gt; f = p.get_future(); 
+    f.get();
+    f.wait();
+    f.wait_for(chrono::miliseconds(2));
+    f.wait_until(tp);
+
+    /* async()) */
+    // can lauch a function in the same thread or another thread 
+    std::future&lt;int&gt;fu = async(factorial, 6); 
+
+    /* Packeged Task */
+    std::packaged_task&lt;int(int)&gt; f(factorial);
+    std::future&lt;int&gt; fu2 = t.get_future();
+    t(6);
+}
+</pre>
+</div>
+</div>
+</div>
 </div><div class="col-md-3"><nav id="table-of-contents">
 <div id="text-table-of-contents" class="bs-docs-sidebar">
 <ul class="nav">
@@ -730,6 +870,8 @@ class BoTemplate;
 <li><a href="#sec-17">17. Variadic Template</a></li>
 <li><a href="#sec-18">18. Template Alias</a></li>
 <li><a href="#sec-19">19. decltype</a></li>
+<li><a href="#sec-20">20. user defined literals</a></li>
+<li><a href="#sec-21">21. concurrency</a></li>
 </ul>
 </div>
 </nav>

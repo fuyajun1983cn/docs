@@ -1,0 +1,200 @@
+#+TITLE:Bluedroid源码分析笔记
+
+
+* 代码路径
+  : git clone https://source.codeaurora.org/quic/la/platform/system/bt
+
+* 模块图
+  
+  [[./images/001.vsd]]
+
+* 代码结构概述 
+  代码主要有如下几个模块组成：
+  - BTE（bluetooth embedded system）
+    实现BT核心功能
+  - BTA（bluetooth application layer）
+    用于和Android frameworks交互。
+  - BTIF（bluetooth interface）
+    BT Interface, glue layer with JNI.
+  - BTU（bluetooth upperlayer）
+  - BTM（bluetooth manager）
+
+** 模块分析
+
+*** BTM
+    定义了一个数据结构: =tBTM_CB=
+    在方法 =btm_init= 初始化了一个全局的变量:  =btm_cb= 。
+
+    通过对上述数据结构定义的研究，可以得知，BTM模块对蓝牙的管理主要涉
+    及如下几个方面：
+    1. ACL Management
+    2. Power Management
+    3. Device control
+    4. BLE Device controllers
+    5. Inquiry
+    6. SCO Management
+    7. Security Management
+
+*** BTU
+    
+**** 初始化过程
+     蓝牙在开启的时候，会调用 stack manager的 =start_up_stack_async= 方
+     法，将接下来的一些初始化工作交由 "stack manager"线程去处理，对应的
+     回调函数为： =event_start_up_stack=
+
+     接下来的调用路径如下： 
+
+     bte_main_enable -> BTU_StartUp 
+
+     在 =BTU_StartUp= 函数中，再次将剩余的一些初始化工作交由 "bt
+     workqueue" 去处理， 对应的回调函数为： =btu_task_start_up=
+
+     在该函数中，分别执行了如下一些初始化工作：
+     1. =btu_init_core=
+        协议栈核心功能的初始化，包含BTU，BTM, L2CAP以及SDP。
+     2. =BTE_InitStack=
+        协议栈核心外的些可靠功能的初始化。
+     3. =bta_sys_init=
+        BTA功能模块的初始化。
+     4. 通过JNI线程通知上层，蓝牙开启完成。
+     5. 注册BTU的两个消息队列上的处理函数。
+
+**** HCI消息处理
+     
+     函数调用逻辑：
+     btu_hci_msg_ready ->  btu_hci_msg_process
+
+**** BTA消息处理
+
+     函数调用逻辑：
+     btu_bta_msg_ready -> bta_sys_event
+
+*** BTE
+
+**** 初始化过程
+     初始化函数： =BTE_InitStack=
+
+*** L2CAP
+    L2CAP是一个核心协议，许多Profile都依赖它，每个依赖它的Profile都必
+    须通过 =L2CA_Register= 来注册自己在L2CAP层的回调函数。
+
+**** Channel State Machine
+     状态机总共有9个状态，他们之间的转换关系如下图所示：
+     
+     
+
+** Profiles
+
+*** GAP
+
+**** 配对
+     代码调用流程：
+     BT Interface: create_bond
+     -> btif_dm_create_bond
+     -> btif_dm_generic_evt BTIF_DM_CB_CREATE_BOND
+     -> btif_dm_cb_create_bond  retry 5 times
+     -> BTA_DmBondByTransport
+     -> bta_sys_sendmsg  BTA_DM_API_BOND_EVT
+
+     处理bta系统消息的函数为：btu_bta_msg_ready
+
+
+     bta_dm_action[] --> BTA_DM_API_BOND_EVT
+     ->bta_dm_bond
+     -> BTM_SecBondByTransport
+     -> btm_sec_bond_by_transport
+
+**** 与蓝牙耳机配对连接过程中的HCI命令序列 
+
+***** 开启蓝牙
+      1. =HCI_Reset=
+         启动蓝牙时，发送了HCI命令：  =BT_VND_OP_USERIAL_OPEN=
+         调用了 =rome_soc_init= 函数，这是Vendor Specific部分的代码，
+         会加载Patch，等一系列芯片相关的初始始化动作，最后会调用上述命
+         令。
+      2. =HCI_Read_Buffer_Size=
+      3. =HCI_Host_Buffer_Size=
+      4. =Vendor Ccommand=
+      5. =HCI_Read_Local_Version_Information=
+      6. =HCI_Read_BD_ADDR=
+      7. =HCI_Read_Local_Supported_Commands=
+      8. =HCI_Read_Local_Extended_Feature=
+      9. =HCI_Write_Simple_Pairing_Mode=
+      10. =Write_LE_Host_Support=
+      11. =HCI_Read_Local_Extended_Feature=
+      12. =HCI_Read_Local_Extended_Feature=
+      13. =LE_Get_Vendor_Capabilities_Command=
+      14. =Write Secure Connections Host Support=
+      15. =HCI_LE_Read_White_List_Size=
+      16. =HCI_LE_Read_Buffer_Size=
+      17. =HCI_LE_Read_Supported_State=
+      18. =HCI_LE_Read_Local_Supported_Features=
+      19. =HCI_LE_Read_Resolving_List_Size=
+      20. =HCI_LE_Set_Event_Mask=
+      21. =HCI_Set_Event_Mask=
+      22. =HCI_LE_Clear_Resolving_List=
+      23. =HCI_LE_Set_Resolvable_Private_Address_Timeout=
+      24. =HCI_Write_Inquiry_Mode=
+      25. =HCI_Write_Page_Scan_Type=
+      26. =HCI_Write_Inquiry_Scan=
+      27. =HCI_Write_Class_of_Device=
+      28. =Write_Page_Timeout=
+      29. =Write_Default_Link_Policy_Settings=
+      30. =LE_Get_Vendor_Capabilities_Command=
+      31. =Change_Local_Name=
+      32. =Write_Extended_Inquiry_Response=
+      33. =HCI_LE_RAND=
+      34. =HCI_LE_Set_Random_Address=
+      35. =Write_Extended_Inquiry_Response=
+      36. =LE_Multi_Advt_Command=
+      37. =Write_Voice_Settings=
+      38. =Write_Extended_Inquiry_Response=
+      39. =Write_Current_IAC_LAP=
+      40. =Write_Inquiry_Scan_Activity=
+      41. =Write_Scan_Enable=
+      42. =Write_Inquiry_Scan_Activity=
+
+***** 连接请求
+      1. =HCI_Accept_Connection_Request=
+         
+
+*** AVRCP
+
+    bta_av_rc_create
+    ->AVRC_Open
+
+*** HFP Client
+    当由于一些未知的原因导致协议栈主动断开时，代码流程如下：
+    bta_hf_client_sco_shutdown
+    ==> bta_hf_client_sco_event, 此时 bta_hf_client_cb.scb.sco_state
+    为 BTA_HF_CLIENT_SCO_OPEN_ST。 bta_hf_client_cb.scb.sco_state 状态
+    为 BTA_HF_CLIENT_SCO_OPEN_ST， 要处理的事件是
+    BTA_HF_CLIENT_SCO_SHUTDOWN_E， 会调用 bta_hf_client_sco_remove ，
+    并调用 bta_hf_client_cb.scb.sco_state 的值为 BTA_HF_CLIENT_SCO_SHUTTING_ST。
+
+    接下去最终是要发一个HCI命令去断开SCO Connections。
+
+    当命令执行完毕后，会调用回调函数：bta_hf_client_sco_disc_cback.  
+    此函数会向 BTA System发送一个 BTA_HF_CLIENT_SCO_CLOSE_EVT 事件，
+    事件码为：0x1b0f。
+
+    该事件会在 bta_hf_client_hdl_event 中调用 bta_hf_client_sm_execute
+    来处理。
+
+    由于此时 bta_hf_client_cb.scb.state 为 BTA_HF_CLIENT_OPEN_ST， 所以会根据此状态下的
+    状态表 bta_hf_client_st_open 进行状态转移，并执行相应的Action。 
+    
+    根据此表中的第 0xf 行的信息，将要执行的事件是：
+    BTA_HF_CLIENT_SCO_CONN_CLOSE，
+    且 bta_hf_client_cb.scb.state 值仍为 BTA_HF_CLIENT_OPEN_ST。
+
+    根据 bta_hf_client_action 列出的函数表，执行对应于
+    BTA_HF_CLIENT_SCO_CONN_CLOSE 项的函数，即：
+    bta_hf_client_sco_conn_close。
+
+    
+    
+    
+
+
+参考：http://blog.csdn.net/shichaog/article/category/6445694/2
