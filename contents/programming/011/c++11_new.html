@@ -6,16 +6,19 @@ layout: default
     <div class="container">
       <div class="row">
         <div class="col-sm-12">
-          <h1>C++11 New Features</h1>
-          <p>C++11新特性研究。</p>
+          <h1>C++ New Features</h1>
+          <p>C++新特性代码救命。 </p>
         </div>
       </div>
     </div>
   </div>
 </div>
 
+
+
+
 <div id="content" class="container">
-<div class="row"><div class="col-md-9"><h1 class="title">C++11 New Features</h1>
+<div class="row"><div class="col-md-9"><h1 class="title">C++11 New Features Forward Declaration Examples Example 1 Example 1 Example 2 Example 3 Example 4 Legacy Code Example 1 Example 2 Example 3 Example 1 Example 2 Example 1 Example Code Example Code Example 1 Example 2 Example Code Example 1 Example 1 Example 2 Example 1 Example 2 Example 1 Example 2 Example 3 Example 1</h1>
 
 <div id="outline-container-sec-1" class="outline-2">
 <h2 id="sec-1"><span class="section-number-2">1</span> Initializer List</h2>
@@ -131,8 +134,42 @@ class Dog {
 </div>
 
 <div id="outline-container-sec-3" class="outline-2">
-<h2 id="sec-3"><span class="section-number-2">3</span> auto type</h2>
+<h2 id="sec-3"><span class="section-number-2">3</span> Type Inference</h2>
 <div class="outline-text-2" id="text-3">
+
+<figure>
+<p><img src="./images/001.png" class="img-responsive" alt="001.png">
+</p>
+</figure>
+</div>
+
+<div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> auto type</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+Why Else Do We Need It?
+</p>
+
+<ul class="org-ul">
+<li>Don’t Repeat Yourself
+</li>
+
+<li>Higher level of abstraction
+</li>
+
+<li>Type changes are better localized
+</li>
+
+<li>Easier refactoring
+</li>
+
+<li>Simpler template code
+</li>
+
+<li>Declaring variables of undocumented or unnamable types
+</li>
+</ul>
+
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -159,15 +196,303 @@ auto&amp; y = a;        // int&amp; y = a
 // It also makes code easier to maintain.
 
 // 1. Don't use auto when type conversion is needed
-// 2. IDE becomes more important
+// 2. IDE becomes more important  
+
+autoj = 10, str= "error"; // compile error, 必须为同一数据类型。
 </pre>
 </div>
 </div>
 </div>
 
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><span class="section-number-3">3.2</span> decltype</h3>
+<div class="outline-text-3" id="text-3-2">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * decltype
+ *
+ * It is equivalent of GNU typeof
+ */
+  const int&amp; foo();      // Declare a function foo()
+  decltype(foo())  x1;  //  type is const int&amp;
+
+  struct S { double x; };
+  decltype(S::x)   x2;  //  x2 is double
+
+  auto s = make_shared&lt;S&gt;();
+  decltype(s-&gt;x)   x3;  //  x3 is double
+
+  int i;
+  decltype(i)      x4;  //  x4 is int  
+
+  float f;              
+  decltype(i + f)  x5;   // x5 is float
+
+  // decltype turns out to be very useful for template generic programming
+  template&lt;type X, type Y&gt;
+  void foo(X x, Y y) {
+     ...
+     decltype(x+y) z;
+     ...
+  }
+
+  // How about return type needs to use decltype?
+  template&lt;type X, type Y&gt;
+  decltype(x+y) goo(X x, Y y) {      // Error: x &amp; y are undefined 
+     return  x + y;
+  }
+
+  // Combining auto and decltype to implement templates with trailing return type
+  template&lt;type X, type Y&gt;
+  auto goo(X x, Y y) -&gt; decltype(x+y) {
+     return  x + y;
+  }
+</pre>
+</div>
+
+<p>
+allows getting the type of an expression
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">int i = 10;
+cout &lt;&lt; typeid(decltype(i + 1.0)).name() &lt;&lt; endl;  // outputs "double"
+AssertThat((is_same&lt;decltype(i + 1.0), double&gt;::value), Equals(true));
+
+vector&lt;int&gt; a;
+decltype(a) b; 
+b.push_back(10);
+decltype(a)::iterator iter = a.end();
+
+//declval allows the use of a type without public constructors in a decltype expression
+class A
+{
+private:
+  A();
+};
+
+#if COMPILE_ERROR
+cout &lt;&lt; typeid(decltype(A())).name() &lt;&lt; endl; // doesn't compile: 
+// A() is private
+#endif
+
+cout &lt;&lt; typeid(decltype(declval&lt;A&gt;())).name() &lt;&lt; endl;
+</pre>
+</div>
+</div>
+</div>
+</div>
+
 <div id="outline-container-sec-4" class="outline-2">
-<h2 id="sec-4"><span class="section-number-2">4</span> foreach</h2>
+<h2 id="sec-4"><span class="section-number-2">4</span> template</h2>
 <div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> Variadic Template</h3>
+<div class="outline-text-3" id="text-4-1">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * Variadic Template
+ *
+ * A template that can take any number of template arguments of any type.
+ * Both class and function templates can be variadic.
+ */
+template&lt;typename... arg&gt;
+class BoTemplate;
+
+BoTemplate&lt;float&gt; t1;
+BoTemplate&lt;int, long, double, float&gt; t2;
+BoTemplate&lt;int, std::vector&lt;double&gt;&gt; t3;
+
+BoTemplate&lt;&gt; t4;
+
+
+// Combination of variadic and non-variadic argument
+template&lt;typename T, typename... arg&gt;
+class BoTemplate;
+
+BoTemplate&lt;&gt; t4;  // Error
+BoTemplate&lt;int, long, double, float&gt; t2;  // OK
+
+
+// Define a default template argument
+template&lt;typename T = int, typename... arg&gt;
+class BoTemplate;
+</pre>
+</div>
+
+<p>
+Example:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameStream, typename... Columns&gt;
+classCSVPrinter
+{
+ public:
+  voidoutput_line(constColumns&amp;... columns);
+  // other methods, constructors etc. not shown
+};
+</pre>
+</div>
+
+<ul class="org-ul">
+<li>Working with Parameter Packs
+</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameStream, typename... Columns&gt;
+classCSVPrinter
+{
+  Stream&amp; _stream;
+  array&lt;string, sizeof...(Columns)&gt; _headers;
+  // rest of implementation
+};
+</pre>
+</div>
+
+<ul class="org-ul">
+<li>Traversing Template Parameter Packs
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typename... Types&gt; // allow zero parameters
+structTupleSize;
+template&lt;typenameHead, typename... Tail&gt; // traverse types
+structTupleSize&lt;Head, Tail...&gt;
+{
+  staticconstsize_tvalue = sizeof(Head) + TupleSize&lt;Tail...&gt;::value;
+};
+template&lt;&gt; structTupleSize&lt;&gt; // end recursion
+{
+  staticconstsize_tvalue = 0;
+};
+TupleSize&lt;&gt;::value;// 0
+TupleSize&lt;int, double, char&gt;::value; // 13 on a 32-bit platform
+</pre>
+</div>
+</li>
+
+<li>Constraining Parameter Packs to One Type
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typename... Strings&gt;
+voidoutput_strings(conststring&amp; s, constStrings&amp;... strings) const
+{
+  write_column(s, _sep);
+  output_strings(strings...);
+}
+voidoutput_strings(conststring&amp; s) const
+{
+  write_column(s, "\n");
+}
+</pre>
+</div>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> Template Alias</h3>
+<div class="outline-text-3" id="text-4-2">
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * Template Alias
+ */
+  template&lt;class T&gt; class Dog { /* ... */ };
+  template&lt;class T&gt;
+    using DogVec = std::vector&lt;T, Dog&lt;T&gt;&gt;;
+
+  DogVec&lt;int&gt; v;  // Same as: std::vector&lt;int, Dog&lt;int&gt;&gt;
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3" class="outline-3">
+<h3 id="sec-4-3"><span class="section-number-3">4.3</span> extern Templates</h3>
+<div class="outline-text-3" id="text-4-3">
+<div class="org-src-container">
+
+<pre class="src src-cpp">// --file1.h --
+template&lt;typenameT&gt;
+T templated_func(constT&amp; t)
+{
+  returnt;
+}
+// --file1.cpp --
+usingnamespacestd;
+voidf()
+{
+  cout&lt;&lt; templated_func(10);
+}
+// --file2.cpp --
+usingnamespacestd;
+externtemplateinttemplated_func(constint&amp;);
+voidg()
+{
+  cout&lt;&lt; templated_func(1234);
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-4" class="outline-3">
+<h3 id="sec-4-4"><span class="section-number-3">4.4</span> Local and Unnamed Types as Template Arguments</h3>
+<div class="outline-text-3" id="text-4-4">
+<p>
+one example:
+</p>
+<div class="org-src-container">
+
+<pre class="src src-cpp">{
+  structA
+    {
+      string name() const{ return"I'm A!"; }
+    };
+  vector&lt;A&gt; v(10);
+  cout&lt;&lt; v[0].name() &lt;&lt; endl;
+}
+</pre>
+</div>
+
+<p>
+Another example:
+</p>
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameT&gt;
+voidprint(constT&amp; t)
+{
+  t.print();
+}
+struct
+{
+  intx = 10;
+  voidprint() const
+  {
+    cout&lt;&lt; x;
+  }
+} a;
+print(a);
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> foreach</h2>
+<div class="outline-text-2" id="text-5">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -200,9 +525,9 @@ auto&amp; y = a;        // int&amp; y = a
 </div>
 </div>
 
-<div id="outline-container-sec-5" class="outline-2">
-<h2 id="sec-5"><span class="section-number-2">5</span> nullptr</h2>
-<div class="outline-text-2" id="text-5">
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> nullptr</h2>
+<div class="outline-text-2" id="text-6">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -225,9 +550,9 @@ int main() {
 </div>
 </div>
 
-<div id="outline-container-sec-6" class="outline-2">
-<h2 id="sec-6"><span class="section-number-2">6</span> enum class</h2>
-<div class="outline-text-2" id="text-6">
+<div id="outline-container-sec-7" class="outline-2">
+<h2 id="sec-7"><span class="section-number-2">7</span> enum class</h2>
+<div class="outline-text-2" id="text-7">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -265,12 +590,104 @@ int main() {
 通过关键字class声明的枚举类型是Scoped Enum，引用时必须包含枚举类型的
 名称。
 </p>
+
+<ul class="org-ul">
+<li>Specifying the Underlying Type
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">enumDirection : unsignedshort
+{
+    South,
+    West,
+    East,
+    North
+    };
+cout&lt;&lt; sizeof(North) &lt;&lt; endl; // outputs sizeof(unsigned short)
+enumColor: double// error
+{
+  Black
+};
+</pre>
+</div>
+</li>
+
+<li>Forward Declaration
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">// flight_board.h
+enumclassAirportCode; // forward declared enum
+structFlightBoard
+{
+  voidprint_airport_name(AirportCodecode)
+  {}
+  voidprint_flight(AirportCodecode, conststring&amp; flight)
+    {
+      // ...
+      print_airport_name(code);
+    }
+};
+
+
+// navigator.h
+structNavigator
+{
+  Navigator();
+ private:
+ enumCompassPoint: int; // forward declaration
+  CompassPoint_compass_point;
+};
+// navigator.cpp
+enumNavigator::CompassPoint: int{ North, South, East, West};
+Navigator::Navigator() : _compass_point(North)
+{}
+</pre>
+</div>
+
+<p>
+Forward Declaration Rules
+</p>
+
+<ul class="org-ul">
+<li>Forward declaration has to include the type (implicitly or
+explicitly)
+</li>
+
+<li>The underlying type has to match between all declarations and
+definition
+</li>
+
+<li>Declarations can’t change from scoped to unscopedenum, or vice
+versa
+</li>
+</ul>
+<div class="org-src-container">
+
+<pre class="src src-cpp">enumE : short; // OK
+enumF; // error, underlying type is required
+enumclassG : short; // OK
+enumclassH; // OK, underlying type for scoped enumsis intby default
+enumE : short; // OK, redeclaration
+enumclassG : short; // OK, redeclaration
+enumclassH; // OK, redeclaration
+enumclassH : int; // OK, redeclarationwith the same underlying type
+enumclassE : short; // error, can't change from unscopedto scoped
+enumG : short; // error, can't change from scoped to unscoped
+enumE : int; // error, different underlying type
+enumclassG; // error, different underlying type
+enumclassH : short; // error, different underlying type
+enumclassH {}; // OK, this redeclarationis a definition
+</pre>
+</div>
+</li>
+</ul>
 </div>
 </div>
 
-<div id="outline-container-sec-7" class="outline-2">
-<h2 id="sec-7"><span class="section-number-2">7</span> <code>static_assert</code></h2>
-<div class="outline-text-2" id="text-7">
+<div id="outline-container-sec-8" class="outline-2">
+<h2 id="sec-8"><span class="section-number-2">8</span> <code>static_assert</code></h2>
+<div class="outline-text-2" id="text-8">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -284,12 +701,197 @@ int main() {
    static_assert( sizeof(int) == 4 );
 </pre>
 </div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">structBase
+{
+  virtual~Base() {}
+};
+template&lt;typenameT&gt;
+classDerived : publicT
+{
+  static_assert(has_virtual_destructor&lt;T&gt;::value,
+                "The base class must have a virtual destructor");
+};
+Derived&lt;Base&gt; d; // OK
+Derived&lt;string&gt; s; // triggers static_assert
+</pre>
+</div>
 </div>
 </div>
 
-<div id="outline-container-sec-8" class="outline-2">
-<h2 id="sec-8"><span class="section-number-2">8</span> Delegating Constructor</h2>
-<div class="outline-text-2" id="text-8">
+<div id="outline-container-sec-9" class="outline-2">
+<h2 id="sec-9"><span class="section-number-2">9</span> Class</h2>
+<div class="outline-text-2" id="text-9">
+</div><div id="outline-container-sec-9-1" class="outline-3">
+<h3 id="sec-9-1"><span class="section-number-3">9.1</span> In-class initializers for non-static data members</h3>
+<div class="outline-text-3" id="text-9-1">
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+ public:
+  string _model = "Unknown";
+  vector&lt;Engine&gt; _engines {Engine(), Engine()};
+};
+classJetPlane
+{
+  vector&lt;Engine&gt; _engines;
+  string _manufacturer;
+  string _model;
+ public:
+  JetPlane() :
+    _engines(2), _manufacturer("Unknown"), _model("Unknown")
+    {}
+  JetPlane(conststring&amp; manufacturer) :
+    _engines(2), _manufacturer(manufacturer), _model("Unknown")
+    {}
+};
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+  vector&lt;Engine&gt; _engines {Engine(), Engine()};
+  string _manufacturer = "Unknown";
+  string _model = "Unknown";
+ public:
+  JetPlane()
+    {}
+  JetPlane(conststring&amp; manufacturer) : _manufacturer(manufacturer)
+    {}
+};
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+ public:
+  string _manufacturer = "Unknown";
+  string _model = "Unknown";
+  vector&lt;Engine&gt; _engines {get_engine_count(_manufacturer, _model)};
+  staticsize_tget_engine_count(conststring&amp; manufacturer,
+                               conststring&amp; model);
+};
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">structCounter
+{
+  int_count = 1;
+};
+Counter c = {10};
+classJetPlane
+{
+ public:
+  vector&lt;Engine&gt; _engines {2};
+  JetPlane() : _engines(4)
+    {}
+};
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-9-2" class="outline-3">
+<h3 id="sec-9-2"><span class="section-number-3">9.2</span> Inheriting Constructors</h3>
+<div class="outline-text-3" id="text-9-2">
+<div class="org-src-container">
+
+<pre class="src src-cpp">classPlane
+{
+  vector&lt;Engine&gt; _engines;
+  string _manufacturer;
+  string _model;
+ public:
+  Plane(conststring&amp; manufacturer);
+  Plane(constPlaneID&amp; tail_number);
+};
+classJetPlane: publicPlane
+{
+ public:
+  // boring
+  JetPlane(conststring&amp; manufacturer) : Plane(manufacturer)
+    {}
+  // boring
+  JetPlane(constPlaneID&amp; tail_number) : Plane(tail_number)
+    {}
+};
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane: publicPlane
+{
+  usingPlane::Plane;
+};
+JetPlaneplane("Boeing"); // OK
+classPropPlane: publicPlane
+{
+ public:
+  usingPlane::Plane;
+  // overrides Plane constructor with the same parameters
+  PropPlane(conststring&amp; manufacturer) : Plane(manufacturer)
+    {
+      cout&lt;&lt; "In PropPlane()"&lt;&lt; endl;
+    }
+};
+PropPlaneprop_plane("ATR");
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classPlane
+{
+  string _manufacturer;
+ public:
+  Plane(conststring&amp; manufacturer) : _manufacturer(manufacturer)
+    {}
+};
+classBoat
+{
+  string _boat_manufacturer;
+ public:
+  Boat(conststring&amp; manufacturer) : _boat_manufacturer(manufacturer)
+    {}
+};
+classFloatPlane: publicPlane, publicBoat
+{
+  usingPlane::Plane;
+  usingBoat::Boat;
+  FloatPlane(conststring&amp; manufacturer) : Plane(manufacturer), Boat("n/a")
+    {}
+};
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classPropPlane: publicPlane
+{
+  size_t_prop_count;
+ public:
+  usingPlane::Plane;
+};
+// oops, _prop_countis not initialized
+PropPlaneprop_plane("ATR");
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-9-3" class="outline-3">
+<h3 id="sec-9-3"><span class="section-number-3">9.3</span> Delegating Constructor</h3>
+<div class="outline-text-3" id="text-9-3">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -325,12 +927,132 @@ class Dog {
 // Limitation: Dog() has to be called first.
 </pre>
 </div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+  vector&lt;Engine&gt; _engines;
+  string _manufacturer;
+  string _model;
+ public:
+  JetPlane() : JetPlane(2, "Unknown", "Unknown")
+    {}
+  JetPlane(conststring&amp; manufacturer, conststring&amp; model) :
+    JetPlane(Lookup::engine_count(manufacturer, model), manufacturer, model)
+    {
+      assign_tail_number();
+    }
+ private:
+  JetPlane(size_tengine_count, conststring&amp; manufacturer,
+           conststring&amp; model) :
+    _engines(engine_count), _manufacturer(manufacturer), _model(model)
+  {
+    configure_engines();
+  }
+  // ...
+};
+</pre>
+</div>
 </div>
 </div>
 
-<div id="outline-container-sec-9" class="outline-2">
-<h2 id="sec-9"><span class="section-number-2">9</span> override (for virtual function)</h2>
-<div class="outline-text-2" id="text-9">
+<div id="outline-container-sec-9-4" class="outline-3">
+<h3 id="sec-9-4"><span class="section-number-3">9.4</span> Default Methods</h3>
+<div class="outline-text-3" id="text-9-4">
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+ public:
+  JetPlane() = default;
+  JetPlane(constJetPlane&amp; other);
+  JetPlane(JetPlane&amp;&amp;) = default;
+};
+classJetPlane
+{
+ public:
+  JetPlane() = default;
+  virtual~JetPlane() = default;
+ protected:
+  JetPlane(constJetPlane&amp; other) = default;
+  JetPlane&amp; operator=(constJetPlane&amp;) = default;
+};
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-9-5" class="outline-3">
+<h3 id="sec-9-5"><span class="section-number-3">9.5</span> Deleted Methods</h3>
+<div class="outline-text-3" id="text-9-5">
+<p>
+Purpose: 
+</p>
+
+<ul class="org-ul">
+<li>Disable some instantiations of a template
+</li>
+
+<li>Disable unwanted conversion
+</li>
+
+<li>Disable heap allocation
+</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 12. delete
+ */
+
+class Dog {
+   Dog(int age) {}
+}
+
+Dog a(2);
+Dog b(3.0); // 3.0 is converted from double to int
+a = b;     // Compiler generated assignment operator
+
+
+// C++ 11:
+class Dog {
+   Dog(int age) {}
+   Dog(double ) = delete;
+   Dog&amp; operator=(const Dog&amp;) = delete;
+}
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameT&gt;
+voidserialize(constT&amp; obj)
+{
+  cout&lt;&lt; obj.to_string();
+};
+// PasswordStorenot allowed to be serialized
+voidserialize(constPasswordStore&amp;) = delete;
+classAltimeter
+{
+ public:
+  Altimeter(double) {}
+  Altimeter(int) = delete;
+};
+classStackOnly
+{
+ public:
+  void* operator new(size_t) = delete;
+};
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-9-6" class="outline-3">
+<h3 id="sec-9-6"><span class="section-number-3">9.6</span> override (for virtual function)</h3>
+<div class="outline-text-3" id="text-9-6">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -367,9 +1089,9 @@ class Yellowdog : public Dog {
 </div>
 </div>
 
-<div id="outline-container-sec-10" class="outline-2">
-<h2 id="sec-10"><span class="section-number-2">10</span> final (for virtual function and for class)</h2>
-<div class="outline-text-2" id="text-10">
+<div id="outline-container-sec-9-7" class="outline-3">
+<h3 id="sec-9-7"><span class="section-number-3">9.7</span> final (for virtual function and for class)</h3>
+<div class="outline-text-3" id="text-9-7">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -385,12 +1107,36 @@ class Dog {
 };
 </pre>
 </div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">structBase final
+{};
+structDerived : publicBase // compile error, can't inherit from
+{}; // final class
+structInterface
+{
+  virtualvoidf()
+    {}
+};
+structBase : publicInterface
+{
+  virtualvoidf() final
+    {}
+};
+structDerived : publicBase
+{
+  virtualvoidf() // compile error, can't override
+    {} // a final method
+};
+</pre>
+</div>
 </div>
 </div>
 
-<div id="outline-container-sec-11" class="outline-2">
-<h2 id="sec-11"><span class="section-number-2">11</span> Compiler Generated Default Constructor</h2>
-<div class="outline-text-2" id="text-11">
+<div id="outline-container-sec-9-8" class="outline-3">
+<h3 id="sec-9-8"><span class="section-number-3">9.8</span> Compiler Generated Default Constructor</h3>
+<div class="outline-text-3" id="text-9-8">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -413,38 +1159,79 @@ class Dog {
 </div>
 </div>
 
-<div id="outline-container-sec-12" class="outline-2">
-<h2 id="sec-12"><span class="section-number-2">12</span> delete</h2>
-<div class="outline-text-2" id="text-12">
+<div id="outline-container-sec-9-9" class="outline-3">
+<h3 id="sec-9-9"><span class="section-number-3">9.9</span> Extended Friend Declarations</h3>
+<div class="outline-text-3" id="text-9-9">
 <div class="org-src-container">
 
-<pre class="src src-c++">/*
- * 12. delete
- */
+<pre class="src src-cpp">classA;
+classB;
+classFriend
+{
+  friendclassA; // old declarations are still OK
+  friendB; // you can also do this now
+};
+classAmigo
+{
+  friendclassD; // OK: declares new class D
+  friendD; // error: undeclared class D
+};
+classB;
+typedefB B2;
+classAmigo
+{
+  friendB2; // OK
+};
+</pre>
+</div>
 
-class Dog {
-   Dog(int age) {}
-}
+<div class="org-src-container">
 
-Dog a(2);
-Dog b(3.0); // 3.0 is converted from double to int
-a = b;     // Compiler generated assignment operator
-
-
-// C++ 11:
-class Dog {
-   Dog(int age) {}
-   Dog(double ) = delete;
-   Dog&amp; operator=(const Dog&amp;) = delete;
-}
+<pre class="src src-cpp">template&lt;typenameT, typenameU&gt;
+classAmi
+{
+  friendT; // OK
+  friendclassU; // still an error, can't use an elaborate specifier
+  // in a template
+};
+Ami&lt;string, string&gt; rc; // OK
+Ami&lt;char, string&gt; f; // OK, "friend char" has no effect in the template
 </pre>
 </div>
 </div>
 </div>
 
-<div id="outline-container-sec-13" class="outline-2">
-<h2 id="sec-13"><span class="section-number-2">13</span> constexpr</h2>
-<div class="outline-text-2" id="text-13">
+<div id="outline-container-sec-9-10" class="outline-3">
+<h3 id="sec-9-10"><span class="section-number-3">9.10</span> Nested Class Access Rights</h3>
+<div class="outline-text-3" id="text-9-10">
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+  // ...
+ private:
+  int_flap_angle;
+  classGPSNavigator{};
+  classAutopilot
+    {
+      GPSNavigator_gps_navigator; // OK, JetPlane::Autopilot can access
+      // JetPlane::GPSNavigator
+      voidadjust_flaps(JetPlane&amp; plane, intflap_angle)
+        {
+          plane._flap_angle= flap_angle; // OK, JetPlane::Autopilot can
+          // access JetPlane::_flap_angle
+        }
+    };
+};
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-10" class="outline-2">
+<h2 id="sec-10"><span class="section-number-2">10</span> constexpr</h2>
+<div class="outline-text-2" id="text-10">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -469,12 +1256,30 @@ int y = cubed(1789);  // computed at compile time
 //2. Super small. It will not occupy space in binary.
 </pre>
 </div>
+
+<p>
+What Else Is It Good for?
+</p>
+
+<ul class="org-ul">
+<li>Ensure constant initialization at compile time
+</li>
+
+<li>Constant expressions can be used in case labels etc.
+</li>
+
+<li>Guaranteed not to cause race conditions
+</li>
+</ul>
 </div>
 </div>
 
-<div id="outline-container-sec-14" class="outline-2">
-<h2 id="sec-14"><span class="section-number-2">14</span> New String Literals</h2>
-<div class="outline-text-2" id="text-14">
+<div id="outline-container-sec-11" class="outline-2">
+<h2 id="sec-11"><span class="section-number-2">11</span> Literals</h2>
+<div class="outline-text-2" id="text-11">
+</div><div id="outline-container-sec-11-1" class="outline-3">
+<h3 id="sec-11-1"><span class="section-number-3">11.1</span> Unicode literals and New String Literals</h3>
+<div class="outline-text-3" id="text-11-1">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -491,55 +1296,79 @@ int y = cubed(1789);  // computed at compile time
   char*     d = R"string \\"    // to define raw string.
 </pre>
 </div>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">Prefix</th>
+<th scope="col" class="text-left">Character Type</th>
+<th scope="col" class="text-left">String Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">u8</td>
+<td class="text-left">char</td>
+<td class="text-left">strin</td>
+</tr>
+
+<tr>
+<td class="text-left">u</td>
+<td class="text-left">char16<sub>t</sub></td>
+<td class="text-left">u16string</td>
+</tr>
+
+<tr>
+<td class="text-left">U</td>
+<td class="text-left">char32<sub>t</sub></td>
+<td class="text-left">u32string</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 
-<div id="outline-container-sec-15" class="outline-2">
-<h2 id="sec-15"><span class="section-number-2">15</span> lambda function</h2>
-<div class="outline-text-2" id="text-15">
+
+<div id="outline-container-sec-11-2" class="outline-3">
+<h3 id="sec-11-2"><span class="section-number-3">11.2</span> Raw Literals</h3>
+<div class="outline-text-3" id="text-11-2">
 <div class="org-src-container">
 
-<pre class="src src-c++">/*
- * 15. lambda function
- */
+<pre class="src src-cpp">cout&lt;&lt; R"(use "\n" for newlines)"&lt;&lt; endl;
 
-cout &lt;&lt; [](int x, int y){return x+y}(3,4) &lt;&lt; endl;  // Output: 7
-auto f = [](int x, int y) { return x+y; };
-cout &lt;&lt; f(3,4) &lt;&lt; endl;   // Output: 7
-
-
-template&lt;typename func&gt;
-void filter(func f, vector&lt;int&gt; arr) {
-   for (auto i: arr) {
-      if (f(i))
-         cout &lt;&lt; i &lt;&lt; " ";
-   }
-}
-
-int main() {
-   vector&lt;int&gt; v = {1, 2, 3, 4, 5, 6 };
-
-   filter([](int x) {return (x&gt;3);},  v);    // Output: 4 5 6
-   ...
-   filter([](int x) {return (x&gt;2 &amp;&amp; x&lt;5);},  v); // Output: 3 4
+R"Nonewline \n"
+LR"Nonewline \n"
+u8R"No newline \n"
+uR"Nonewline \n"
+UR"Nonewline \n"
 
 
-   int y = 4;  
-   filter([&amp;](int x) {return (x&gt;y);},  v);    // Output: 5 6
-   //Note: [&amp;] tells compiler that we want variable capture
-}
+R"("\w+\\\w+")"
+"\"\\w+\\\\\\w+\""
 
-// Lambda function works almost like a language extention
-template
-for_nth_item
+R"(grep-r "\.js" *)"
+
+cout&lt;&lt; R"!!(A raw literal is delimited with "( )")!!"&lt;&lt; endl;
+
+R"(multiline
+literal)"
 </pre>
 </div>
 </div>
 </div>
 
-<div id="outline-container-sec-16" class="outline-2">
-<h2 id="sec-16"><span class="section-number-2">16</span> User defined Literals</h2>
-<div class="outline-text-2" id="text-16">
+<div id="outline-container-sec-11-3" class="outline-3">
+<h3 id="sec-11-3"><span class="section-number-3">11.3</span> User defined Literals</h3>
+<div class="outline-text-3" id="text-11-3">
 <div class="org-src-container">
 
 <pre class="src src-c++">/*
@@ -605,116 +1434,8 @@ int main() {
 }
 </pre>
 </div>
-</div>
-</div>
-
-<div id="outline-container-sec-17" class="outline-2">
-<h2 id="sec-17"><span class="section-number-2">17</span> Variadic Template</h2>
-<div class="outline-text-2" id="text-17">
-<div class="org-src-container">
-
-<pre class="src src-c++">/*
- * Variadic Template
- *
- * A template that can take any number of template arguments of any type.
- * Both class and function templates can be variadic.
- */
-template&lt;typename... arg&gt;
-class BoTemplate;
-
-BoTemplate&lt;float&gt; t1;
-BoTemplate&lt;int, long, double, float&gt; t2;
-BoTemplate&lt;int, std::vector&lt;double&gt;&gt; t3;
-
-BoTemplate&lt;&gt; t4;
 
 
-// Combination of variadic and non-variadic argument
-template&lt;typename T, typename... arg&gt;
-class BoTemplate;
-
-BoTemplate&lt;&gt; t4;  // Error
-BoTemplate&lt;int, long, double, float&gt; t2;  // OK
-
-
-// Define a default template argument
-template&lt;typename T = int, typename... arg&gt;
-class BoTemplate;
-</pre>
-</div>
-</div>
-</div>
-
-<div id="outline-container-sec-18" class="outline-2">
-<h2 id="sec-18"><span class="section-number-2">18</span> Template Alias</h2>
-<div class="outline-text-2" id="text-18">
-<div class="org-src-container">
-
-<pre class="src src-c++">/*
- * Template Alias
- */
-  template&lt;class T&gt; class Dog { /* ... */ };
-  template&lt;class T&gt;
-    using DogVec = std::vector&lt;T, Dog&lt;T&gt;&gt;;
-
-  DogVec&lt;int&gt; v;  // Same as: std::vector&lt;int, Dog&lt;int&gt;&gt;
-</pre>
-</div>
-</div>
-</div>
-
-<div id="outline-container-sec-19" class="outline-2">
-<h2 id="sec-19"><span class="section-number-2">19</span> decltype</h2>
-<div class="outline-text-2" id="text-19">
-<div class="org-src-container">
-
-<pre class="src src-c++">/*
- * decltype
- *
- * It is equivalent of GNU typeof
- */
-  const int&amp; foo();      // Declare a function foo()
-  decltype(foo())  x1;  //  type is const int&amp;
-
-  struct S { double x; };
-  decltype(S::x)   x2;  //  x2 is double
-
-  auto s = make_shared&lt;S&gt;();
-  decltype(s-&gt;x)   x3;  //  x3 is double
-
-  int i;
-  decltype(i)      x4;  //  x4 is int  
-
-  float f;              
-  decltype(i + f)  x5;   // x5 is float
-
-  // decltype turns out to be very useful for template generic programming
-  template&lt;type X, type Y&gt;
-  void foo(X x, Y y) {
-     ...
-     decltype(x+y) z;
-     ...
-  }
-
-  // How about return type needs to use decltype?
-  template&lt;type X, type Y&gt;
-  decltype(x+y) goo(X x, Y y) {      // Error: x &amp; y are undefined 
-     return  x + y;
-  }
-
-  // Combining auto and decltype to implement templates with trailing return type
-  template&lt;type X, type Y&gt;
-  auto goo(X x, Y y) -&gt; decltype(x+y) {
-     return  x + y;
-  }
-</pre>
-</div>
-</div>
-</div>
-
-<div id="outline-container-sec-20" class="outline-2">
-<h2 id="sec-20"><span class="section-number-2">20</span> user defined literals</h2>
-<div class="outline-text-2" id="text-20">
 <p>
 C++ went a long way to make user defined types (classes) to behave
 same as build-in types. User defined literals pushes this effort
@@ -785,10 +1506,127 @@ int main(int argc, char *argv[])
 </div>
 </div>
 </div>
+</div>
 
-<div id="outline-container-sec-21" class="outline-2">
-<h2 id="sec-21"><span class="section-number-2">21</span> concurrency</h2>
-<div class="outline-text-2" id="text-21">
+<div id="outline-container-sec-12" class="outline-2">
+<h2 id="sec-12"><span class="section-number-2">12</span> lambda function</h2>
+<div class="outline-text-2" id="text-12">
+<p>
+Why Do We Need This Thing
+</p>
+
+<ul class="org-ul">
+<li>Improve locality
+</li>
+
+<li>Reduce boilerplate
+</li>
+
+<li>Express intentions better
+</li>
+</ul>
+
+
+<p>
+Lambda Parameters
+</p>
+
+<ul class="org-ul">
+<li>No default values for parameters
+</li>
+
+<li>No variable length argument lists
+</li>
+
+<li>No unnamed parameters
+</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-c++">/*
+ * 15. lambda function
+ */
+
+cout &lt;&lt; [](int x, int y){return x+y}(3,4) &lt;&lt; endl;  // Output: 7
+auto f = [](int x, int y) { return x+y; };
+cout &lt;&lt; f(3,4) &lt;&lt; endl;   // Output: 7
+
+
+template&lt;typename func&gt;
+void filter(func f, vector&lt;int&gt; arr) {
+   for (auto i: arr) {
+      if (f(i))
+         cout &lt;&lt; i &lt;&lt; " ";
+   }
+}
+
+int main() {
+   vector&lt;int&gt; v = {1, 2, 3, 4, 5, 6 };
+
+   filter([](int x) {return (x&gt;3);},  v);    // Output: 4 5 6
+   ...
+   filter([](int x) {return (x&gt;2 &amp;&amp; x&lt;5);},  v); // Output: 3 4
+
+
+   int y = 4;  
+   filter([&amp;](int x) {return (x&gt;y);},  v);    // Output: 5 6
+   //Note: [&amp;] tells compiler that we want variable capture
+}
+
+// Lambda function works almost like a language extention
+template
+for_nth_item
+</pre>
+</div>
+
+
+<p>
+non-local variables can always be accessed in a lambda, local
+variables have to be captured. 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c++">// non-local variables can always be accessed in a lambda
+function&lt;bool()&gt; g() 
+{
+    static auto a = 5;
+    static auto b = -3;
+    return []() { return a + b &gt; 0; };
+}
+
+// local variables have to be captured
+function&lt;bool()&gt; f() 
+{
+    auto a = 5;
+    auto b = -3;
+    // won't compile if a &amp; b aren't captured
+    return [a, b]() { return a + b &gt; 0; };  
+}
+</pre>
+</div>
+
+<p>
+Rules of Thumb for Lambdas
+</p>
+
+<ul class="org-ul">
+<li>Write short and clear lambdas
+</li>
+
+<li>If it’s becoming long, you might need a function object
+</li>
+
+<li>Don’t duplicate code across lambda expressions
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-13" class="outline-2">
+<h2 id="sec-13"><span class="section-number-2">13</span> concurrency</h2>
+<div class="outline-text-2" id="text-13">
 <p>
 C++定义了线程，互斥量，条件变量以及future等在多线程编程中用到的一些
 基础工具。
@@ -848,30 +1686,377 @@ int main()
 </div>
 </div>
 </div>
+
+<div id="outline-container-sec-14" class="outline-2">
+<h2 id="sec-14"><span class="section-number-2">14</span> Move semantics</h2>
+<div class="outline-text-2" id="text-14">
+<div class="org-src-container">
+
+<pre class="src src-cpp">vector&lt;string&gt; v;
+v.push_back(string("a"));
+v.push_back(string("b"));
+string s = string("Boeing") + "737"+ "-"+ "300";
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classJetPlane
+{
+ public:
+  JetPlane();
+  JetPlane(constJetPlane&amp;);
+  JetPlane&amp; operator=(constJetPlane&amp;);
+  JetPlane(JetPlane&amp;&amp;);
+  JetPlane&amp; operator=(JetPlane&amp;&amp;);
+};
+</pre>
+</div>
+
+<p>
+What Are the Benefits?
+</p>
+
+<ul class="org-ul">
+<li>Better performance
+</li>
+
+<li>More clarity of intention in the code
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">Surface3D get_surface(constLatitude&amp; lat, constLongitude&amp; lon)
+{
+  Surface3D surface;
+  // load up millions of points making up the surface
+  returnsurface;
+}
+</pre>
+</div>
+</li>
+
+<li>Better support for exclusive resource ownership
+</li>
+</ul>
+
+
+<p>
+Overload Resolution
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">voidf(JetPlane&amp; plane);
+voidf(constJetPlane&amp; plane);
+voidf(JetPlane&amp;&amp; plane);
+voidf(constJetPlane&amp;&amp; plane);
+</pre>
+</div>
+
+<ul class="org-ul">
+<li>Maintain const-correctness -don’t bind constvalue to non-constref
+</li>
+
+<li>Bind lvaluesto lvaluerefs; bind rvaluesto rvaluerefs if possible
+</li>
+
+<li>If rule 2 isn’t enough to resolve ambiguity, choose an overload
+which preserves const-ness
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">JetPlanejet;
+f(jet); // f(JetPlane&amp;)
+constJetPlanegrounded_jet;
+f(grounded_jet); // f(constJetPlane&amp;)
+f(JetPlane()); // f(JetPlane&amp;&amp;)
+automake_const_jet= []() -&gt; constJetPlane{ returnJetPlane(); };
+f(make_const_jet()); // f(constJetPlane&amp;&amp;)
+</pre>
+</div>
+</li>
+</ul>
+
+
+<p>
+Compiler Generated Move Operations
+</p>
+
+<ul class="org-ul">
+<li>No user-declared copy constructor or copy assignment operator
+</li>
+
+<li>No user-declared move assignment operator
+</li>
+
+<li>No user-declared destructor
+</li>
+
+<li>The move constructor wouldn’t be implicitly marked as deleted
+</li>
+</ul>
+
+
+<p>
+Implementing Your Own Move Operations
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classA
+{
+  double_d;
+  int* _p;
+  string _str;
+ public:
+  A(A&amp;&amp; rhs) : _d(rhs._d), _p(rhs._p), _str(move(rhs._str))
+    {
+      rhs._p = nullptr;
+      rhs._str.clear();
+    }
+  A&amp; operator=(A&amp;&amp; rhs)
+    {
+      delete_p;
+      _d = rhs._d;
+      _p = rhs._p;
+      _str= move(rhs._str); // careful!
+      rhs._p = nullptr;
+      rhs._str.clear();
+      return*this;
+    }
+};
+
+voidJetPlane::set_model(conststring&amp; model)
+{
+  _model = model;
+}
+voidJetPlane::set_model(string&amp;&amp; model)
+{
+  _model = move(model); // careful: model is a named rvalueref so it's an
+  // lvalue; use std::move to force a move operation
+  model.clear();
+}
+string model("Airbus 320");
+JetPlanejet;
+jet.set_model(model); // copy overload used
+jet.set_model(string("Airbus 320")); // move overload used
+</pre>
+</div>
+
+<p>
+Move-only Types
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">classMoveOnly
+{
+  int* _p;
+ public:
+  MoveOnly() : _p(newint(10)) {}
+  ~MoveOnly() { delete_p; }
+  MoveOnly(constMoveOnly&amp; rhs) = delete;
+  MoveOnly&amp; operator=(constMoveOnly&amp; rhs) = delete;
+  MoveOnly(MoveOnly&amp;&amp; rhs)
+    {
+      *this= move(rhs);
+    }
+  MoveOnly&amp; operator=(MoveOnly&amp;&amp; rhs)
+    {
+      if(this== &amp;rhs)
+        return*this;
+      _p = rhs._p;
+      rhs._p = nullptr;
+      return*this;
+    }
+};
+
+MoveOnlya;
+MoveOnlyb(a); // copying, doesn't compile
+MoveOnlyc(move(a)); // OK
+MoveOnlyd;
+d= move(b); // OK
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-15" class="outline-2">
+<h2 id="sec-15"><span class="section-number-2">15</span> Reference Collapsing and rvaluesin Templates</h2>
+<div class="outline-text-2" id="text-15">
+<div class="org-src-container">
+
+<pre class="src src-cpp">Point p1(10, 10);
+usingPointRef= Point&amp;;
+PointRef&amp; p2 = p1;
+</pre>
+</div>
+
+<ul class="org-ul">
+<li>A&amp; &amp; becomes A&amp;
+</li>
+
+<li>A&amp; &amp;&amp; becomes A&amp;
+</li>
+
+<li>A&amp;&amp; &amp; becomes A&amp;
+</li>
+
+<li>A&amp;&amp; &amp;&amp; becomes A&amp;&amp;
+</li>
+</ul>
+
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameT&gt; voidf(T&amp;&amp;);
+</pre>
+</div>
+
+<ul class="org-ul">
+<li>f(lvalueA)=&gt; T is A&amp;=&gt;f(A&amp; &amp;&amp;) =&gt;f(A&amp;)
+</li>
+
+<li>f(rvalueA) =&gt;T is A=&gt;f(A&amp;&amp;)
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-16" class="outline-2">
+<h2 id="sec-16"><span class="section-number-2">16</span> Perfect forwarding</h2>
+<div class="outline-text-2" id="text-16">
+<div class="org-src-container">
+
+<pre class="src src-cpp">unique_ptr&lt;vector&lt;Point&gt;&gt; p_points(newvector&lt;Point&gt;(10));
+template&lt;typenameT, typenameArg&gt;
+unique_ptr&lt;T&gt; make_unique(Argarg)
+{
+  returnunique_ptr&lt;T&gt;(newT(arg));
+}
+template&lt;typenameT, typenameArg&gt;
+unique_ptr&lt;T&gt; make_unique(Arg&amp;arg)
+{
+  returnunique_ptr&lt;T&gt;(newT(arg));
+}
+make_unique&lt;vector&lt;int&gt;&gt;(10); // can't convert argument from intto int&amp;
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameT, typenameArg&gt;
+unique_ptr&lt;T&gt; make_unique(constArg&amp; arg)
+{
+  returnunique_ptr&lt;T&gt;(newT(arg));
+}
+template&lt;typenameT, typenameArg&gt;
+unique_ptr&lt;T&gt; make_unique(Arg&amp; arg)
+{
+  returnunique_ptr&lt;T&gt;(newT(arg));
+}
+inta = 10;
+make_unique&lt;vector&lt;int&gt;&gt;(a); // OK, Arg&amp; overload
+make_unique&lt;vector&lt;int&gt;&gt;(10); // OK, constArg&amp; overload
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-cpp">template&lt;typenameT, typenameT1, typenameT2&gt;
+unique_ptr&lt;T&gt; make_unique(T1&amp;&amp; arg1, T2&amp;&amp; arg2)
+{
+  returnunique_ptr&lt;T&gt;(newT(forward&lt;T1&gt;(arg1), forward&lt;T2&gt;(arg2)));
+}
+template&lt;typenameT, typename... Args&gt;
+unique_ptr&lt;T&gt; make_unique(Args&amp;&amp;... args)
+{
+  returnunique_ptr&lt;T&gt;(newT(forward&lt;Args&gt;(args)...));
+}
+#include&lt;utility&gt;
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-17" class="outline-2">
+<h2 id="sec-17"><span class="section-number-2">17</span> Inline Namespaces</h2>
+<div class="outline-text-2" id="text-17">
+<div class="org-src-container">
+
+<pre class="src src-cpp">namespaceAPI
+{
+  inlinenamespacev2
+    {
+      // v2 processes doubles instead of ints
+      voidprocess(vector&lt;double&gt;)
+      {}
+    }
+  namespacev1
+    {
+      voidprocess(vector&lt;int&gt;)
+      {}
+    }
+}
+vector&lt;double&gt; doubles;
+API::process(doubles);
+vector&lt;int&gt; ints;
+API::v1::process(ints);
+</pre>
+</div>
+</div>
+</div>
 </div><div class="col-md-3"><nav id="table-of-contents">
 <div id="text-table-of-contents" class="bs-docs-sidebar">
 <ul class="nav">
 <li><a href="#sec-1">1. Initializer List</a></li>
 <li><a href="#sec-2">2. Uniform Initialization</a></li>
-<li><a href="#sec-3">3. auto type</a></li>
-<li><a href="#sec-4">4. foreach</a></li>
-<li><a href="#sec-5">5. nullptr</a></li>
-<li><a href="#sec-6">6. enum class</a></li>
-<li><a href="#sec-7">7. <code>static_assert</code></a></li>
-<li><a href="#sec-8">8. Delegating Constructor</a></li>
-<li><a href="#sec-9">9. override (for virtual function)</a></li>
-<li><a href="#sec-10">10. final (for virtual function and for class)</a></li>
-<li><a href="#sec-11">11. Compiler Generated Default Constructor</a></li>
-<li><a href="#sec-12">12. delete</a></li>
-<li><a href="#sec-13">13. constexpr</a></li>
-<li><a href="#sec-14">14. New String Literals</a></li>
-<li><a href="#sec-15">15. lambda function</a></li>
-<li><a href="#sec-16">16. User defined Literals</a></li>
-<li><a href="#sec-17">17. Variadic Template</a></li>
-<li><a href="#sec-18">18. Template Alias</a></li>
-<li><a href="#sec-19">19. decltype</a></li>
-<li><a href="#sec-20">20. user defined literals</a></li>
-<li><a href="#sec-21">21. concurrency</a></li>
+<li><a href="#sec-3">3. Type Inference</a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. auto type</a></li>
+<li><a href="#sec-3-2">3.2. decltype</a></li>
+</ul>
+</li>
+<li><a href="#sec-4">4. template</a>
+<ul class="nav">
+<li><a href="#sec-4-1">4.1. Variadic Template</a></li>
+<li><a href="#sec-4-2">4.2. Template Alias</a></li>
+<li><a href="#sec-4-3">4.3. extern Templates</a></li>
+<li><a href="#sec-4-4">4.4. Local and Unnamed Types as Template Arguments</a></li>
+</ul>
+</li>
+<li><a href="#sec-5">5. foreach</a></li>
+<li><a href="#sec-6">6. nullptr</a></li>
+<li><a href="#sec-7">7. enum class</a></li>
+<li><a href="#sec-8">8. <code>static_assert</code></a></li>
+<li><a href="#sec-9">9. Class</a>
+<ul class="nav">
+<li><a href="#sec-9-1">9.1. In-class initializers for non-static data members</a></li>
+<li><a href="#sec-9-2">9.2. Inheriting Constructors</a></li>
+<li><a href="#sec-9-3">9.3. Delegating Constructor</a></li>
+<li><a href="#sec-9-4">9.4. Default Methods</a></li>
+<li><a href="#sec-9-5">9.5. Deleted Methods</a></li>
+<li><a href="#sec-9-6">9.6. override (for virtual function)</a></li>
+<li><a href="#sec-9-7">9.7. final (for virtual function and for class)</a></li>
+<li><a href="#sec-9-8">9.8. Compiler Generated Default Constructor</a></li>
+<li><a href="#sec-9-9">9.9. Extended Friend Declarations</a></li>
+<li><a href="#sec-9-10">9.10. Nested Class Access Rights</a></li>
+</ul>
+</li>
+<li><a href="#sec-10">10. constexpr</a></li>
+<li><a href="#sec-11">11. Literals</a>
+<ul class="nav">
+<li><a href="#sec-11-1">11.1. Unicode literals and New String Literals</a></li>
+<li><a href="#sec-11-2">11.2. Raw Literals</a></li>
+<li><a href="#sec-11-3">11.3. User defined Literals</a></li>
+</ul>
+</li>
+<li><a href="#sec-12">12. lambda function</a></li>
+<li><a href="#sec-13">13. concurrency</a></li>
+<li><a href="#sec-14">14. Move semantics</a></li>
+<li><a href="#sec-15">15. Reference Collapsing and rvaluesin Templates</a></li>
+<li><a href="#sec-16">16. Perfect forwarding</a></li>
+<li><a href="#sec-17">17. Inline Namespaces</a></li>
 </ul>
 </div>
 </nav>

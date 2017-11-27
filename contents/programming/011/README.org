@@ -102,35 +102,283 @@
       
   #+END_SRC
 
-* auto type
-  #+BEGIN_SRC c++
-    /*
-     ,* 3. auto type
-     ,*/
-    std::vector<int> vec = {2, 3, 4, 5};
+* Type Inference
 
-    // C++ 03
-    for (std::vector<int>::iterator it = vec.begin(); it!=vec.end(); ++ it)
-        m_vec.push_back(*it);
+  [[./images/001.png]]
+
+** auto type
+   
+   Why Else Do We Need It?
+
+   - Don’t Repeat Yourself
+
+   - Higher level of abstraction
+
+   - Type changes are better localized
+
+   - Easier refactoring
+
+   - Simpler template code
+
+   - Declaring variables of undocumented or unnamable types
+   
+   #+BEGIN_SRC c++
+     /*
+      ,* 3. auto type
+      ,*/
+     std::vector<int> vec = {2, 3, 4, 5};
+
+     // C++ 03
+     for (std::vector<int>::iterator it = vec.begin(); it!=vec.end(); ++ it)
+         m_vec.push_back(*it);
 
 
-    // C++ 11: use auto type
-    for (auto it = vec.begin(); it!=vec.end(); ++ it)
-        m_vec.push_back(*it);
+     // C++ 11: use auto type
+     for (auto it = vec.begin(); it!=vec.end(); ++ it)
+         m_vec.push_back(*it);
 
-    auto a = 6;    // a is a integer
-    auto b = 9.6;  // b is a double
-    auto c = a;    // c is an integer
-    auto const x = a;   // int const x = a
-    auto& y = a;        // int& y = a
+     auto a = 6;    // a is a integer
+     auto b = 9.6;  // b is a double
+     auto c = a;    // c is an integer
+     auto const x = a;   // int const x = a
+     auto& y = a;        // int& y = a
 
-    // It's static type, no run-time cost, fat-free.
-    // It also makes code easier to maintain.
+     // It's static type, no run-time cost, fat-free.
+     // It also makes code easier to maintain.
 
-    // 1. Don't use auto when type conversion is needed
-    // 2. IDE becomes more important  
-  #+END_SRC
+     // 1. Don't use auto when type conversion is needed
+     // 2. IDE becomes more important  
 
+     autoj = 10, str= "error"; // compile error, 必须为同一数据类型。
+   #+END_SRC
+
+** decltype
+   #+BEGIN_SRC c++
+     /*
+      ,* decltype
+      ,*
+      ,* It is equivalent of GNU typeof
+      ,*/
+       const int& foo();      // Declare a function foo()
+       decltype(foo())  x1;  //  type is const int&
+
+       struct S { double x; };
+       decltype(S::x)   x2;  //  x2 is double
+
+       auto s = make_shared<S>();
+       decltype(s->x)   x3;  //  x3 is double
+
+       int i;
+       decltype(i)      x4;  //  x4 is int  
+
+       float f;              
+       decltype(i + f)  x5;   // x5 is float
+
+       // decltype turns out to be very useful for template generic programming
+       template<type X, type Y>
+       void foo(X x, Y y) {
+          ...
+          decltype(x+y) z;
+          ...
+       }
+
+       // How about return type needs to use decltype?
+       template<type X, type Y>
+       decltype(x+y) goo(X x, Y y) {      // Error: x & y are undefined 
+          return  x + y;
+       }
+
+       // Combining auto and decltype to implement templates with trailing return type
+       template<type X, type Y>
+       auto goo(X x, Y y) -> decltype(x+y) {
+          return  x + y;
+       }  
+   #+END_SRC
+
+   allows getting the type of an expression
+
+   #+BEGIN_SRC cpp
+     int i = 10;
+     cout << typeid(decltype(i + 1.0)).name() << endl;  // outputs "double"
+     AssertThat((is_same<decltype(i + 1.0), double>::value), Equals(true));
+
+     vector<int> a;
+     decltype(a) b; 
+     b.push_back(10);
+     decltype(a)::iterator iter = a.end();
+
+     //declval allows the use of a type without public constructors in a decltype expression
+     class A
+     {
+     private:
+       A();
+     };
+
+     #if COMPILE_ERROR
+     cout << typeid(decltype(A())).name() << endl; // doesn't compile: 
+     // A() is private
+     #endif
+                 
+     cout << typeid(decltype(declval<A>())).name() << endl;
+   #+END_SRC
+
+* template
+** Variadic Template
+   #+BEGIN_SRC c++
+     /*
+      ,* Variadic Template
+      ,*
+      ,* A template that can take any number of template arguments of any type.
+      ,* Both class and function templates can be variadic.
+      ,*/
+     template<typename... arg>
+     class BoTemplate;
+
+     BoTemplate<float> t1;
+     BoTemplate<int, long, double, float> t2;
+     BoTemplate<int, std::vector<double>> t3;
+
+     BoTemplate<> t4;
+
+
+     // Combination of variadic and non-variadic argument
+     template<typename T, typename... arg>
+     class BoTemplate;
+
+     BoTemplate<> t4;  // Error
+     BoTemplate<int, long, double, float> t2;  // OK
+
+
+     // Define a default template argument
+     template<typename T = int, typename... arg>
+     class BoTemplate;  
+   #+END_SRC
+
+   Example:
+
+   #+BEGIN_SRC cpp
+     template<typenameStream, typename... Columns>
+     classCSVPrinter
+     {
+      public:
+       voidoutput_line(constColumns&... columns);
+       // other methods, constructors etc. not shown
+     };   
+   #+END_SRC
+
+   - Working with Parameter Packs
+
+   #+BEGIN_SRC cpp
+     template<typenameStream, typename... Columns>
+     classCSVPrinter
+     {
+       Stream& _stream;
+       array<string, sizeof...(Columns)> _headers;
+       // rest of implementation
+     };
+   #+END_SRC
+
+   - Traversing Template Parameter Packs
+
+     #+BEGIN_SRC cpp
+       template<typename... Types> // allow zero parameters
+       structTupleSize;
+       template<typenameHead, typename... Tail> // traverse types
+       structTupleSize<Head, Tail...>
+       {
+         staticconstsize_tvalue = sizeof(Head) + TupleSize<Tail...>::value;
+       };
+       template<> structTupleSize<> // end recursion
+       {
+         staticconstsize_tvalue = 0;
+       };
+       TupleSize<>::value;// 0
+       TupleSize<int, double, char>::value; // 13 on a 32-bit platform     
+     #+END_SRC
+
+   - Constraining Parameter Packs to One Type
+
+     #+BEGIN_SRC cpp
+       template<typename... Strings>
+       voidoutput_strings(conststring& s, constStrings&... strings) const
+       {
+         write_column(s, _sep);
+         output_strings(strings...);
+       }
+       voidoutput_strings(conststring& s) const
+       {
+         write_column(s, "\n");
+       }     
+     #+END_SRC
+
+** Template Alias
+   #+BEGIN_SRC c++
+     /*
+      ,* Template Alias
+      ,*/
+       template<class T> class Dog { /* ... */ };
+       template<class T>
+         using DogVec = std::vector<T, Dog<T>>;
+
+       DogVec<int> v;  // Same as: std::vector<int, Dog<int>>  
+   #+END_SRC
+
+** extern Templates
+
+   #+BEGIN_SRC cpp
+     // --file1.h --
+     template<typenameT>
+     T templated_func(constT& t)
+     {
+       returnt;
+     }
+     // --file1.cpp --
+     usingnamespacestd;
+     voidf()
+     {
+       cout<< templated_func(10);
+     }
+     // --file2.cpp --
+     usingnamespacestd;
+     externtemplateinttemplated_func(constint&);
+     voidg()
+     {
+       cout<< templated_func(1234);
+     }   
+   #+END_SRC
+
+** Local and Unnamed Types as Template Arguments
+
+   one example:
+   #+BEGIN_SRC cpp
+     {
+       structA
+         {
+           string name() const{ return"I'm A!"; }
+         };
+       vector<A> v(10);
+       cout<< v[0].name() << endl;
+     }   
+   #+END_SRC
+
+   Another example:
+   #+BEGIN_SRC cpp
+     template<typenameT>
+     voidprint(constT& t)
+     {
+       t.print();
+     }
+     struct
+     {
+       intx = 10;
+       voidprint() const
+       {
+         cout<< x;
+       }
+     } a;
+     print(a);   
+   #+END_SRC
+    
 * foreach
   #+BEGIN_SRC c++
     /*
@@ -214,6 +462,84 @@
   通过关键字class声明的枚举类型是Scoped Enum，引用时必须包含枚举类型的
   名称。
 
+  - Specifying the Underlying Type
+
+    #+BEGIN_SRC cpp
+      enumDirection : unsignedshort
+      {
+          South,
+          West,
+          East,
+          North
+          };
+      cout<< sizeof(North) << endl; // outputs sizeof(unsigned short)
+      enumColor: double// error
+      {
+        Black
+      };    
+    #+END_SRC
+
+  - Forward Declaration
+
+    #+BEGIN_SRC cpp
+      // flight_board.h
+      enumclassAirportCode; // forward declared enum
+      structFlightBoard
+      {
+        voidprint_airport_name(AirportCodecode)
+        {}
+        voidprint_flight(AirportCodecode, conststring& flight)
+          {
+            // ...
+            print_airport_name(code);
+          }
+      };
+
+
+      // navigator.h
+      structNavigator
+      {
+        Navigator();
+       private:
+       enumCompassPoint: int; // forward declaration
+        CompassPoint_compass_point;
+      };
+      // navigator.cpp
+      enumNavigator::CompassPoint: int{ North, South, East, West};
+      Navigator::Navigator() : _compass_point(North)
+      {}
+
+    #+END_SRC
+
+    Forward Declaration Rules
+
+    - Forward declaration has to include the type (implicitly or
+      explicitly)
+
+    - The underlying type has to match between all declarations and
+      definition
+
+    - Declarations can’t change from scoped to unscopedenum, or vice
+      versa
+
+    #+TITLE: Forward Declaration Examples
+    #+BEGIN_SRC cpp
+      enumE : short; // OK
+      enumF; // error, underlying type is required
+      enumclassG : short; // OK
+      enumclassH; // OK, underlying type for scoped enumsis intby default
+      enumE : short; // OK, redeclaration
+      enumclassG : short; // OK, redeclaration
+      enumclassH; // OK, redeclaration
+      enumclassH : int; // OK, redeclarationwith the same underlying type
+      enumclassE : short; // error, can't change from unscopedto scoped
+      enumG : short; // error, can't change from scoped to unscoped
+      enumE : int; // error, different underlying type
+      enumclassG; // error, different underlying type
+      enumclassH : short; // error, different underlying type
+      enumclassH {}; // OK, this redeclarationis a definition    
+    #+END_SRC
+
 * =static_assert=
   #+BEGIN_SRC c++
     /*
@@ -227,131 +553,464 @@
        static_assert( sizeof(int) == 4 );  
   #+END_SRC
 
-* Delegating Constructor 
-  #+BEGIN_SRC c++
-    /*
-     ,* 8. Delegating Constructor 
-     ,*/
-
-    class Dog {
-       public:
-       Dog() { ... }
-       Dog(int a) { Dog(); doOtherThings(a); }
+  #+TITLE: Example 1
+  #+BEGIN_SRC cpp
+    structBase
+    {
+      virtual~Base() {}
     };
-
-
-    // C++ 03:
-    class Dog {
-       init() { ... };
-       public:
-       Dog() { init(); }
-       Dog(int a) { init(); doOtherThings(); }
+    template<typenameT>
+    classDerived : publicT
+    {
+      static_assert(has_virtual_destructor<T>::value,
+                    "The base class must have a virtual destructor");
     };
-    /* Cons:
-     ,* 1. Cumbersome code.
-     ,* 2. init() could be invoked by other functions.
-     ,*/
-
-    // C++ 11:
-    class Dog {
-       int age = 9;
-       public:
-       Dog() { ... }
-       Dog(int a) : Dog() { doOtherThings(); }
-    };
-    // Limitation: Dog() has to be called first.  
+    Derived<Base> d; // OK
+    Derived<string> s; // triggers static_assert  
   #+END_SRC
 
-* override (for virtual function)
-  #+BEGIN_SRC c++
-    /*
-     ,* 9. override (for virtual function)
-     ,*
-     ,* To avoid inadvertently create new function in derived classes.
-     ,*/
-    // C++ 03
-    class Dog {
-       virtual void A(int);
-       virtual void B() const;
-    }
+* Class
 
-    class Yellowdog : public Dog {
-       virtual void A(float);  // Created a new function
-       virtual void B(); // Created a new function 
-    }
+** In-class initializers for non-static data members
+   
+   #+TITLE: Example 1
+   #+BEGIN_SRC cpp
+     classJetPlane
+     {
+      public:
+       string _model = "Unknown";
+       vector<Engine> _engines {Engine(), Engine()};
+     };
+     classJetPlane
+     {
+       vector<Engine> _engines;
+       string _manufacturer;
+       string _model;
+      public:
+       JetPlane() :
+         _engines(2), _manufacturer("Unknown"), _model("Unknown")
+         {}
+       JetPlane(conststring& manufacturer) :
+         _engines(2), _manufacturer(manufacturer), _model("Unknown")
+         {}
+     };   
+   #+END_SRC
+
+   #+TITLE: Example 2
+   #+BEGIN_SRC cpp
+     classJetPlane
+     {
+       vector<Engine> _engines {Engine(), Engine()};
+       string _manufacturer = "Unknown";
+       string _model = "Unknown";
+      public:
+       JetPlane()
+         {}
+       JetPlane(conststring& manufacturer) : _manufacturer(manufacturer)
+         {}
+     };   
+   #+END_SRC
+
+   #+TITLE: Example 3
+   #+BEGIN_SRC cpp
+     classJetPlane
+     {
+      public:
+       string _manufacturer = "Unknown";
+       string _model = "Unknown";
+       vector<Engine> _engines {get_engine_count(_manufacturer, _model)};
+       staticsize_tget_engine_count(conststring& manufacturer,
+                                    conststring& model);
+     };   
+   #+END_SRC
+
+   #+TITLE: Example 4
+   #+BEGIN_SRC cpp
+     structCounter
+     {
+       int_count = 1;
+     };
+     Counter c = {10};
+     classJetPlane
+     {
+      public:
+       vector<Engine> _engines {2};
+       JetPlane() : _engines(4)
+         {}
+     };   
+   #+END_SRC
+
+** Inheriting Constructors
+
+   #+TITLE: Legacy Code
+   #+BEGIN_SRC cpp
+     classPlane
+     {
+       vector<Engine> _engines;
+       string _manufacturer;
+       string _model;
+      public:
+       Plane(conststring& manufacturer);
+       Plane(constPlaneID& tail_number);
+     };
+     classJetPlane: publicPlane
+     {
+      public:
+       // boring
+       JetPlane(conststring& manufacturer) : Plane(manufacturer)
+         {}
+       // boring
+       JetPlane(constPlaneID& tail_number) : Plane(tail_number)
+         {}
+     };   
+   #+END_SRC
+
+   #+TITLE: Example 1
+   #+BEGIN_SRC cpp
+     classJetPlane: publicPlane
+     {
+       usingPlane::Plane;
+     };
+     JetPlaneplane("Boeing"); // OK
+     classPropPlane: publicPlane
+     {
+      public:
+       usingPlane::Plane;
+       // overrides Plane constructor with the same parameters
+       PropPlane(conststring& manufacturer) : Plane(manufacturer)
+         {
+           cout<< "In PropPlane()"<< endl;
+         }
+     };
+     PropPlaneprop_plane("ATR");   
+   #+END_SRC
+
+   #+TITLE: Example 2
+   #+BEGIN_SRC cpp
+     classPlane
+     {
+       string _manufacturer;
+      public:
+       Plane(conststring& manufacturer) : _manufacturer(manufacturer)
+         {}
+     };
+     classBoat
+     {
+       string _boat_manufacturer;
+      public:
+       Boat(conststring& manufacturer) : _boat_manufacturer(manufacturer)
+         {}
+     };
+     classFloatPlane: publicPlane, publicBoat
+     {
+       usingPlane::Plane;
+       usingBoat::Boat;
+       FloatPlane(conststring& manufacturer) : Plane(manufacturer), Boat("n/a")
+         {}
+     };   
+   #+END_SRC
+
+   #+TITLE: Example 3
+   #+BEGIN_SRC cpp
+     classPropPlane: publicPlane
+     {
+       size_t_prop_count;
+      public:
+       usingPlane::Plane;
+     };
+     // oops, _prop_countis not initialized
+     PropPlaneprop_plane("ATR");   
+   #+END_SRC
+
+** Delegating Constructor 
+
+   #+TITLE: Example 1
+   #+BEGIN_SRC c++
+     /*
+      ,* 8. Delegating Constructor 
+      ,*/
+
+     class Dog {
+        public:
+        Dog() { ... }
+        Dog(int a) { Dog(); doOtherThings(a); }
+     };
 
 
-    // C++ 11
-    class Dog {
-       virtual void A(int);
-       virtual void B() const;
-       void C();
-    }
+     // C++ 03:
+     class Dog {
+        init() { ... };
+        public:
+        Dog() { init(); }
+        Dog(int a) { init(); doOtherThings(); }
+     };
+     /* Cons:
+      ,* 1. Cumbersome code.
+      ,* 2. init() could be invoked by other functions.
+      ,*/
 
-    class Yellowdog : public Dog {
-       virtual void A(float) override;  // Error: no function to override
-       virtual void B() override;       // Error: no function to override
-       void C() override;               // Error: not a virtual function
-    }
-      
-  #+END_SRC
+     // C++ 11:
+     class Dog {
+        int age = 9;
+        public:
+        Dog() { ... }
+        Dog(int a) : Dog() { doOtherThings(); }
+     };
+     // Limitation: Dog() has to be called first.  
+   #+END_SRC
 
-* final (for virtual function and for class)
-  #+BEGIN_SRC c++
-    /*
-     ,* 10. final (for virtual function and for class)
-     ,*/
+   #+TITLE: Example 2
+   #+BEGIN_SRC cpp
+     classJetPlane
+     {
+       vector<Engine> _engines;
+       string _manufacturer;
+       string _model;
+      public:
+       JetPlane() : JetPlane(2, "Unknown", "Unknown")
+         {}
+       JetPlane(conststring& manufacturer, conststring& model) :
+         JetPlane(Lookup::engine_count(manufacturer, model), manufacturer, model)
+         {
+           assign_tail_number();
+         }
+      private:
+       JetPlane(size_tengine_count, conststring& manufacturer,
+                conststring& model) :
+         _engines(engine_count), _manufacturer(manufacturer), _model(model)
+       {
+         configure_engines();
+       }
+       // ...
+     };   
+   #+END_SRC
 
-    class Dog final {    // no class can be derived from Dog
-       ...
-    };
+** Default Methods
+
+   #+TITLE: Example 1
+   #+BEGIN_SRC cpp
+     classJetPlane
+     {
+      public:
+       JetPlane() = default;
+       JetPlane(constJetPlane& other);
+       JetPlane(JetPlane&&) = default;
+     };
+     classJetPlane
+     {
+      public:
+       JetPlane() = default;
+       virtual~JetPlane() = default;
+      protected:
+       JetPlane(constJetPlane& other) = default;
+       JetPlane& operator=(constJetPlane&) = default;
+     };   
+   #+END_SRC
+
+** Deleted Methods
+
+   Purpose: 
+
+   - Disable some instantiations of a template
+
+   - Disable unwanted conversion
+
+   - Disable heap allocation
+   
+   #+BEGIN_SRC c++
+     /*
+      ,* 12. delete
+      ,*/
+
+     class Dog {
+        Dog(int age) {}
+     }
+
+     Dog a(2);
+     Dog b(3.0); // 3.0 is converted from double to int
+     a = b;     // Compiler generated assignment operator
+
+
+     // C++ 11:
+     class Dog {
+        Dog(int age) {}
+        Dog(double ) = delete;
+        Dog& operator=(const Dog&) = delete;
+     }  
+   #+END_SRC
+
+   #+TITLE: Example Code
+   #+BEGIN_SRC cpp
+     template<typenameT>
+     voidserialize(constT& obj)
+     {
+       cout<< obj.to_string();
+     };
+     // PasswordStorenot allowed to be serialized
+     voidserialize(constPasswordStore&) = delete;
+     classAltimeter
+     {
+      public:
+       Altimeter(double) {}
+       Altimeter(int) = delete;
+     };
+     classStackOnly
+     {
+      public:
+       void* operator new(size_t) = delete;
+     };   
+   #+END_SRC
+
+** override (for virtual function)
+   #+BEGIN_SRC c++
+     /*
+      ,* 9. override (for virtual function)
+      ,*
+      ,* To avoid inadvertently create new function in derived classes.
+      ,*/
+     // C++ 03
+     class Dog {
+        virtual void A(int);
+        virtual void B() const;
+     }
+
+     class Yellowdog : public Dog {
+        virtual void A(float);  // Created a new function
+        virtual void B(); // Created a new function 
+     }
+
+
+     // C++ 11
+     class Dog {
+        virtual void A(int);
+        virtual void B() const;
+        void C();
+     }
+
+     class Yellowdog : public Dog {
+        virtual void A(float) override;  // Error: no function to override
+        virtual void B() override;       // Error: no function to override
+        void C() override;               // Error: not a virtual function
+     }
        
-    class Dog {
-       virtual void bark() final;  // No class can override bark() 
-    };  
-  #+END_SRC
+   #+END_SRC
 
-* Compiler Generated Default Constructor
-  #+BEGIN_SRC c++
-    /*
-     ,* 11. Compiler Generated Default Constructor
-     ,*/
-    class Dog {
-       Dog(int age) {}
-    };
+** final (for virtual function and for class)
+   #+BEGIN_SRC c++
+     /*
+      ,* 10. final (for virtual function and for class)
+      ,*/
 
-    Dog d1;  // Error: compiler will not generate the default constructor
+     class Dog final {    // no class can be derived from Dog
+        ...
+     };
+        
+     class Dog {
+        virtual void bark() final;  // No class can override bark() 
+     };  
+   #+END_SRC
+
+   #+TITLE: Example Code
+   #+BEGIN_SRC cpp
+     structBase final
+     {};
+     structDerived : publicBase // compile error, can't inherit from
+     {}; // final class
+     structInterface
+     {
+       virtualvoidf()
+         {}
+     };
+     structBase : publicInterface
+     {
+       virtualvoidf() final
+         {}
+     };
+     structDerived : publicBase
+     {
+       virtualvoidf() // compile error, can't override
+         {} // a final method
+     };   
+   #+END_SRC
+
+** Compiler Generated Default Constructor
+   #+BEGIN_SRC c++
+     /*
+      ,* 11. Compiler Generated Default Constructor
+      ,*/
+     class Dog {
+        Dog(int age) {}
+     };
+
+     Dog d1;  // Error: compiler will not generate the default constructor
 
 
-    // C++ 11:
-    class Dog {
-       Dog(int age);
-       Dog() = default;    // Force compiler to generate the default constructor
-    };  
-  #+END_SRC
+     // C++ 11:
+     class Dog {
+        Dog(int age);
+        Dog() = default;    // Force compiler to generate the default constructor
+     };  
+   #+END_SRC
 
-* delete
-  #+BEGIN_SRC c++
-    /*
-     ,* 12. delete
-     ,*/
+** Extended Friend Declarations
 
-    class Dog {
-       Dog(int age) {}
-    }
+   #+TITLE: Example 1
+   #+BEGIN_SRC cpp
+     classA;
+     classB;
+     classFriend
+     {
+       friendclassA; // old declarations are still OK
+       friendB; // you can also do this now
+     };
+     classAmigo
+     {
+       friendclassD; // OK: declares new class D
+       friendD; // error: undeclared class D
+     };
+     classB;
+     typedefB B2;
+     classAmigo
+     {
+       friendB2; // OK
+     };   
+   #+END_SRC
 
-    Dog a(2);
-    Dog b(3.0); // 3.0 is converted from double to int
-    a = b;     // Compiler generated assignment operator
+   #+TITLE: Example 2
+   #+BEGIN_SRC cpp
+     template<typenameT, typenameU>
+     classAmi
+     {
+       friendT; // OK
+       friendclassU; // still an error, can't use an elaborate specifier
+       // in a template
+     };
+     Ami<string, string> rc; // OK
+     Ami<char, string> f; // OK, "friend char" has no effect in the template   
+   #+END_SRC
 
+** Nested Class Access Rights
 
-    // C++ 11:
-    class Dog {
-       Dog(int age) {}
-       Dog(double ) = delete;
-       Dog& operator=(const Dog&) = delete;
-    }  
-  #+END_SRC
+   #+TITLE: Example Code
+   #+BEGIN_SRC cpp
+     classJetPlane
+     {
+       // ...
+      private:
+       int_flap_angle;
+       classGPSNavigator{};
+       classAutopilot
+         {
+           GPSNavigator_gps_navigator; // OK, JetPlane::Autopilot can access
+           // JetPlane::GPSNavigator
+           voidadjust_flaps(JetPlane& plane, intflap_angle)
+             {
+               plane._flap_angle= flap_angle; // OK, JetPlane::Autopilot can
+               // access JetPlane::_flap_angle
+             }
+         };
+     };   
+   #+END_SRC
 
 * constexpr
   #+BEGIN_SRC c++
@@ -377,23 +1036,206 @@
     //2. Super small. It will not occupy space in binary.  
   #+END_SRC
 
-* New String Literals
-  #+BEGIN_SRC c++
-    /*
-     ,* 14. New String Literals
-     ,*/
+  What Else Is It Good for?
 
-      // C++ 03:
-      char*     a = "string";  
+  - Ensure constant initialization at compile time
 
-      // C++ 11:
-      char*     a = u8"string";  // to define an UTF-8 string. 
-      char16_t* b = u"string";   // to define an UTF-16 string. 
-      char32_t* c = U"string";   // to define an UTF-32 string. 
-      char*     d = R"string \\"    // to define raw string.   
-  #+END_SRC
+  - Constant expressions can be used in case labels etc.
+
+  - Guaranteed not to cause race conditions
+
+* Literals
+
+** Unicode literals and New String Literals
+   #+BEGIN_SRC c++
+     /*
+      ,* 14. New String Literals
+      ,*/
+
+       // C++ 03:
+       char*     a = "string";  
+
+       // C++ 11:
+       char*     a = u8"string";  // to define an UTF-8 string. 
+       char16_t* b = u"string";   // to define an UTF-16 string. 
+       char32_t* c = U"string";   // to define an UTF-32 string. 
+       char*     d = R"string \\"    // to define raw string.   
+   #+END_SRC
+
+   | Prefix | Character Type | String Type |
+   |--------+----------------+-------------|
+   | u8     | char           | strin       |
+   | u      | char16_t       | u16string   |
+   | U      | char32_t       | u32string   |
+   |--------+----------------+-------------|
+
+   
+** Raw Literals
+
+   #+TITLE: Example 1
+   #+BEGIN_SRC cpp
+     cout<< R"(use "\n" for newlines)"<< endl;
+
+     R"Nonewline \n"
+     LR"Nonewline \n"
+     u8R"No newline \n"
+     uR"Nonewline \n"
+     UR"Nonewline \n"
+
+
+     R"("\w+\\\w+")"
+     "\"\\w+\\\\\\w+\""
+
+     R"(grep-r "\.js" *)"
+
+     cout<< R"!!(A raw literal is delimited with "( )")!!"<< endl;
+
+     R"(multiline
+     literal)"
+   #+END_SRC
+
+** User defined Literals
+   #+BEGIN_SRC c++
+     /*
+      ,* 17. User defined Literals
+      ,*/
+
+     // C++ went a long way to make user defined types (classes) to behave same as buildin types.
+     // User defined literals pushes this effort even further
+
+     //Old C++:
+     long double height = 3.4;
+
+     // Remember in high school physics class?
+     height = 3.4cm;
+     ratio = 3.4cm / 2.1mm; 
+
+     //Why we don't do that anymore?
+     // 1. No language support
+     // 2. Run time cost associated with the unit translation
+
+
+
+     // C++ 11:
+     long double operator"" _cm(long double x) { return x * 10; }
+     long double operator"" _m(long double x) { return x * 1000; }
+     long double operator"" _mm(long double x) { return x; }
+
+     int main() {
+        long double height = 3.4_cm;
+        cout << height  << endl;              // 34
+        cout << (height + 13.0_m)  << endl;   // 13034
+        cout << (130.0_mm / 13.0_m)  << endl; // 0.01
+     }
+
+     //Note: add constexpr to make the translation happen in compile time.
+
+
+     // Restriction: it can only work with following paramters:
+        char const*
+        unsigned long long
+        long double
+        char const*, std::size_t
+        wchar_t const*, std::size_t
+        char16_t const*, std::size_t
+        char32_t const*, std::size_t
+     // Note: return value can be of any types.
+
+
+     // Example:
+     int operator"" _hex(char const* str, size_t l) { 
+        // Convert hexdecimal formated str to integer ret
+        return ret;
+     }
+
+     int operator"" _oct(char const* str, size_t l) { 
+        // Convert octal formated str to integer ret
+        return ret;
+     }
+
+     int main() {
+        cout << "FF"_hex << endl;  // 255
+        cout << "40"_oct << endl;  // 32
+     }
+       
+   #+END_SRC
+
+
+   C++ went a long way to make user defined types (classes) to behave
+   same as build-in types. User defined literals pushes this effort
+   even further
+
+   add constexpr to make the translation happen in compile time.
+   
+   #+BEGIN_SRC c++
+     constexpr long double operator"" _cm(long double x) { return x * 10; }
+     constexpr long double operator"" _m(long double x) { return x * 1000; }
+     constexpr long double operator"" _mm(long double x) { return x; }
+
+     int main(int argc, char *argv[])
+     {
+       long double height = 3.4_cm;
+       cout << height  << endl;              // 34
+       cout << (height + 13.0_m)  << endl;   // 13034
+       cout << (130.0_mm / 13.0_m)  << endl; // 0.01
+       
+       return 0;
+     }
+       
+   #+END_SRC
+
+
+   Restriction: it can only work with following parameters:
+   #+BEGIN_SRC c++
+     char const*
+     unsigned long long
+     long double
+     char const*, std::size_t
+     wchar_t const*, std::size_t
+     char16_t const*, std::size_t
+     char32_t const*, std::size_t  
+   #+END_SRC
+   
+   更多例子：
+   #+BEGIN_SRC c++
+     int operator"" _bin(const char* str, size_t l)
+     {
+       int ret = 0;
+       for (size_t i = 0;i < l; i++) {
+         if (str[i] == '1')
+           ret += 1 << (l-i-1);
+       }
+       return ret;
+     }
+
+     int main(int argc, char *argv[])
+     {
+       cout<<"110"_bin<<endl;
+       cout<<"111"_bin<<endl;
+       
+       return 0;
+     }
+       
+   #+END_SRC
 
 * lambda function
+
+  Why Do We Need This Thing
+
+  - Improve locality
+
+  - Reduce boilerplate
+
+  - Express intentions better
+
+
+  Lambda Parameters
+
+  - No default values for parameters
+
+  - No variable length argument lists
+
+  - No unnamed parameters
   
   #+BEGIN_SRC c++
     /*
@@ -454,216 +1296,13 @@
     }  
   #+END_SRC
 
-* User defined Literals
-  #+BEGIN_SRC c++
-    /*
-     ,* 17. User defined Literals
-     ,*/
+  Rules of Thumb for Lambdas
 
-    // C++ went a long way to make user defined types (classes) to behave same as buildin types.
-    // User defined literals pushes this effort even further
+  - Write short and clear lambdas
 
-    //Old C++:
-    long double height = 3.4;
+  - If it’s becoming long, you might need a function object
 
-    // Remember in high school physics class?
-    height = 3.4cm;
-    ratio = 3.4cm / 2.1mm; 
-
-    //Why we don't do that anymore?
-    // 1. No language support
-    // 2. Run time cost associated with the unit translation
-
-
-
-    // C++ 11:
-    long double operator"" _cm(long double x) { return x * 10; }
-    long double operator"" _m(long double x) { return x * 1000; }
-    long double operator"" _mm(long double x) { return x; }
-
-    int main() {
-       long double height = 3.4_cm;
-       cout << height  << endl;              // 34
-       cout << (height + 13.0_m)  << endl;   // 13034
-       cout << (130.0_mm / 13.0_m)  << endl; // 0.01
-    }
-
-    //Note: add constexpr to make the translation happen in compile time.
-
-
-    // Restriction: it can only work with following paramters:
-       char const*
-       unsigned long long
-       long double
-       char const*, std::size_t
-       wchar_t const*, std::size_t
-       char16_t const*, std::size_t
-       char32_t const*, std::size_t
-    // Note: return value can be of any types.
-
-
-    // Example:
-    int operator"" _hex(char const* str, size_t l) { 
-       // Convert hexdecimal formated str to integer ret
-       return ret;
-    }
-
-    int operator"" _oct(char const* str, size_t l) { 
-       // Convert octal formated str to integer ret
-       return ret;
-    }
-
-    int main() {
-       cout << "FF"_hex << endl;  // 255
-       cout << "40"_oct << endl;  // 32
-    }
-      
-  #+END_SRC
-
-* Variadic Template
-  #+BEGIN_SRC c++
-    /*
-     ,* Variadic Template
-     ,*
-     ,* A template that can take any number of template arguments of any type.
-     ,* Both class and function templates can be variadic.
-     ,*/
-    template<typename... arg>
-    class BoTemplate;
-
-    BoTemplate<float> t1;
-    BoTemplate<int, long, double, float> t2;
-    BoTemplate<int, std::vector<double>> t3;
-
-    BoTemplate<> t4;
-
-
-    // Combination of variadic and non-variadic argument
-    template<typename T, typename... arg>
-    class BoTemplate;
-
-    BoTemplate<> t4;  // Error
-    BoTemplate<int, long, double, float> t2;  // OK
-
-
-    // Define a default template argument
-    template<typename T = int, typename... arg>
-    class BoTemplate;  
-  #+END_SRC
-
-* Template Alias
-  #+BEGIN_SRC c++
-    /*
-     ,* Template Alias
-     ,*/
-      template<class T> class Dog { /* ... */ };
-      template<class T>
-        using DogVec = std::vector<T, Dog<T>>;
-
-      DogVec<int> v;  // Same as: std::vector<int, Dog<int>>  
-  #+END_SRC
-
-* decltype
-  #+BEGIN_SRC c++
-    /*
-     ,* decltype
-     ,*
-     ,* It is equivalent of GNU typeof
-     ,*/
-      const int& foo();      // Declare a function foo()
-      decltype(foo())  x1;  //  type is const int&
-
-      struct S { double x; };
-      decltype(S::x)   x2;  //  x2 is double
-
-      auto s = make_shared<S>();
-      decltype(s->x)   x3;  //  x3 is double
-
-      int i;
-      decltype(i)      x4;  //  x4 is int  
-
-      float f;              
-      decltype(i + f)  x5;   // x5 is float
-
-      // decltype turns out to be very useful for template generic programming
-      template<type X, type Y>
-      void foo(X x, Y y) {
-         ...
-         decltype(x+y) z;
-         ...
-      }
-
-      // How about return type needs to use decltype?
-      template<type X, type Y>
-      decltype(x+y) goo(X x, Y y) {      // Error: x & y are undefined 
-         return  x + y;
-      }
-
-      // Combining auto and decltype to implement templates with trailing return type
-      template<type X, type Y>
-      auto goo(X x, Y y) -> decltype(x+y) {
-         return  x + y;
-      }  
-  #+END_SRC
-
-* user defined literals 
-
-  C++ went a long way to make user defined types (classes) to behave
-  same as build-in types. User defined literals pushes this effort
-  even further
-
-  add constexpr to make the translation happen in compile time.
-  
-  #+BEGIN_SRC c++
-    constexpr long double operator"" _cm(long double x) { return x * 10; }
-    constexpr long double operator"" _m(long double x) { return x * 1000; }
-    constexpr long double operator"" _mm(long double x) { return x; }
-
-    int main(int argc, char *argv[])
-    {
-      long double height = 3.4_cm;
-      cout << height  << endl;              // 34
-      cout << (height + 13.0_m)  << endl;   // 13034
-      cout << (130.0_mm / 13.0_m)  << endl; // 0.01
-      
-      return 0;
-    }
-      
-  #+END_SRC
-
-
-  Restriction: it can only work with following parameters:
-  #+BEGIN_SRC c++
-    char const*
-    unsigned long long
-    long double
-    char const*, std::size_t
-    wchar_t const*, std::size_t
-    char16_t const*, std::size_t
-    char32_t const*, std::size_t  
-  #+END_SRC
-  
-  更多例子：
-  #+BEGIN_SRC c++
-    int operator"" _bin(const char* str, size_t l)
-    {
-      int ret = 0;
-      for (size_t i = 0;i < l; i++) {
-        if (str[i] == '1')
-          ret += 1 << (l-i-1);
-      }
-      return ret;
-    }
-
-    int main(int argc, char *argv[])
-    {
-      cout<<"110"_bin<<endl;
-      cout<<"111"_bin<<endl;
-      
-      return 0;
-    }
-      
-  #+END_SRC
+  - Don’t duplicate code across lambda expressions
 
 * concurrency
   C++定义了线程，互斥量，条件变量以及future等在多线程编程中用到的一些
@@ -719,3 +1358,259 @@
         t(6);
     }  
   #+END_SRC
+
+* Move semantics
+
+  #+TITLE: Example 1
+  #+BEGIN_SRC cpp
+    vector<string> v;
+    v.push_back(string("a"));
+    v.push_back(string("b"));
+    string s = string("Boeing") + "737"+ "-"+ "300";  
+  #+END_SRC
+
+  #+TITLE: Example 2
+  #+BEGIN_SRC cpp
+    classJetPlane
+    {
+     public:
+      JetPlane();
+      JetPlane(constJetPlane&);
+      JetPlane& operator=(constJetPlane&);
+      JetPlane(JetPlane&&);
+      JetPlane& operator=(JetPlane&&);
+    };  
+  #+END_SRC
+
+  What Are the Benefits?
+
+  - Better performance
+
+  - More clarity of intention in the code
+
+    #+BEGIN_SRC cpp
+      Surface3D get_surface(constLatitude& lat, constLongitude& lon)
+      {
+        Surface3D surface;
+        // load up millions of points making up the surface
+        returnsurface;
+      }    
+    #+END_SRC
+
+  - Better support for exclusive resource ownership
+
+
+  Overload Resolution
+
+  #+BEGIN_SRC cpp
+    voidf(JetPlane& plane);
+    voidf(constJetPlane& plane);
+    voidf(JetPlane&& plane);
+    voidf(constJetPlane&& plane);  
+  #+END_SRC
+
+  - Maintain const-correctness -don’t bind constvalue to non-constref
+
+  - Bind lvaluesto lvaluerefs; bind rvaluesto rvaluerefs if possible
+
+  - If rule 2 isn’t enough to resolve ambiguity, choose an overload
+    which preserves const-ness
+
+    #+BEGIN_SRC cpp
+      JetPlanejet;
+      f(jet); // f(JetPlane&)
+      constJetPlanegrounded_jet;
+      f(grounded_jet); // f(constJetPlane&)
+      f(JetPlane()); // f(JetPlane&&)
+      automake_const_jet= []() -> constJetPlane{ returnJetPlane(); };
+      f(make_const_jet()); // f(constJetPlane&&)    
+    #+END_SRC
+
+
+  Compiler Generated Move Operations
+
+  - No user-declared copy constructor or copy assignment operator
+
+  - No user-declared move assignment operator
+
+  - No user-declared destructor
+
+  - The move constructor wouldn’t be implicitly marked as deleted
+
+
+  Implementing Your Own Move Operations
+
+  #+TITLE: Example 1
+  #+BEGIN_SRC cpp
+    classA
+    {
+      double_d;
+      int* _p;
+      string _str;
+     public:
+      A(A&& rhs) : _d(rhs._d), _p(rhs._p), _str(move(rhs._str))
+        {
+          rhs._p = nullptr;
+          rhs._str.clear();
+        }
+      A& operator=(A&& rhs)
+        {
+          delete_p;
+          _d = rhs._d;
+          _p = rhs._p;
+          _str= move(rhs._str); // careful!
+          rhs._p = nullptr;
+          rhs._str.clear();
+          return*this;
+        }
+    };
+
+    voidJetPlane::set_model(conststring& model)
+    {
+      _model = model;
+    }
+    voidJetPlane::set_model(string&& model)
+    {
+      _model = move(model); // careful: model is a named rvalueref so it's an
+      // lvalue; use std::move to force a move operation
+      model.clear();
+    }
+    string model("Airbus 320");
+    JetPlanejet;
+    jet.set_model(model); // copy overload used
+    jet.set_model(string("Airbus 320")); // move overload used
+  #+END_SRC
+
+  Move-only Types
+
+  #+TITLE: Example 2
+  #+BEGIN_SRC cpp
+    classMoveOnly
+    {
+      int* _p;
+     public:
+      MoveOnly() : _p(newint(10)) {}
+      ~MoveOnly() { delete_p; }
+      MoveOnly(constMoveOnly& rhs) = delete;
+      MoveOnly& operator=(constMoveOnly& rhs) = delete;
+      MoveOnly(MoveOnly&& rhs)
+        {
+          ,*this= move(rhs);
+        }
+      MoveOnly& operator=(MoveOnly&& rhs)
+        {
+          if(this== &rhs)
+            return*this;
+          _p = rhs._p;
+          rhs._p = nullptr;
+          return*this;
+        }
+    };
+
+    MoveOnlya;
+    MoveOnlyb(a); // copying, doesn't compile
+    MoveOnlyc(move(a)); // OK
+    MoveOnlyd;
+    d= move(b); // OK
+  #+END_SRC
+  
+* Reference Collapsing and rvaluesin Templates
+
+  #+BEGIN_SRC cpp
+    Point p1(10, 10);
+    usingPointRef= Point&;
+    PointRef& p2 = p1;  
+  #+END_SRC
+
+  - A& & becomes A&
+
+  - A& && becomes A&
+
+  - A&& & becomes A&
+
+  - A&& && becomes A&&
+
+
+  #+BEGIN_SRC cpp
+    template<typenameT> voidf(T&&);  
+  #+END_SRC
+
+  - f(lvalueA)=> T is A&=>f(A& &&) =>f(A&)
+
+  - f(rvalueA) =>T is A=>f(A&&)
+
+* Perfect forwarding
+  
+  #+TITLE: Example 1
+  #+BEGIN_SRC cpp
+    unique_ptr<vector<Point>> p_points(newvector<Point>(10));
+    template<typenameT, typenameArg>
+    unique_ptr<T> make_unique(Argarg)
+    {
+      returnunique_ptr<T>(newT(arg));
+    }
+    template<typenameT, typenameArg>
+    unique_ptr<T> make_unique(Arg&arg)
+    {
+      returnunique_ptr<T>(newT(arg));
+    }
+    make_unique<vector<int>>(10); // can't convert argument from intto int&  
+  #+END_SRC
+
+  #+TITLE: Example 2
+  #+BEGIN_SRC cpp
+    template<typenameT, typenameArg>
+    unique_ptr<T> make_unique(constArg& arg)
+    {
+      returnunique_ptr<T>(newT(arg));
+    }
+    template<typenameT, typenameArg>
+    unique_ptr<T> make_unique(Arg& arg)
+    {
+      returnunique_ptr<T>(newT(arg));
+    }
+    inta = 10;
+    make_unique<vector<int>>(a); // OK, Arg& overload
+    make_unique<vector<int>>(10); // OK, constArg& overload  
+  #+END_SRC
+
+  #+TITLE: Example 3
+  #+BEGIN_SRC cpp
+    template<typenameT, typenameT1, typenameT2>
+    unique_ptr<T> make_unique(T1&& arg1, T2&& arg2)
+    {
+      returnunique_ptr<T>(newT(forward<T1>(arg1), forward<T2>(arg2)));
+    }
+    template<typenameT, typename... Args>
+    unique_ptr<T> make_unique(Args&&... args)
+    {
+      returnunique_ptr<T>(newT(forward<Args>(args)...));
+    }
+    #include<utility>  
+  #+END_SRC
+
+* Inline Namespaces
+
+  #+TITLE: Example 1
+  #+BEGIN_SRC cpp
+    namespaceAPI
+    {
+      inlinenamespacev2
+        {
+          // v2 processes doubles instead of ints
+          voidprocess(vector<double>)
+          {}
+        }
+      namespacev1
+        {
+          voidprocess(vector<int>)
+          {}
+        }
+    }
+    vector<double> doubles;
+    API::process(doubles);
+    vector<int> ints;
+    API::v1::process(ints);  
+  #+END_SRC
+
+  
